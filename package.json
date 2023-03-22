@@ -1,0 +1,27 @@
+{
+  "name": "elm-concurrent-task",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "source": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "watch": "parcel watch",
+    "start": "nodemon dist/index.js",
+    "build": "parcel build"
+  },
+  "author": "Andrew MacMurray",
+  "license": "MIT",
+  "dependencies": {
+    "elm-taskport": "^2.0.1",
+    "xhr2": "^0.2.1"
+  },
+  "devDependencies": {
+    "@parcel/transformer-elm": "^2.7.0",
+    "elm": "^0.19.1-5",
+    "elm-format": "^0.8.5",
+    "elm-test": "^0.19.1-revision9",
+    "nodemon": "^2.0.19",
+    "parcel": "^2.7.0"
+  }
+}
