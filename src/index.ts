@@ -7,7 +7,7 @@ global.XMLHttpRequest = xhr;
 global.ProgressEvent = xhr.ProgressEvent;
 
 const Ffi = {
-  slowInt: () => waitRandom().then(() => crypto.randomInt(10, 50)),
+  slowInt: (i) => waitRandom().then(() => i),
 };
 
 function waitRandom() {
@@ -19,19 +19,13 @@ function waitRandom() {
 }
 
 TaskPort.install({ logErrors: false }, undefined);
-TaskPort.register("fanout", async (definitions) => {
+TaskPort.register("fanout", (definitions) => {
   return Promise.all(
-    definitions.map(async (d) => [
-      d.hash,
-      await Ffi[d.definition.function](d.definition.args),
-    ])
+    definitions.map((d) => Ffi[d.definition.function](d.definition.args))
   ).then((res) => {
-    const final = Object.fromEntries(res);
-    console.log(final);
-    return final;
+    console.log(`${res}`);
+    return res;
   });
 });
 
 const app = Elm.Main.init({ flags: null });
-
-// run each definition in JS

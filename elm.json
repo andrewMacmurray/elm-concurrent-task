@@ -19,9 +19,22 @@
         }
     },
     "test-dependencies": {
-        "direct": {},
+        "direct": {
+            "elm-explorations/test": "2.1.1",
+            "avh4/elm-program-test": "4.0.0"
+        },
         "indirect": {
-            "elm/url": "1.0.0"
+            "avh4/elm-fifo": "1.0.4",
+            "elm/browser": "1.0.2",
+            "elm/html": "1.0.0",
+            "elm/parser": "1.1.0",
+            "elm/random": "1.0.0",
+            "elm/url": "1.0.0",
+            "elm/virtual-dom": "1.0.3",
+            "elm-community/list-extra": "8.7.0",
+            "hecrj/html-parser": "2.4.0",
+            "mgold/elm-nonempty-list": "4.2.0",
+            "rtfeldman/elm-hex": "1.0.0"
         }
     }
 }

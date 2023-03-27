@@ -31,7 +31,7 @@ type alias Model =
 
 
 type Msg
-    = OnResult (Result Task.Error Int)
+    = OnResult (Result Task.Error String)
 
 
 
@@ -64,25 +64,26 @@ update msg model =
 -- Task
 
 
-myTask : Task Decode.Error Int
+myTask : Task Decode.Error String
 myTask =
-    Task.map3 (\a b c -> a + b + c)
-        doubleSlowInt
-        doubleSlowInt
-        slowInt
+    Task.map4 (\a b c d -> a ++ ", " ++ b ++ ", " ++ c ++ ", " ++ d)
+        (doubleSlowInt 1)
+        (doubleSlowInt 3)
+        (doubleSlowInt 5)
+        (doubleSlowInt 7)
 
 
-doubleSlowInt : Task Decode.Error Int
-doubleSlowInt =
-    slowInt |> Task.andThenDo (Task.map2 (+) slowInt slowInt)
+doubleSlowInt : Int -> Task Decode.Error String
+doubleSlowInt i =
+    Task.map2 (\a b -> a ++ ", " ++ b) (slowInt i) (slowInt (i + 1))
 
 
-slowInt : Task Decode.Error Int
-slowInt =
+slowInt : Int -> Task Decode.Error String
+slowInt id =
     Task.ffi
         { function = "slowInt"
-        , args = Encode.null
-        , expect = Decode.int
+        , args = Encode.int id
+        , expect = Decode.int |> Decode.map String.fromInt
         }
 
 

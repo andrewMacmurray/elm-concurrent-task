@@ -8,7 +8,8 @@
   "scripts": {
     "watch": "parcel watch",
     "start": "nodemon dist/index.js",
-    "build": "parcel build"
+    "build": "parcel build",
+    "test": "elm-spec"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
@@ -20,7 +21,7 @@
     "@parcel/transformer-elm": "^2.7.0",
     "elm": "^0.19.1-5",
     "elm-format": "^0.8.5",
-    "elm-test": "^0.19.1-revision9",
+    "elm-spec-runner": "^2.5.1",
     "nodemon": "^2.0.19",
     "parcel": "^2.7.0"
   }
