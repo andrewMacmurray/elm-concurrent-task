@@ -1,6 +1,6 @@
 port module TaskSpec exposing (main)
 
-import Concurrent.Task2 as Task exposing (Task)
+import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Runner
@@ -17,13 +17,13 @@ import Spec.Step as Step
 
 
 type alias Model =
-    { task : Task Task.Error String
+    { task : Task.Progress Task.Error String
     , result : Maybe (Result Task.Error String)
     }
 
 
 type Msg
-    = OnProgress ( Task Task.Error String, Cmd Msg )
+    = OnProgress ( Task.Progress Task.Error String, Cmd Msg )
     | OnResult (Result Task.Error String)
 
 
@@ -64,7 +64,7 @@ subscriptions model =
 getInt : Task Task.Error Int
 getInt =
     Task.ffi
-        { function = "slowInt"
+        { function = "getInt"
         , args = Encode.null
         , expect = Decode.int
         }
@@ -103,11 +103,11 @@ pendingSpec =
                 |> it "decodes is results successfully" (expectResult (Ok "42"))
             )
         , scenario "Two Tasks"
-            ((Task.map2 (+)
-                getInt
-                getInt
-                |> Task.map String.fromInt
-             )
+            (Task.map String.fromInt
+                (Task.map2 (+)
+                    getInt
+                    getInt
+                )
                 |> givenATask
                 |> when "two concurrent tasks are run"
                     [ sendProgress
@@ -125,9 +125,9 @@ pendingSpec =
                 |> givenATask
                 |> when "three concurrent tasks are run"
                     [ sendProgress
-                        [ Encode.string "1"
+                        [ Encode.string "5"
                         , Encode.string "3"
-                        , Encode.string "5"
+                        , Encode.string "1"
                         ]
                     ]
                 |> it "decodes the results successfully" (expectResult (Ok "135"))

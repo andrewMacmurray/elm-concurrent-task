@@ -1,10 +1,7 @@
 import { Elm } from "./elm/Main.elm";
-import xhr from "xhr2";
-import * as TaskPort from "elm-taskport/js/taskport.js";
 import crypto from "node:crypto";
 
-global.XMLHttpRequest = xhr;
-global.ProgressEvent = xhr.ProgressEvent;
+// Ffi
 
 const Ffi = {
   slowInt: (i) => waitRandom().then(() => i),
@@ -18,14 +15,17 @@ function waitRandom() {
   });
 }
 
-TaskPort.install({ logErrors: false }, undefined);
-TaskPort.register("fanout", (definitions) => {
-  return Promise.all(
-    definitions.map((d) => Ffi[d.definition.function](d.definition.args))
+const app = Elm.Main.init({ flags: null });
+
+app.ports.send.subscribe(async (defs) => {
+  Promise.all(
+    defs.map(async (def) => {
+      return [def.id, await Ffi[def.function](def.args)];
+    })
   ).then((res) => {
-    console.log(`${res}`);
-    return res;
+    console.log(res);
+    const results = Object.fromEntries(res);
+    console.log(`results: ${JSON.stringify(results, null, 2)}`);
+    app.ports.receive.send(results);
   });
 });
-
-const app = Elm.Main.init({ flags: null });

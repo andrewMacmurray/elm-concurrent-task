@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode
@@ -27,11 +27,13 @@ type alias Flags =
 
 
 type alias Model =
-    {}
+    { task : Task.Progress Task.Error String
+    }
 
 
 type Msg
     = OnResult (Result Task.Error String)
+    | OnProgress ( Task.Progress Task.Error String, Cmd Msg )
 
 
 
@@ -40,8 +42,16 @@ type Msg
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    ( {}
-    , Task.attempt OnResult myTask
+    let
+        ( progress, cmd ) =
+            Task.attempt
+                { send = send
+                , onResult = OnResult
+                }
+                myTask
+    in
+    ( { task = progress }
+    , cmd
     )
 
 
@@ -59,31 +69,33 @@ update msg model =
             in
             ( model, Cmd.none )
 
+        OnProgress ( task, cmd ) ->
+            ( { model | task = task }, cmd )
+
 
 
 -- Task
 
 
-myTask : Task Decode.Error String
+myTask : Task Task.Error String
 myTask =
-    Task.map4 (\a b c d -> a ++ ", " ++ b ++ ", " ++ c ++ ", " ++ d)
+    Task.map3 (\a b c -> a ++ ", " ++ b ++ ", " ++ c)
         (doubleSlowInt 1)
         (doubleSlowInt 3)
         (doubleSlowInt 5)
-        (doubleSlowInt 7)
 
 
-doubleSlowInt : Int -> Task Decode.Error String
+doubleSlowInt : Int -> Task Task.Error String
 doubleSlowInt i =
     Task.map2 (\a b -> a ++ ", " ++ b) (slowInt i) (slowInt (i + 1))
 
 
-slowInt : Int -> Task Decode.Error String
+slowInt : Int -> Task Task.Error String
 slowInt id =
     Task.ffi
         { function = "slowInt"
         , args = Encode.int id
-        , expect = Decode.int |> Decode.map String.fromInt
+        , expect = Decode.map String.fromInt Decode.int
         }
 
 
@@ -92,5 +104,21 @@ slowInt id =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+subscriptions model =
+    Task.onProgress
+        { send = send
+        , receive = receive
+        , onResult = OnResult
+        , onProgress = OnProgress
+        }
+        model.task
+
+
+
+-- Ports
+
+
+port send : Decode.Value -> Cmd msg
+
+
+port receive : (Decode.Value -> msg) -> Sub msg

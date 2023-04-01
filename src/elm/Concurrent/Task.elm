@@ -1,7 +1,7 @@
 module Concurrent.Task exposing
-    ( BatchElement
-    , Definition
-    , Error
+    ( Definition
+    , Error(..)
+    , Progress
     , Task
     , andMap
     , andThen
@@ -14,14 +14,14 @@ module Concurrent.Task exposing
     , map3
     , mapError
     , onError
+    , onProgress
     , succeed
     )
 
-import FNV1a
+import Concurrent.Ids as Ids exposing (Ids)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Task as CoreTask
-import TaskPort
 
 
 
@@ -29,12 +29,21 @@ import TaskPort
 
 
 type Task x a
-    = Pending (List Definition) (RawResponses -> Task x a)
+    = Exec (Ids -> Progress x a)
+
+
+type alias Progress x a =
+    ( Task_ x a, Ids )
+
+
+type Task_ x a
+    = Pending (List Definition) (RawResponses -> Task_ x a)
     | Done (Result x a)
 
 
 type alias Definition =
-    { function : String
+    { id : String
+    , function : String
     , args : Encode.Value
     }
 
@@ -58,49 +67,48 @@ type alias Ffi a =
     }
 
 
-ffi : Ffi a -> Task Decode.Error a
+ffi : Ffi a -> Task Error a
 ffi options =
-    Pending [ toDefinition options ] (getResponseFor (toDefinition options) options.expect)
-
-
-toDefinition : Ffi a -> Definition
-toDefinition x =
-    { function = x.function
-    , args = x.args
-    }
-
-
-getResponseFor : Definition -> Expect a -> RawResponses -> Task Decode.Error a
-getResponseFor definition expect results =
-    results
-        |> Decode.decodeValue (Decode.field (definitionHash definition) expect)
-        |> fromResult
-
-
-definitionHash : Definition -> String
-definitionHash definition =
-    encodeDefinition definition
-        |> Encode.encode 0
-        |> FNV1a.hash
-        |> String.fromInt
+    Exec
+        (\ids ->
+            let
+                ( id, nextIds ) =
+                    Ids.next ids
+            in
+            ( Pending
+                [ { id = id
+                  , function = options.function
+                  , args = options.args
+                  }
+                ]
+                (\results ->
+                    results
+                        |> Decode.decodeValue (Decode.field id options.expect)
+                        |> fromResult_
+                        |> mapError_ DecodeError
+                )
+            , nextIds
+            )
+        )
 
 
 encodeDefinition : Definition -> Encode.Value
 encodeDefinition definition =
     Encode.object
-        [ ( "function", Encode.string definition.function )
+        [ ( "id", Encode.string definition.id )
+        , ( "function", Encode.string definition.function )
         , ( "args", definition.args )
         ]
 
 
-fromResult : Result x a -> Task x a
-fromResult res =
+fromResult_ : Result x a -> Task_ x a
+fromResult_ res =
     case res of
         Ok a ->
-            succeed a
+            succeed_ a
 
         Err e ->
-            fail e
+            fail_ e
 
 
 
@@ -108,29 +116,58 @@ fromResult res =
 
 
 map : (a -> b) -> Task x a -> Task x b
-map f task =
+map f (Exec task) =
+    Exec
+        (\ids ->
+            let
+                ( tsk, nextIds ) =
+                    task ids
+            in
+            ( map_ f tsk, nextIds )
+        )
+
+
+map_ : (a -> b) -> Task_ x a -> Task_ x b
+map_ f task =
     case task of
         Done res ->
             Done (Result.map f res)
 
         Pending defs next ->
-            Pending defs (next >> map f)
+            Pending defs (next >> map_ f)
 
 
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2 f task1 task2 =
+map2 f (Exec task1) (Exec task2) =
+    Exec
+        (\ids ->
+            let
+                ( task1_, ids1 ) =
+                    task1 ids
+
+                ( task2_, ids2 ) =
+                    task2 ids1
+            in
+            ( map2_ f task1_ task2_
+            , ids2
+            )
+        )
+
+
+map2_ : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
+map2_ f task1 task2 =
     case ( task1, task2 ) of
         ( Done res1, Done res2 ) ->
             Done (Result.map2 f res1 res2)
 
         ( Done res1, Pending defs next ) ->
-            Pending defs (\res -> map2 f (Done res1) (next res))
+            Pending defs (\res -> map2_ f (Done res1) (next res))
 
         ( Pending defs next, Done res2 ) ->
-            Pending defs (\res -> map2 f (next res) (Done res2))
+            Pending defs (\res -> map2_ f (next res) (Done res2))
 
         ( Pending defs1 next1, Pending defs2 next2 ) ->
-            Pending (defs1 ++ defs2) (\res -> map2 f (next1 res) (next2 res))
+            Pending (defs1 ++ defs2) (\res -> map2_ f (next1 res) (next2 res))
 
 
 andMap : Task x a -> Task x (a -> b) -> Task x b
@@ -151,7 +188,29 @@ map3 f task1 task2 task3 =
 
 
 andThen : (a -> Task x b) -> Task x a -> Task x b
-andThen f task =
+andThen f (Exec task) =
+    Exec
+        (\ids ->
+            let
+                ( task_, ids1 ) =
+                    task ids
+
+                next a =
+                    unwrap (f a) ids1
+            in
+            ( andThen_ (next >> Tuple.first) task_
+            , Tuple.second (Ids.next ids1)
+            )
+        )
+
+
+unwrap : Task x a -> Ids -> ( Task_ x a, Ids )
+unwrap (Exec task) =
+    task
+
+
+andThen_ : (a -> Task_ x b) -> Task_ x a -> Task_ x b
+andThen_ f task =
     case task of
         Done res ->
             case res of
@@ -159,10 +218,10 @@ andThen f task =
                     f a
 
                 Err e ->
-                    fail e
+                    fail_ e
 
         Pending defs next ->
-            Pending defs (next >> andThen f)
+            Pending defs (next >> andThen_ f)
 
 
 andThenDo : Task x b -> Task x a -> Task x b
@@ -170,13 +229,23 @@ andThenDo task2 task1 =
     task1 |> andThen (\_ -> task2)
 
 
-fail : x -> Task x a
+fail : a -> Task a b
 fail e =
+    Exec (\_ -> ( fail_ e, Ids.init ))
+
+
+fail_ : x -> Task_ x a
+fail_ e =
     Done (Err e)
 
 
 succeed : a -> Task x a
 succeed a =
+    Exec (\_ -> ( succeed_ a, Ids.init ))
+
+
+succeed_ : a -> Task_ x a
+succeed_ a =
     Done (Ok a)
 
 
@@ -185,7 +254,24 @@ succeed a =
 
 
 onError : (x -> Task y a) -> Task x a -> Task y a
-onError f task =
+onError f (Exec task) =
+    Exec
+        (\ids ->
+            let
+                ( task_, nextIds ) =
+                    task ids
+
+                next x =
+                    unwrap (f x) nextIds
+            in
+            ( onError_ (next >> Tuple.first) task_
+            , nextIds
+            )
+        )
+
+
+onError_ : (x -> Task_ y a) -> Task_ x a -> Task_ y a
+onError_ f task =
     case task of
         Done res ->
             case res of
@@ -196,17 +282,31 @@ onError f task =
                     f e
 
         Pending defs next ->
-            Pending defs (next >> onError f)
+            Pending defs (next >> onError_ f)
 
 
 mapError : (x -> y) -> Task x a -> Task y a
-mapError f task =
+mapError f (Exec task) =
+    Exec
+        (\ids ->
+            let
+                ( tsk, ids1 ) =
+                    task ids
+            in
+            ( mapError_ f tsk
+            , ids1
+            )
+        )
+
+
+mapError_ : (x -> y) -> Task_ x a -> Task_ y a
+mapError_ f task =
     case task of
         Done res ->
             Done (Result.mapError f res)
 
         Pending defs next ->
-            Pending defs (next >> mapError f)
+            Pending defs (next >> mapError_ f)
 
 
 
@@ -214,71 +314,55 @@ mapError f task =
 
 
 type Error
-    = TaskPortError TaskPort.Error
-    | PendingError
+    = PendingError
     | DecodeError Decode.Error
 
 
-attempt : (Result Error a -> msg) -> Task Decode.Error a -> Cmd msg
-attempt onResult task =
-    handleNext task
-        |> CoreTask.andThen
-            (\t ->
-                case t of
-                    Done res ->
-                        case res of
-                            Ok a ->
-                                CoreTask.succeed a
+type alias Attempt msg a =
+    { send : Decode.Value -> Cmd msg
+    , onResult : Result Error a -> msg
+    }
 
-                            Err e ->
-                                CoreTask.fail (DecodeError e)
 
-                    Pending _ _ ->
-                        CoreTask.fail PendingError
+type alias OnProgress msg a =
+    { onResult : Result Error a -> msg
+    , onProgress : ( Progress Error a, Cmd msg ) -> msg
+    , receive : (Decode.Value -> msg) -> Sub msg
+    , send : Encode.Value -> Cmd msg
+    }
+
+
+attempt : Attempt msg a -> Task Error a -> ( Progress Error a, Cmd msg )
+attempt options ((Exec toTask) as t) =
+    case toTask Ids.init of
+        ( Done res, ids ) ->
+            ( ( Done res, ids )
+            , CoreTask.succeed res
+                |> CoreTask.perform options.onResult
             )
-        |> CoreTask.attempt onResult
+
+        ( Pending defs next, ids ) ->
+            ( ( Pending defs next, ids )
+            , options.send (Encode.list encodeDefinition defs)
+            )
 
 
-handleNext : Task x a -> CoreTask.Task Error (Task x a)
-handleNext task =
+onProgress : OnProgress msg a -> Progress Error a -> Sub msg
+onProgress options ( task, ids ) =
     case task of
         Done res ->
-            CoreTask.succeed (Done res)
+            options.receive (\_ -> options.onResult res)
 
-        Pending definitions next ->
-            definitions
-                |> List.map (\d -> { hash = definitionHash d, definition = d })
-                |> fanout
-                |> CoreTask.andThen
-                    (\res ->
-                        case next res of
-                            Done r ->
-                                CoreTask.succeed (Done r)
+        Pending _ next ->
+            options.receive
+                (\results ->
+                    case next results of
+                        Done res ->
+                            options.onResult res
 
-                            Pending defs2 next2 ->
-                                handleNext (Pending defs2 next2)
-                    )
-
-
-fanout : List BatchElement -> CoreTask.Task Error RawResponses
-fanout =
-    TaskPort.call
-        { function = "fanout"
-        , argsEncoder = Encode.list encodeBatchElement
-        , valueDecoder = Decode.value
-        }
-        >> CoreTask.mapError TaskPortError
-
-
-encodeBatchElement : BatchElement -> Encode.Value
-encodeBatchElement batch =
-    Encode.object
-        [ ( "hash", Encode.string batch.hash )
-        , ( "definition", encodeDefinition batch.definition )
-        ]
-
-
-type alias BatchElement =
-    { hash : String
-    , definition : Definition
-    }
+                        Pending defs next_ ->
+                            options.onProgress
+                                ( ( Pending defs next_, Tuple.second (Ids.next ids) )
+                                , options.send (Encode.list encodeDefinition defs)
+                                )
+                )
