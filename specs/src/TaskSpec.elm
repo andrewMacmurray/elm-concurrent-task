@@ -1,13 +1,13 @@
 port module TaskSpec exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Runner
-import Spec exposing (describe, given, it, scenario, when)
-import Spec.Claim
+import Spec exposing (Spec, describe, given, it, scenario, when)
+import Spec.Extra exposing (equals)
 import Spec.Observer exposing (observeModel)
-import Spec.Port as Ports
+import Spec.Port
 import Spec.Setup as Spec
 import Spec.Step as Step
 
@@ -28,16 +28,16 @@ type Msg
 
 
 init : Task Task.Error String -> ( Model, Cmd Msg )
-init t =
+init task =
     let
-        ( task, cmd ) =
+        ( progress, cmd ) =
             Task.attempt
                 { send = send
                 , onResult = OnResult
                 }
-                t
+                task
     in
-    ( { task = task, result = Nothing }, cmd )
+    ( { task = progress, result = Nothing }, cmd )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -61,20 +61,20 @@ subscriptions model =
         model.task
 
 
-getInt : Task Task.Error Int
-getInt =
+getInt : Int -> Task Task.Error Int
+getInt i =
     Task.ffi
         { function = "getInt"
-        , args = Encode.null
+        , args = Encode.int i
         , expect = Decode.int
         }
 
 
-getString : Task Task.Error String
-getString =
+getString : String -> Task Task.Error String
+getString s =
     Task.ffi
         { function = "getString"
-        , args = Encode.null
+        , args = Encode.string s
         , expect = Decode.string
         }
 
@@ -89,53 +89,60 @@ port receive : (Decode.Value -> msg) -> Sub msg
 -- Spec
 
 
-pendingSpec : Spec.Spec Model Msg
+main : Program Spec.Flags (Spec.Model Model Msg) (Spec.Msg Msg)
+main =
+    Runner.program
+        [ hardcodedSpec
+        , pendingSpec
+        ]
+
+
+pendingSpec : Spec Model Msg
 pendingSpec =
     describe "Pending Tasks"
         [ scenario "Single Task"
-            (getString
+            (getString "42"
                 |> givenATask
-                |> when "a single task is run"
-                    [ sendProgress
-                        [ Encode.string "42"
-                        ]
-                    ]
-                |> it "decodes is results successfully" (expectResult (Ok "42"))
+                |> when "a single task is run" [ runBatch ]
+                |> it "decodes its results successfully" (expectResult (Ok "42"))
             )
         , scenario "Two Tasks"
             (Task.map String.fromInt
                 (Task.map2 (+)
-                    getInt
-                    getInt
+                    (getInt 1)
+                    (getInt 3)
                 )
                 |> givenATask
-                |> when "two concurrent tasks are run"
-                    [ sendProgress
-                        [ Encode.int 1
-                        , Encode.int 3
-                        ]
-                    ]
-                |> it "decodes the results successfully" (expectResult (Ok "4"))
+                |> when "two concurrent tasks are run" [ runBatch ]
+                |> it "combines the results" (expectResult (Ok "4"))
             )
         , scenario "Three Tasks"
             (Task.map3 (\a b c -> a ++ b ++ c)
-                getString
-                getString
-                getString
+                (getString "1")
+                (getString "3")
+                (getString "5")
                 |> givenATask
-                |> when "three concurrent tasks are run"
-                    [ sendProgress
-                        [ Encode.string "5"
-                        , Encode.string "3"
-                        , Encode.string "1"
-                        ]
-                    ]
-                |> it "decodes the results successfully" (expectResult (Ok "135"))
+                |> when "three concurrent tasks are run" [ runBatch ]
+                |> it "combines the results" (expectResult (Ok "135"))
+            )
+        , scenario "Chained Tasks"
+            (Task.map2 (\a b -> a ++ b)
+                (getString "A")
+                (getString "B")
+                |> Task.andThen
+                    (\ab ->
+                        Task.map2 (\c d -> ab ++ c ++ d)
+                            (getString "C")
+                            (getString "D")
+                    )
+                |> givenATask
+                |> when "chained tasks are run" [ runBatch, runBatch ]
+                |> it "chains and combines the results" (expectResult (Ok "ABCD"))
             )
         ]
 
 
-hardcodedSpec : Spec.Spec Model Msg
+hardcodedSpec : Spec Model Msg
 hardcodedSpec =
     describe "Hardcoded Tasks"
         [ scenario "Single Task"
@@ -153,7 +160,7 @@ hardcodedSpec =
                 |> when "a combined hardcoded task is run" []
                 |> it "combines the two tasks" (expectResult (Ok "111"))
             )
-        , scenario "Chaining Tasks"
+        , scenario "Chained Tasks"
             ((Task.succeed "1"
                 |> Task.andThen
                     (\a ->
@@ -178,15 +185,50 @@ hardcodedSpec =
         ]
 
 
-sendProgress : List Encode.Value -> Step.Context model -> Step.Command msg
-sendProgress results =
-    Ports.send "receive" (Encode.list identity results)
+
+-- Helpers
+
+
+type alias TaskDefinition =
+    { id : String
+    , function : String
+    , args : Encode.Value
+    }
+
+
+runBatch : Step.Context model -> Step.Command msg
+runBatch =
+    Spec.Port.respond "send" decodeTaskDefinitions sendProgress
+
+
+decodeTaskDefinitions : Decoder (List TaskDefinition)
+decodeTaskDefinitions =
+    Decode.list decodeTaskDefinition
+
+
+decodeTaskDefinition : Decoder TaskDefinition
+decodeTaskDefinition =
+    Decode.map3
+        TaskDefinition
+        (Decode.field "id" Decode.string)
+        (Decode.field "function" Decode.string)
+        (Decode.field "args" Decode.value)
+
+
+sendProgress : List TaskDefinition -> Step.Context model -> Step.Command msg
+sendProgress defs =
+    Spec.Port.send "receive" (encodeProgress defs)
+
+
+encodeProgress : List TaskDefinition -> Encode.Value
+encodeProgress defs =
+    Encode.object (List.map (\def -> ( def.id, def.args )) defs)
 
 
 expectResult : Result Task.Error String -> Spec.Expectation Model
 expectResult expected =
     observeModel .result
-        |> Spec.expect (Spec.Claim.isEqual Debug.toString (Just expected))
+        |> Spec.expect (equals (Just expected))
 
 
 givenATask : Task Task.Error String -> Spec.Script Model Msg
@@ -196,11 +238,3 @@ givenATask t =
             |> Spec.withUpdate update
             |> Spec.withSubscriptions subscriptions
         )
-
-
-main : Program Spec.Flags (Spec.Model Model Msg) (Spec.Msg Msg)
-main =
-    Runner.program
-        [ hardcodedSpec
-        , pendingSpec
-        ]

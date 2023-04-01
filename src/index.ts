@@ -15,6 +15,8 @@ function waitRandom() {
   });
 }
 
+// App
+
 const app = Elm.Main.init({ flags: null });
 
 app.ports.send.subscribe(async (defs) => {
@@ -23,7 +25,6 @@ app.ports.send.subscribe(async (defs) => {
       return [def.id, await Ffi[def.function](def.args)];
     })
   ).then((res) => {
-    console.log(res);
     const results = Object.fromEntries(res);
     console.log(`results: ${JSON.stringify(results, null, 2)}`);
     app.ports.receive.send(results);

@@ -1,5 +1,6 @@
 port module Runner exposing
-    ( pick
+    ( elmSpecOut
+    , pick
     , program
     , skip
     )
