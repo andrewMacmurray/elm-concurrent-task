@@ -1,17 +1,23 @@
-module Concurrent.Ids exposing (Ids, init, next)
+module Concurrent.Ids exposing
+    ( Ids
+    , init
+    , next
+    )
+
+-- Opaque Sequence of Ids
 
 
-type alias Ids =
-    Int
+type Ids
+    = Ids Int
 
 
 init : Ids
 init =
-    0
+    Ids 0
 
 
 next : Ids -> ( String, Ids )
-next ids =
+next (Ids ids) =
     ( String.fromInt ids
-    , ids + 1
+    , Ids (ids + 1)
     )

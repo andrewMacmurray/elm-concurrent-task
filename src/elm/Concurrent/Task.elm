@@ -29,7 +29,7 @@ import Task as CoreTask
 
 
 type Task x a
-    = Exec (Ids -> Progress x a)
+    = Task (Ids -> Progress x a)
 
 
 type alias Progress x a =
@@ -37,7 +37,7 @@ type alias Progress x a =
 
 
 type Task_ x a
-    = Pending (List Definition) (RawResponses -> Task_ x a)
+    = Pending (List Definition) (Responses -> Task_ x a)
     | Done (Result x a)
 
 
@@ -48,7 +48,7 @@ type alias Definition =
     }
 
 
-type alias RawResponses =
+type alias Responses =
     Decode.Value
 
 
@@ -69,7 +69,7 @@ type alias Ffi a =
 
 ffi : Ffi a -> Task Error a
 ffi options =
-    Exec
+    Task
         (\ids ->
             let
                 ( id, nextIds ) =
@@ -116,8 +116,8 @@ fromResult_ res =
 
 
 map : (a -> b) -> Task x a -> Task x b
-map f (Exec task) =
-    Exec
+map f (Task task) =
+    Task
         (\ids ->
             let
                 ( tsk, nextIds ) =
@@ -138,8 +138,8 @@ map_ f task =
 
 
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2 f (Exec task1) (Exec task2) =
-    Exec
+map2 f (Task task1) (Task task2) =
+    Task
         (\ids ->
             let
                 ( task1_, ids1 ) =
@@ -188,8 +188,8 @@ map3 f task1 task2 task3 =
 
 
 andThen : (a -> Task x b) -> Task x a -> Task x b
-andThen f (Exec task) =
-    Exec
+andThen f (Task task) =
+    Task
         (\ids ->
             let
                 ( task_, ids1 ) =
@@ -198,15 +198,10 @@ andThen f (Exec task) =
                 next a =
                     unwrap (f a) ids1
             in
-            ( andThen_ (next >> Tuple.first) task_
+            ( andThen_ next task_
             , Tuple.second (Ids.next ids1)
             )
         )
-
-
-unwrap : Task x a -> Ids -> ( Task_ x a, Ids )
-unwrap (Exec task) =
-    task
 
 
 andThen_ : (a -> Task_ x b) -> Task_ x a -> Task_ x b
@@ -231,7 +226,7 @@ andThenDo task2 task1 =
 
 fail : a -> Task a b
 fail e =
-    Exec (\_ -> ( fail_ e, Ids.init ))
+    Task (\_ -> ( fail_ e, Ids.init ))
 
 
 fail_ : x -> Task_ x a
@@ -241,7 +236,7 @@ fail_ e =
 
 succeed : a -> Task x a
 succeed a =
-    Exec (\_ -> ( succeed_ a, Ids.init ))
+    Task (\_ -> ( succeed_ a, Ids.init ))
 
 
 succeed_ : a -> Task_ x a
@@ -254,8 +249,8 @@ succeed_ a =
 
 
 onError : (x -> Task y a) -> Task x a -> Task y a
-onError f (Exec task) =
-    Exec
+onError f (Task task) =
+    Task
         (\ids ->
             let
                 ( task_, nextIds ) =
@@ -264,7 +259,7 @@ onError f (Exec task) =
                 next x =
                     unwrap (f x) nextIds
             in
-            ( onError_ (next >> Tuple.first) task_
+            ( onError_ next task_
             , nextIds
             )
         )
@@ -286,15 +281,15 @@ onError_ f task =
 
 
 mapError : (x -> y) -> Task x a -> Task y a
-mapError f (Exec task) =
-    Exec
+mapError f (Task task) =
+    Task
         (\ids ->
             let
-                ( tsk, ids1 ) =
+                ( task_, nextIds ) =
                     task ids
             in
-            ( mapError_ f tsk
-            , ids1
+            ( mapError_ f task_
+            , nextIds
             )
         )
 
@@ -307,6 +302,11 @@ mapError_ f task =
 
         Pending defs next ->
             Pending defs (next >> mapError_ f)
+
+
+unwrap : Task x a -> Ids -> Task_ x a
+unwrap (Task task) ids =
+    Tuple.first (task ids)
 
 
 
@@ -325,15 +325,15 @@ type alias Attempt msg a =
 
 
 type alias OnProgress msg a =
-    { onResult : Result Error a -> msg
-    , onProgress : ( Progress Error a, Cmd msg ) -> msg
+    { send : Encode.Value -> Cmd msg
     , receive : (Decode.Value -> msg) -> Sub msg
-    , send : Encode.Value -> Cmd msg
+    , onResult : Result Error a -> msg
+    , onProgress : ( Progress Error a, Cmd msg ) -> msg
     }
 
 
 attempt : Attempt msg a -> Task Error a -> ( Progress Error a, Cmd msg )
-attempt options ((Exec toTask) as t) =
+attempt options ((Task toTask) as t) =
     case toTask Ids.init of
         ( Done res, ids ) ->
             ( ( Done res, ids )
