@@ -20,13 +20,41 @@ function waitRandom() {
 const app = Elm.Main.init({ flags: null });
 
 app.ports.send.subscribe(async (defs) => {
+  for (let i = 0; i < defs.length; i++) {
+    const def = defs[i];
+    if (!Ffi[def.function]) {
+      return app.ports.receive.send({
+        status: "error",
+        error: {
+          reason: "missing_function",
+          message: `${def.function} is not registered`,
+        },
+      });
+    }
+  }
+
   Promise.all(
     defs.map(async (def) => {
-      return [def.id, await Ffi[def.function](def.args)];
+      try {
+        const result = await Ffi[def.function](def.args);
+        return [def.id, result];
+      } catch (e) {
+        throw new Error(`${def.function} threw an execption: ${e.message}`);
+      }
     })
-  ).then((res) => {
-    const results = Object.fromEntries(res);
-    console.log(`results: ${JSON.stringify(results, null, 2)}`);
-    app.ports.receive.send(results);
-  });
+  )
+    .then((res) => {
+      const results = Object.fromEntries(res);
+      console.log(`results: ${JSON.stringify(results, null, 2)}`);
+      app.ports.receive.send({ status: "success", results: results });
+    })
+    .catch((e) => {
+      app.ports.receive.send({
+        status: "error",
+        error: {
+          reason: "js_exception",
+          message: e.message,
+        },
+      });
+    });
 });

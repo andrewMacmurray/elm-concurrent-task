@@ -5,9 +5,11 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Runner
 import Spec exposing (Spec, describe, given, it, scenario, when)
+import Spec.Claim as Claim
 import Spec.Extra exposing (equals)
 import Spec.Observer exposing (observeModel)
 import Spec.Port
+import Spec.Report as Report
 import Spec.Setup as Spec
 import Spec.Step as Step
 
@@ -92,8 +94,9 @@ port receive : (Decode.Value -> msg) -> Sub msg
 main : Program Spec.Flags (Spec.Model Model Msg) (Spec.Msg Msg)
 main =
     Runner.program
-        [ hardcodedSpec
-        , pendingSpec
+        [ pendingSpec
+        , errorSpec
+        , hardcodedSpec
         ]
 
 
@@ -142,6 +145,49 @@ pendingSpec =
         ]
 
 
+errorSpec : Spec Model Msg
+errorSpec =
+    describe "Error spec"
+        [ scenario "JS Error"
+            (getString "42"
+                |> givenATask
+                |> when "a JS error is thrown by the function" [ sendError "js_exception" "something went wrong" ]
+                |> it "returns an error" (expectResult (Err (Task.JsException "something went wrong")))
+            )
+        , scenario "Function missing error"
+            (Task.map2 (++)
+                (getString "42")
+                (getString "42")
+                |> givenATask
+                |> when "a missing function error is thrown" [ sendError "missing_function" "getString function is missing" ]
+                |> it "returns an error" (expectResult (Err (Task.MissingFunction "getString function is missing")))
+            )
+        , scenario "Decode response error"
+            (getString "42"
+                |> givenATask
+                |> when "a function returns the wrong type"
+                    [ sendProgress
+                        [ { id = "0"
+                          , function = "getString"
+                          , args = Encode.int 42
+                          }
+                        ]
+                    ]
+                |> it "returns an error"
+                    (expectResultIs
+                        (\res ->
+                            case res of
+                                Err (Task.DecodeResponseError _) ->
+                                    True
+
+                                _ ->
+                                    False
+                        )
+                    )
+            )
+        ]
+
+
 hardcodedSpec : Spec Model Msg
 hardcodedSpec =
     describe "Hardcoded Tasks"
@@ -175,12 +221,12 @@ hardcodedSpec =
         , scenario "Failing Tasks"
             ((Task.succeed "1"
                 |> Task.andThenDo (Task.succeed "2")
-                |> Task.andThenDo (Task.fail Task.PendingError)
+                |> Task.andThenDo (Task.fail (Task.JsException "something went wrong"))
                 |> Task.andThenDo (Task.succeed "3")
              )
                 |> givenATask
                 |> when "a failing task is run" []
-                |> it "returns an error" (expectResult (Err Task.PendingError))
+                |> it "returns an error" (expectResult (Err (Task.JsException "something went wrong")))
             )
         ]
 
@@ -199,6 +245,11 @@ type alias TaskDefinition =
 runBatch : Step.Context model -> Step.Command msg
 runBatch =
     Spec.Port.respond "send" decodeTaskDefinitions sendProgress
+
+
+sendError : String -> String -> Step.Context model -> Step.Command msg
+sendError error reason =
+    Spec.Port.send "receive" (encodeError error reason)
 
 
 decodeTaskDefinitions : Decoder (List TaskDefinition)
@@ -222,7 +273,41 @@ sendProgress defs =
 
 encodeProgress : List TaskDefinition -> Encode.Value
 encodeProgress defs =
-    Encode.object (List.map (\def -> ( def.id, def.args )) defs)
+    Encode.object
+        [ ( "status", Encode.string "success" )
+        , ( "results", Encode.object (List.map (\def -> ( def.id, def.args )) defs) )
+        ]
+
+
+encodeError : String -> String -> Encode.Value
+encodeError error message =
+    Encode.object
+        [ ( "status", Encode.string "error" )
+        , ( "error"
+          , Encode.object
+                [ ( "reason", Encode.string error )
+                , ( "message", Encode.string message )
+                ]
+          )
+        ]
+
+
+expectResultIs : (Result Task.Error String -> Bool) -> Spec.Expectation Model
+expectResultIs toExpected =
+    observeModel .result
+        |> Spec.expect
+            (\res ->
+                case res of
+                    Just r ->
+                        if toExpected r then
+                            Claim.Accept
+
+                        else
+                            Claim.Reject (Report.note ("Expected result does not match predicate, got: " ++ Debug.toString r))
+
+                    Nothing ->
+                        Claim.Reject (Report.note "No Result present")
+            )
 
 
 expectResult : Result Task.Error String -> Spec.Expectation Model

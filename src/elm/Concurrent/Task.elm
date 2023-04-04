@@ -56,6 +56,13 @@ type alias Expect a =
     Decoder a
 
 
+type Error
+    = DecodeResponseError Decode.Error
+    | JsException String
+    | MissingFunction String
+    | UnknownStatus String
+
+
 
 -- Create
 
@@ -83,13 +90,48 @@ ffi options =
                 ]
                 (\results ->
                     results
-                        |> Decode.decodeValue (Decode.field id options.expect)
+                        |> Decode.decodeValue (decodeResponse id options.expect)
+                        |> Result.mapError DecodeResponseError
+                        |> Result.andThen identity
                         |> fromResult_
-                        |> mapError_ DecodeError
                 )
             , nextIds
             )
         )
+
+
+decodeResponse : String -> Decoder value -> Decoder (Result Error value)
+decodeResponse id expect =
+    Decode.field "status" Decode.string
+        |> Decode.andThen
+            (\status ->
+                case status of
+                    "success" ->
+                        Decode.field "results" (Decode.field id (Decode.map Ok expect))
+
+                    "error" ->
+                        Decode.field "error" (Decode.map Err errorDecoder)
+
+                    _ ->
+                        Decode.succeed (Err (UnknownStatus status))
+            )
+
+
+errorDecoder : Decoder Error
+errorDecoder =
+    Decode.field "reason" Decode.string
+        |> Decode.andThen
+            (\reason ->
+                case reason of
+                    "js_exception" ->
+                        Decode.field "message" (Decode.map JsException Decode.string)
+
+                    "missing_function" ->
+                        Decode.field "message" (Decode.map MissingFunction Decode.string)
+
+                    _ ->
+                        Decode.succeed (UnknownStatus ("Unknown error reason: " ++ reason))
+            )
 
 
 encodeDefinition : Definition -> Encode.Value
@@ -313,11 +355,6 @@ unwrap (Task task) ids =
 -- Batches
 
 
-type Error
-    = PendingError
-    | DecodeError Decode.Error
-
-
 type alias Attempt msg a =
     { send : Decode.Value -> Cmd msg
     , onResult : Result Error a -> msg
@@ -333,7 +370,7 @@ type alias OnProgress msg a =
 
 
 attempt : Attempt msg a -> Task Error a -> ( Progress Error a, Cmd msg )
-attempt options ((Task toTask) as t) =
+attempt options (Task toTask) =
     case toTask Ids.init of
         ( Done res, ids ) ->
             ( ( Done res, ids )
