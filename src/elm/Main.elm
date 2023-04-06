@@ -1,6 +1,7 @@
 port module Main exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
+import Concurrent.Task.Http as Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 
@@ -48,7 +49,7 @@ init _ =
                 { send = send
                 , onResult = OnResult
                 }
-                myTask
+                myHttpTask
     in
     ( { task = progress }
     , cmd
@@ -75,6 +76,17 @@ update msg model =
 
 
 -- Task
+
+
+myHttpTask : Task Task.Error String
+myHttpTask =
+    Http.request
+        { url = "https://jsonplaceholder.typicode.com/todos/1"
+        , method = "GET"
+        , headers = []
+        , body = Http.emptyBody
+        , expect = Http.expectJson (Decode.field "title" Decode.string)
+        }
 
 
 myTask : Task Task.Error String

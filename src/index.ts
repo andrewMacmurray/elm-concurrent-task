@@ -1,3 +1,4 @@
+import axios from "axios";
 import { Elm } from "./elm/Main.elm";
 import crypto from "node:crypto";
 
@@ -5,6 +6,16 @@ import crypto from "node:crypto";
 
 const Ffi = {
   slowInt: (i) => waitRandom().then(() => i),
+  httpRequest: (r) => {
+    return axios
+      .request({
+        method: r.method,
+        url: r.url,
+        headers: Object.fromEntries(r.headers.map((h) => [h.name, h.value])),
+        data: r.body,
+      })
+      .then((response) => response.data);
+  },
 };
 
 function waitRandom() {
