@@ -2,8 +2,12 @@ port module Main exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
+import Concurrent.Task.Random
+import Concurrent.Task.Time
 import Json.Decode as Decode
 import Json.Encode as Encode
+import Random
+import Time
 
 
 
@@ -49,7 +53,7 @@ init _ =
                 { send = send
                 , onResult = OnResult
                 }
-                myHttpTask
+                (Task.map Debug.toString randomTask)
     in
     ( { task = progress }
     , cmd
@@ -76,6 +80,16 @@ update msg model =
 
 
 -- Task
+
+
+randomTask : Task x Int
+randomTask =
+    Concurrent.Task.Random.generate (Random.int 0 100000000)
+
+
+timeNowTask : Task x Time.Posix
+timeNowTask =
+    Concurrent.Task.Time.now
 
 
 myHttpTask : Task Task.Error String

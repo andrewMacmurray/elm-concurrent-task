@@ -1,4 +1,13 @@
-module Concurrent.Task.Http exposing (..)
+module Concurrent.Task.Http exposing
+    ( Body
+    , Expect
+    , Header
+    , Request
+    , emptyBody
+    , expectJson
+    , header
+    , request
+    )
 
 import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode exposing (Decoder)
@@ -28,6 +37,15 @@ type Expect a
 
 type Header
     = Header String String
+
+
+
+-- Header
+
+
+header : String -> String -> Header
+header =
+    Header
 
 
 

@@ -6,6 +6,8 @@ import crypto from "node:crypto";
 
 const Ffi = {
   slowInt: (i) => waitRandom().then(() => i),
+  timeNow: () => Date.now(),
+  randomSeed: () => crypto.randomInt(0, 1000000000),
   httpRequest: (r) => {
     return axios
       .request({
