@@ -8,6 +8,7 @@ const Ffi = {
   slowInt: (i) => waitRandom().then(() => i),
   timeNow: () => Date.now(),
   randomSeed: () => crypto.randomInt(0, 1000000000),
+  getEnv: (x) => process.env[x],
   httpRequest: (r) => {
     return axios
       .request({

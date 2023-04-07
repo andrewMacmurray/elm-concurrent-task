@@ -53,7 +53,7 @@ init _ =
                 { send = send
                 , onResult = OnResult
                 }
-                (Task.map Debug.toString randomTask)
+                myCombo
     in
     ( { task = progress }
     , cmd
@@ -100,6 +100,33 @@ myHttpTask =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "title" Decode.string)
+        }
+
+
+myCombo : Task Task.Error String
+myCombo =
+    Task.map2 (++)
+        (waitThenDone 2000)
+        (getEnv |> Task.andThenDo (waitThenDone 2000))
+
+
+waitThenDone : Int -> Task Task.Error String
+waitThenDone ms =
+    Http.request
+        { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
+        , method = "GET"
+        , headers = []
+        , body = Http.emptyBody
+        , expect = Http.expectJson (Decode.field "message" Decode.string)
+        }
+
+
+getEnv : Task Task.Error String
+getEnv =
+    Task.ffi
+        { function = "getEnv"
+        , args = Encode.string "HOME"
+        , expect = Decode.string
         }
 
 
