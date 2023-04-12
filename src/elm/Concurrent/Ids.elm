@@ -1,5 +1,6 @@
 module Concurrent.Ids exposing
     ( Ids
+    , get
     , init
     , next
     )
@@ -16,8 +17,11 @@ init =
     Ids 0
 
 
-next : Ids -> ( String, Ids )
-next (Ids ids) =
-    ( String.fromInt ids
-    , Ids (ids + 1)
-    )
+next : Ids -> Ids
+next (Ids id) =
+    Ids (id + 1)
+
+
+get : Ids -> String
+get (Ids id) =
+    String.fromInt id

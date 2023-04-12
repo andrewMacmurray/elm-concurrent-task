@@ -79,8 +79,8 @@ ffi options =
     Task
         (\ids ->
             let
-                ( id, nextIds ) =
-                    Ids.next ids
+                id =
+                    Ids.get ids
             in
             ( Pending
                 [ { id = id
@@ -95,7 +95,7 @@ ffi options =
                         |> Result.andThen identity
                         |> fromResult_
                 )
-            , nextIds
+            , Ids.next ids
             )
         )
 
@@ -191,7 +191,7 @@ map2 f (Task task1) (Task task2) =
                     task2 ids1
             in
             ( map2_ f task1_ task2_
-            , ids2
+            , Ids.next ids2
             )
         )
 
@@ -241,7 +241,7 @@ andThen f (Task task) =
                     unwrap (f a) ids1
             in
             ( andThen_ next task_
-            , Tuple.second (Ids.next ids1)
+            , Ids.next ids1
             )
         )
 
@@ -399,7 +399,7 @@ onProgress options ( task, ids ) =
 
                         Pending defs next_ ->
                             options.onProgress
-                                ( ( Pending defs next_, Tuple.second (Ids.next ids) )
+                                ( ( Pending defs next_, Ids.next ids )
                                 , options.send (Encode.list encodeDefinition defs)
                                 )
                 )
