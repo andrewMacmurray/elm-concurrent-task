@@ -19,6 +19,7 @@ module Concurrent.Task exposing
     )
 
 import Concurrent.Ids as Ids exposing (Ids)
+import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Task as CoreTask
@@ -33,7 +34,17 @@ type Task x a
 
 
 type alias Progress x a =
-    ( Task_ x a, Ids )
+    ( Task_ x a, Model )
+
+
+type alias Model =
+    { ids : Ids
+    , responses : Responses
+    }
+
+
+type alias Responses =
+    Dict String Decode.Value
 
 
 type Task_ x a
@@ -48,10 +59,6 @@ type alias Definition =
     }
 
 
-type alias Responses =
-    Decode.Value
-
-
 type alias Expect a =
     Decoder a
 
@@ -61,6 +68,23 @@ type Error
     | JsException String
     | MissingFunction String
     | UnknownStatus String
+    | MissingResponseId String
+
+
+
+-- Model
+
+
+init : Ids -> Model
+init ids =
+    { ids = ids
+    , responses = Dict.empty
+    }
+
+
+nextIds_ : Model -> Model
+nextIds_ model =
+    { model | ids = Ids.next model.ids }
 
 
 
@@ -79,8 +103,13 @@ ffi options =
     Task
         (\ids ->
             let
+                model : Model
+                model =
+                    init ids
+
+                id : String
                 id =
-                    Ids.get ids
+                    Ids.get model.ids
             in
             ( Pending
                 [ { id = id
@@ -89,25 +118,34 @@ ffi options =
                   }
                 ]
                 (\results ->
-                    results
-                        |> Decode.decodeValue (decodeResponse id options.expect)
-                        |> Result.mapError DecodeResponseError
-                        |> Result.andThen identity
-                        |> fromResult_
+                    let
+                        _ =
+                            Debug.log "running" id
+                    in
+                    case Dict.get id results of
+                        Just res ->
+                            res
+                                |> Decode.decodeValue (decodeResponse options.expect)
+                                |> Result.mapError DecodeResponseError
+                                |> Result.andThen identity
+                                |> fromResult_
+
+                        Nothing ->
+                            fail_ (MissingResponseId id)
                 )
-            , Ids.next ids
+            , nextIds_ model
             )
         )
 
 
-decodeResponse : String -> Decoder value -> Decoder (Result Error value)
-decodeResponse id expect =
+decodeResponse : Decoder value -> Decoder (Result Error value)
+decodeResponse expect =
     Decode.field "status" Decode.string
         |> Decode.andThen
             (\status ->
                 case status of
                     "success" ->
-                        Decode.field "results" (Decode.field id (Decode.map Ok expect))
+                        Decode.field "result" (Decode.map Ok expect)
 
                     "error" ->
                         Decode.field "error" (Decode.map Err errorDecoder)
@@ -153,6 +191,16 @@ fromResult_ res =
             fail_ e
 
 
+definitions : Responses -> Task_ x a -> List Definition
+definitions responses task =
+    case task of
+        Done _ ->
+            []
+
+        Pending defs next ->
+            defs ++ definitions responses (next responses)
+
+
 
 -- Maps
 
@@ -184,14 +232,14 @@ map2 f (Task task1) (Task task2) =
     Task
         (\ids ->
             let
-                ( task1_, ids1 ) =
+                ( task1_, model1 ) =
                     task1 ids
 
-                ( task2_, ids2 ) =
-                    task2 ids1
+                ( task2_, model2 ) =
+                    task2 model1.ids
             in
             ( map2_ f task1_ task2_
-            , Ids.next ids2
+            , nextIds_ model2
             )
         )
 
@@ -234,14 +282,14 @@ andThen f (Task task) =
     Task
         (\ids ->
             let
-                ( task_, ids1 ) =
+                ( task_, model ) =
                     task ids
 
                 next a =
-                    unwrap (f a) ids1
+                    unwrap (f a) model.ids
             in
             ( andThen_ next task_
-            , Ids.next ids1
+            , nextIds_ model
             )
         )
 
@@ -268,7 +316,7 @@ andThenDo task2 task1 =
 
 fail : a -> Task a b
 fail e =
-    Task (\_ -> ( fail_ e, Ids.init ))
+    Task (\_ -> ( fail_ e, init Ids.init ))
 
 
 fail_ : x -> Task_ x a
@@ -278,7 +326,7 @@ fail_ e =
 
 succeed : a -> Task x a
 succeed a =
-    Task (\_ -> ( succeed_ a, Ids.init ))
+    Task (\_ -> ( succeed_ a, init Ids.init ))
 
 
 succeed_ : a -> Task_ x a
@@ -295,14 +343,14 @@ onError f (Task task) =
     Task
         (\ids ->
             let
-                ( task_, nextIds ) =
+                ( task_, model ) =
                     task ids
 
                 next x =
-                    unwrap (f x) nextIds
+                    unwrap (f x) model.ids
             in
             ( onError_ next task_
-            , nextIds
+            , model
             )
         )
 
@@ -327,11 +375,11 @@ mapError f (Task task) =
     Task
         (\ids ->
             let
-                ( task_, nextIds ) =
+                ( task_, model ) =
                     task ids
             in
             ( mapError_ f task_
-            , nextIds
+            , model
             )
         )
 
@@ -363,7 +411,7 @@ type alias Attempt msg a =
 
 type alias OnProgress msg a =
     { send : Encode.Value -> Cmd msg
-    , receive : (Decode.Value -> msg) -> Sub msg
+    , receive : ({ id : String, result : Decode.Value } -> msg) -> Sub msg
     , onResult : Result Error a -> msg
     , onProgress : ( Progress Error a, Cmd msg ) -> msg
     }
@@ -385,21 +433,32 @@ attempt options (Task toTask) =
 
 
 onProgress : OnProgress msg a -> Progress Error a -> Sub msg
-onProgress options ( task, ids ) =
+onProgress options ( task, model ) =
     case task of
-        Done res ->
-            options.receive (\_ -> options.onResult res)
+        Done _ ->
+            Sub.none
 
         Pending _ next ->
             options.receive
-                (\results ->
-                    case next results of
+                (\result ->
+                    let
+                        updatedResponses =
+                            Dict.insert
+                                result.id
+                                result.result
+                                model.responses
+                    in
+                    case next updatedResponses of
                         Done res ->
                             options.onResult res
 
                         Pending defs next_ ->
                             options.onProgress
-                                ( ( Pending defs next_, Ids.next ids )
-                                , options.send (Encode.list encodeDefinition defs)
+                                ( ( Pending defs next_
+                                  , { model | responses = updatedResponses }
+                                  )
+                                , defs
+                                    |> Encode.list encodeDefinition
+                                    |> options.send
                                 )
                 )

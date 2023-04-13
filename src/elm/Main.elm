@@ -70,7 +70,7 @@ update msg model =
         OnResult result ->
             let
                 _ =
-                    Debug.log "res" result
+                    Debug.log "result" result
             in
             ( model, Cmd.none )
 
@@ -105,9 +105,10 @@ myHttpTask =
 
 myCombo : Task Task.Error String
 myCombo =
-    Task.map2 (++)
-        (waitThenDone 2000)
-        (getEnv |> Task.andThenDo (waitThenDone 2000))
+    Task.map3 join3
+        (waitThenDone 500)
+        (waitThenDone 1000)
+        (waitThenDone 1500)
 
 
 waitThenDone : Int -> Task Task.Error String
@@ -152,6 +153,11 @@ slowInt id =
         }
 
 
+join3 : String -> String -> String -> String
+join3 a b c =
+    a ++ ", " ++ b ++ ", " ++ c
+
+
 
 -- Subscriptions
 
@@ -174,4 +180,4 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (Decode.Value -> msg) -> Sub msg
+port receive : ({ id : String, result : Decode.Value } -> msg) -> Sub msg

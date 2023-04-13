@@ -47,28 +47,26 @@ app.ports.send.subscribe(async (defs) => {
     }
   }
 
-  Promise.all(
-    defs.map(async (def) => {
-      try {
-        const result = await Ffi[def.function](def.args);
-        return [def.id, result];
-      } catch (e) {
-        throw new Error(`${def.function} threw an execption: ${e.message}`);
-      }
-    })
-  )
-    .then((res) => {
-      const results = Object.fromEntries(res);
-      console.log(`results: ${JSON.stringify(results, null, 2)}`);
-      app.ports.receive.send({ status: "success", results: results });
-    })
-    .catch((e) => {
+  defs.map(async (def) => {
+    try {
+      console.log("--STARTING--", def.function, def.id);
+      const result = await Ffi[def.function](def.args);
+      // console.log(def, result);
       app.ports.receive.send({
+        status: "success",
+        id: def.id,
+        result: { status: "success", result: result },
+      });
+      console.log(`sent ${def.id} back to elm`);
+    } catch (e) {
+      app.ports.receive.send({
+        id: def.id,
         status: "error",
         error: {
           reason: "js_exception",
-          message: e.message,
+          message: `${def.function} threw an execption: ${e.message}`,
         },
       });
-    });
+    }
+  });
 });
