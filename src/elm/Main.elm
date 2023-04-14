@@ -121,10 +121,16 @@ myCombo =
         )
         (waitThenDone 1000
             |> Task.andThenDo (waitThenDone 750)
-            |> Task.andThenDo (waitThenDone 250)
+            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 100)
         )
         (waitThenDone 100)
-        |> Task.andThenDo (waitThenDone 100)
+        |> Task.andThenDo
+            (Task.map2 join2
+                (waitThenDone 100)
+                (waitThenDone 200)
+            )
 
 
 waitThenDone : Int -> Task Task.Error String

@@ -35,4 +35,4 @@ get (Sequence id) =
 
 combine : Sequence -> Sequence -> Sequence
 combine (Sequence a) (Sequence b) =
-    Sequence (a + b)
+    Sequence (max a b)
