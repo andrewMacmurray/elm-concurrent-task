@@ -40,17 +40,17 @@ type alias Progress x a =
 
 type alias Model =
     { ids : Ids.Sequence
-    , sent : Set Ids.Id
-    , responses : Responses
+    , started : Set Ids.Id
+    , results : Results
     }
 
 
-type alias Responses =
+type alias Results =
     Dict Ids.Id Decode.Value
 
 
 type Task_ x a
-    = Pending (List Definition) (Responses -> Task_ x a)
+    = Pending (List Definition) (Results -> Task_ x a)
     | Done (Result x a)
 
 
@@ -79,8 +79,8 @@ type Error
 init : Model
 init =
     { ids = Ids.init
-    , sent = Set.empty
-    , responses = Dict.empty
+    , started = Set.empty
+    , results = Dict.empty
     }
 
 
@@ -96,12 +96,12 @@ combineSequences ids model =
 
 recordSent : List Definition -> Model -> Model
 recordSent defs model =
-    { model | sent = Set.union model.sent (toSentIds defs) }
+    { model | started = Set.union model.started (toSentIds defs) }
 
 
-updateResponses : Responses -> Model -> Model
+updateResponses : Results -> Model -> Model
 updateResponses responses model =
-    { model | responses = responses }
+    { model | results = responses }
 
 
 toSentIds : List Definition -> Set Ids.Id
@@ -205,7 +205,7 @@ fromResult_ res =
             fail_ e
 
 
-definitions : Responses -> Task_ x a -> List Definition
+definitions : Results -> Task_ x a -> List Definition
 definitions responses task =
     case task of
         Done _ ->
@@ -419,14 +419,14 @@ unwrap (Task task) model =
 
 type alias Attempt msg a =
     { send : Decode.Value -> Cmd msg
-    , onResult : Result Error a -> msg
+    , onComplete : Result Error a -> msg
     }
 
 
 type alias OnProgress msg a =
     { send : Encode.Value -> Cmd msg
     , receive : (List { id : Ids.Id, result : Decode.Value } -> msg) -> Sub msg
-    , onResult : Result Error a -> msg
+    , onComplete : Result Error a -> msg
     , onProgress : ( Progress Error a, Cmd msg ) -> msg
     }
 
@@ -437,7 +437,7 @@ attempt options (Task task) =
         ( Done res, model ) ->
             ( ( Done res, model )
             , CoreTask.succeed res
-                |> CoreTask.perform options.onResult
+                |> CoreTask.perform options.onComplete
             )
 
         ( Pending defs next, model ) ->
@@ -452,7 +452,7 @@ onProgress : OnProgress msg a -> Progress Error a -> Sub msg
 onProgress options ( task, model ) =
     case task of
         Done res ->
-            options.receive (\_ -> options.onResult res)
+            options.receive (\_ -> options.onComplete res)
 
         Pending _ next ->
             options.receive
@@ -460,12 +460,12 @@ onProgress options ( task, model ) =
                     let
                         updatedResponses =
                             List.foldl (\r dict -> Dict.insert r.id r.result dict)
-                                model.responses
+                                model.results
                                 results
                     in
                     case next updatedResponses of
                         Done res ->
-                            options.onResult res
+                            options.onComplete res
 
                         Pending defs next_ ->
                             options.onProgress
@@ -476,7 +476,7 @@ onProgress options ( task, model ) =
                                         |> nextId
                                   )
                                 , defs
-                                    |> List.filter (\d -> not (Set.member d.id model.sent))
+                                    |> List.filter (\d -> not (Set.member d.id model.started))
                                     |> Encode.list encodeDefinition
                                     |> options.send
                                 )

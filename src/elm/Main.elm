@@ -37,7 +37,7 @@ type alias Model =
 
 
 type Msg
-    = OnResult (Result Task.Error String)
+    = OnComplete (Result Task.Error String)
     | OnProgress ( Task.Progress Task.Error String, Cmd Msg )
 
 
@@ -51,7 +51,7 @@ init _ =
         ( progress, cmd ) =
             Task.attempt
                 { send = send
-                , onResult = OnResult
+                , onComplete = OnComplete
                 }
                 myCombo
     in
@@ -67,7 +67,7 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnResult result ->
+        OnComplete result ->
             let
                 _ =
                     Debug.log "result" result
@@ -203,7 +203,7 @@ subscriptions model =
     Task.onProgress
         { send = send
         , receive = receive
-        , onResult = OnResult
+        , onComplete = OnComplete
         , onProgress = OnProgress
         }
         model.task

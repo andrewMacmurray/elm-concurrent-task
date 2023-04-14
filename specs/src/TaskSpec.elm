@@ -26,7 +26,7 @@ type alias Model =
 
 type Msg
     = OnProgress ( Task.Progress Task.Error String, Cmd Msg )
-    | OnResult (Result Task.Error String)
+    | OnComplete (Result Task.Error String)
 
 
 init : Task Task.Error String -> ( Model, Cmd Msg )
@@ -35,7 +35,7 @@ init task =
         ( progress, cmd ) =
             Task.attempt
                 { send = send
-                , onResult = OnResult
+                , onComplete = OnComplete
                 }
                 task
     in
@@ -52,17 +52,17 @@ update msg model =
         OnProgress ( task, cmd ) ->
             ( { model | task = task }, cmd )
 
-        OnResult result ->
+        OnComplete result ->
             ( { model | result = Just result }, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Task.onProgress
-        { onResult = OnResult
-        , onProgress = OnProgress
+        { send = send
         , receive = receive
-        , send = send
+        , onComplete = OnComplete
+        , onProgress = OnProgress
         }
         model.task
 
