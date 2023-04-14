@@ -70,7 +70,7 @@ update msg model =
         OnResult result ->
             let
                 _ =
-                    Debug.log "res" result
+                    Debug.log "result" result
             in
             ( model, Cmd.none )
 
@@ -103,11 +103,36 @@ myHttpTask =
         }
 
 
+manyEnvs : Task Task.Error String
+manyEnvs =
+    Task.map3 join3
+        (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
+        (getEnv "THREE")
+        getHome
+        |> Task.andThenDo (getEnv "USER")
+
+
 myCombo : Task Task.Error String
 myCombo =
-    Task.map2 (++)
-        (waitThenDone 2000)
-        (getEnv |> Task.andThenDo (waitThenDone 2000))
+    Task.map3 join3
+        (waitThenDone 500
+            |> Task.andThenDo (waitThenDone 200)
+            |> Task.andThenDo (waitThenDone 200)
+            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 200)
+        )
+        (waitThenDone 1000
+            |> Task.andThenDo (waitThenDone 750)
+            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 100)
+        )
+        (waitThenDone 100)
+        |> Task.andThenDo
+            (Task.map2 join2
+                (waitThenDone 100)
+                (waitThenDone 200)
+            )
 
 
 waitThenDone : Int -> Task Task.Error String
@@ -121,18 +146,23 @@ waitThenDone ms =
         }
 
 
-getEnv : Task Task.Error String
-getEnv =
+getHome : Task Task.Error String
+getHome =
+    getEnv "HOME"
+
+
+getEnv : String -> Task Task.Error String
+getEnv var =
     Task.ffi
         { function = "getEnv"
-        , args = Encode.string "HOME"
+        , args = Encode.string var
         , expect = Decode.string
         }
 
 
-myTask : Task Task.Error String
-myTask =
-    Task.map3 (\a b c -> a ++ ", " ++ b ++ ", " ++ c)
+slowInts : Task Task.Error String
+slowInts =
+    Task.map3 join3
         (doubleSlowInt 1)
         (doubleSlowInt 3)
         (doubleSlowInt 5)
@@ -140,7 +170,9 @@ myTask =
 
 doubleSlowInt : Int -> Task Task.Error String
 doubleSlowInt i =
-    Task.map2 (\a b -> a ++ ", " ++ b) (slowInt i) (slowInt (i + 1))
+    Task.map2 join2
+        (slowInt i)
+        (slowInt (i + 1))
 
 
 slowInt : Int -> Task Task.Error String
@@ -150,6 +182,16 @@ slowInt id =
         , args = Encode.int id
         , expect = Decode.map String.fromInt Decode.int
         }
+
+
+join3 : String -> String -> String -> String
+join3 a b c =
+    a ++ ", " ++ b ++ ", " ++ c
+
+
+join2 : String -> String -> String
+join2 a b =
+    a ++ ", " ++ b
 
 
 
@@ -174,4 +216,4 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (Decode.Value -> msg) -> Sub msg
+port receive : (List { id : String, result : Decode.Value } -> msg) -> Sub msg

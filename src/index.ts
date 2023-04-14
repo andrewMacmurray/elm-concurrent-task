@@ -37,38 +37,44 @@ app.ports.send.subscribe(async (defs) => {
   for (let i = 0; i < defs.length; i++) {
     const def = defs[i];
     if (!Ffi[def.function]) {
-      return app.ports.receive.send({
-        status: "error",
-        error: {
-          reason: "missing_function",
-          message: `${def.function} is not registered`,
+      return app.ports.receive.send([
+        {
+          id: def.id,
+          result: {
+            status: "error",
+            error: {
+              reason: "missing_function",
+              message: `${def.function} is not registered`,
+            },
+          },
         },
-      });
+      ]);
     }
   }
 
-  Promise.all(
-    defs.map(async (def) => {
-      try {
-        const result = await Ffi[def.function](def.args);
-        return [def.id, result];
-      } catch (e) {
-        throw new Error(`${def.function} threw an execption: ${e.message}`);
-      }
-    })
-  )
-    .then((res) => {
-      const results = Object.fromEntries(res);
-      console.log(`results: ${JSON.stringify(results, null, 2)}`);
-      app.ports.receive.send({ status: "success", results: results });
-    })
-    .catch((e) => {
-      app.ports.receive.send({
-        status: "error",
-        error: {
-          reason: "js_exception",
-          message: e.message,
+  defs.map(async (def) => {
+    try {
+      console.log("--STARTING--", def.function, def.id);
+      const result = await Ffi[def.function](def.args);
+      app.ports.receive.send([
+        {
+          id: def.id,
+          result: { status: "success", value: result },
         },
-      });
-    });
+      ]);
+    } catch (e) {
+      app.ports.receive.send([
+        {
+          id: def.id,
+          result: {
+            status: "error",
+            error: {
+              reason: "js_exception",
+              message: `${def.function} threw an execption: ${e.message}`,
+            },
+          },
+        },
+      ]);
+    }
+  });
 });
