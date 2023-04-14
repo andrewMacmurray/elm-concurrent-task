@@ -22,7 +22,7 @@ const Ffi = {
 };
 
 function waitRandom() {
-  const randomN = crypto.randomInt(1000, 2000);
+  const randomN = crypto.randomInt(0, 500);
   console.log(`Waiting for ${randomN}`);
   return new Promise((res) => {
     setTimeout(res, randomN);

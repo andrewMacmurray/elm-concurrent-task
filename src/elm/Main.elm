@@ -119,15 +119,14 @@ myCombo =
             |> Task.andThenDo (waitThenDone 200)
             |> Task.andThenDo (waitThenDone 200)
             |> Task.andThenDo (waitThenDone 100)
-            |> Task.andThenDo (waitThenDone 200)
         )
         (waitThenDone 1000
             |> Task.andThenDo (waitThenDone 750)
             |> Task.andThenDo (waitThenDone 100)
-            |> Task.andThenDo (waitThenDone 100)
+        )
+        (waitThenDone 100
             |> Task.andThenDo (waitThenDone 100)
         )
-        (waitThenDone 100)
         |> Task.andThenDo
             (Task.map2 join2
                 (waitThenDone 100)
@@ -216,4 +215,4 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (List { id : String, result : Decode.Value } -> msg) -> Sub msg
+port receive : (Task.Response -> msg) -> Sub msg

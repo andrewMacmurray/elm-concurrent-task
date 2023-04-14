@@ -1,6 +1,7 @@
 port module TaskSpec exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
+import Dict
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Runner
@@ -88,7 +89,7 @@ getString s =
 port send : Encode.Value -> Cmd msg
 
 
-port receive : (List { id : String, result : Decode.Value } -> msg) -> Sub msg
+port receive : (Task.Response -> msg) -> Sub msg
 
 
 
@@ -187,6 +188,28 @@ errorSpec =
                                 _ ->
                                     False
                         )
+                    )
+            )
+        ]
+
+
+cleanupSpec : Spec Model Msg
+cleanupSpec =
+    describe "Cleanup"
+        [ scenario "Cleanup"
+            (getString "42"
+                |> Task.andThenDo (getString "42")
+                |> Task.andThenDo (getString "42")
+                |> givenATask
+                |> when "a task is run" [ runBatch ]
+                |> it "removes the already used responses"
+                    (observeModel
+                        (.task
+                            >> Tuple.second
+                            >> .results
+                            >> Dict.size
+                        )
+                        |> Spec.expect (equals 1)
                     )
             )
         ]

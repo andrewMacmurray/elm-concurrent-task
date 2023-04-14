@@ -2,6 +2,7 @@ module Concurrent.Task exposing
     ( Definition
     , Error(..)
     , Progress
+    , Response
     , Task
     , andMap
     , andThen
@@ -63,6 +64,13 @@ type alias Definition =
 
 type alias Expect a =
     Decoder a
+
+
+type alias Response =
+    List
+        { id : Ids.Id
+        , result : Decode.Value
+        }
 
 
 type Error
@@ -414,7 +422,7 @@ unwrap (Task task) model =
 
 
 
--- Batches
+-- Attempt
 
 
 type alias Attempt msg a =
@@ -425,7 +433,7 @@ type alias Attempt msg a =
 
 type alias OnProgress msg a =
     { send : Encode.Value -> Cmd msg
-    , receive : (List { id : Ids.Id, result : Decode.Value } -> msg) -> Sub msg
+    , receive : (Response -> msg) -> Sub msg
     , onComplete : Result Error a -> msg
     , onProgress : ( Progress Error a, Cmd msg ) -> msg
     }
@@ -454,14 +462,12 @@ onProgress options ( task, model ) =
         Done res ->
             options.receive (\_ -> options.onComplete res)
 
-        Pending _ next ->
+        Pending defs_ next ->
             options.receive
                 (\results ->
                     let
                         updatedResponses =
-                            List.foldl (\r dict -> Dict.insert r.id r.result dict)
-                                model.results
-                                results
+                            List.foldl addResponse model.results results
                     in
                     case next updatedResponses of
                         Done res ->
@@ -472,6 +478,7 @@ onProgress options ( task, model ) =
                                 ( ( Pending defs next_
                                   , model
                                         |> updateResponses updatedResponses
+                                        |> clearDoneResponses defs_
                                         |> recordSent defs
                                         |> nextId
                                   )
@@ -481,3 +488,13 @@ onProgress options ( task, model ) =
                                     |> options.send
                                 )
                 )
+
+
+clearDoneResponses : List Definition -> Model -> Model
+clearDoneResponses defs model =
+    { model | results = Dict.filter (\id _ -> not (List.member id (List.map .id defs))) model.results }
+
+
+addResponse : { id : String, result : Decode.Value } -> Results -> Results
+addResponse r responses =
+    Dict.insert r.id r.result responses
