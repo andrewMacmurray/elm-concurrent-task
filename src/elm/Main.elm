@@ -152,9 +152,9 @@ getEnv var =
         }
 
 
-myTask : Task Task.Error String
-myTask =
-    Task.map3 (\a b c -> a ++ ", " ++ b ++ ", " ++ c)
+slowInts : Task Task.Error String
+slowInts =
+    Task.map3 join3
         (doubleSlowInt 1)
         (doubleSlowInt 3)
         (doubleSlowInt 5)
@@ -162,7 +162,9 @@ myTask =
 
 doubleSlowInt : Int -> Task Task.Error String
 doubleSlowInt i =
-    Task.map2 (\a b -> a ++ ", " ++ b) (slowInt i) (slowInt (i + 1))
+    Task.map2 join2
+        (slowInt i)
+        (slowInt (i + 1))
 
 
 slowInt : Int -> Task Task.Error String

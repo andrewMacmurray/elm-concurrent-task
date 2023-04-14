@@ -294,16 +294,16 @@ map3 f task1 task2 task3 =
 andThen : (a -> Task x b) -> Task x a -> Task x b
 andThen f (Task task) =
     Task
-        (\ids ->
+        (\model ->
             let
-                ( task_, model ) =
-                    task ids
+                ( task_, model1 ) =
+                    task model
 
                 next a =
-                    unwrap (f a) model
+                    unwrap (f a) model1
             in
             ( andThen_ next task_
-            , nextId model
+            , nextId model1
             )
         )
 
@@ -355,16 +355,16 @@ succeed_ a =
 onError : (x -> Task y a) -> Task x a -> Task y a
 onError f (Task task) =
     Task
-        (\ids ->
+        (\model ->
             let
-                ( task_, model ) =
-                    task ids
+                ( task_, model1 ) =
+                    task model
 
                 next x =
-                    unwrap (f x) model
+                    unwrap (f x) model1
             in
             ( onError_ next task_
-            , model
+            , model1
             )
         )
 
@@ -387,13 +387,13 @@ onError_ f task =
 mapError : (x -> y) -> Task x a -> Task y a
 mapError f (Task task) =
     Task
-        (\ids ->
+        (\model ->
             let
-                ( task_, model ) =
-                    task ids
+                ( task_, model1 ) =
+                    task model
             in
             ( mapError_ f task_
-            , model
+            , model1
             )
         )
 
@@ -432,8 +432,8 @@ type alias OnProgress msg a =
 
 
 attempt : Attempt msg a -> Task Error a -> ( Progress Error a, Cmd msg )
-attempt options (Task toTask) =
-    case toTask init of
+attempt options (Task task) =
+    case task init of
         ( Done res, model ) ->
             ( ( Done res, model )
             , CoreTask.succeed res
