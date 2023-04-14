@@ -39,7 +39,11 @@ init task =
                 }
                 task
     in
-    ( { task = progress, result = Nothing }, cmd )
+    ( { task = progress
+      , result = Nothing
+      }
+    , cmd
+    )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -84,7 +88,7 @@ getString s =
 port send : Encode.Value -> Cmd msg
 
 
-port receive : (Decode.Value -> msg) -> Sub msg
+port receive : (List { id : String, result : Decode.Value } -> msg) -> Sub msg
 
 
 
@@ -249,7 +253,12 @@ runBatch =
 
 sendError : String -> String -> Step.Context model -> Step.Command msg
 sendError error reason =
-    Spec.Port.send "receive" (encodeError error reason)
+    Spec.Port.respond "send" decodeTaskDefinitions (sendError_ error reason)
+
+
+sendError_ : String -> String -> List TaskDefinition -> Step.Context model -> Step.Command msg
+sendError_ error reason defs =
+    Spec.Port.send "receive" (Encode.list (encodeError error reason) defs)
 
 
 decodeTaskDefinitions : Decoder (List TaskDefinition)
@@ -268,25 +277,35 @@ decodeTaskDefinition =
 
 sendProgress : List TaskDefinition -> Step.Context model -> Step.Command msg
 sendProgress defs =
-    Spec.Port.send "receive" (encodeProgress defs)
+    Spec.Port.send "receive" (Encode.list encodeSuccess defs)
 
 
-encodeProgress : List TaskDefinition -> Encode.Value
-encodeProgress defs =
+encodeSuccess : TaskDefinition -> Encode.Value
+encodeSuccess def =
     Encode.object
-        [ ( "status", Encode.string "success" )
-        , ( "results", Encode.object (List.map (\def -> ( def.id, def.args )) defs) )
+        [ ( "id", Encode.string def.id )
+        , ( "result"
+          , Encode.object
+                [ ( "status", Encode.string "success" )
+                , ( "value", def.args )
+                ]
+          )
         ]
 
 
-encodeError : String -> String -> Encode.Value
-encodeError error message =
+encodeError : String -> String -> TaskDefinition -> Encode.Value
+encodeError error message def =
     Encode.object
-        [ ( "status", Encode.string "error" )
-        , ( "error"
+        [ ( "id", Encode.string def.id )
+        , ( "result"
           , Encode.object
-                [ ( "reason", Encode.string error )
-                , ( "message", Encode.string message )
+                [ ( "status", Encode.string "error" )
+                , ( "error"
+                  , Encode.object
+                        [ ( "reason", Encode.string error )
+                        , ( "message", Encode.string message )
+                        ]
+                  )
                 ]
           )
         ]

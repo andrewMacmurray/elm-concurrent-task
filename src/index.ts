@@ -37,13 +37,18 @@ app.ports.send.subscribe(async (defs) => {
   for (let i = 0; i < defs.length; i++) {
     const def = defs[i];
     if (!Ffi[def.function]) {
-      return app.ports.receive.send({
-        status: "error",
-        error: {
-          reason: "missing_function",
-          message: `${def.function} is not registered`,
+      return app.ports.receive.send([
+        {
+          id: def.id,
+          result: {
+            status: "error",
+            error: {
+              reason: "missing_function",
+              message: `${def.function} is not registered`,
+            },
+          },
         },
-      });
+      ]);
     }
   }
 
@@ -51,21 +56,25 @@ app.ports.send.subscribe(async (defs) => {
     try {
       console.log("--STARTING--", def.function, def.id);
       const result = await Ffi[def.function](def.args);
-      // console.log(def, result);
-      app.ports.receive.send({
-        status: "success",
-        id: def.id,
-        result: { status: "success", result: result },
-      });
-    } catch (e) {
-      app.ports.receive.send({
-        id: def.id,
-        status: "error",
-        error: {
-          reason: "js_exception",
-          message: `${def.function} threw an execption: ${e.message}`,
+      app.ports.receive.send([
+        {
+          id: def.id,
+          result: { status: "success", value: result },
         },
-      });
+      ]);
+    } catch (e) {
+      app.ports.receive.send([
+        {
+          id: def.id,
+          result: {
+            status: "error",
+            error: {
+              reason: "js_exception",
+              message: `${def.function} threw an execption: ${e.message}`,
+            },
+          },
+        },
+      ]);
     }
   });
 });

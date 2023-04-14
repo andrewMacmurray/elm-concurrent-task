@@ -116,8 +116,10 @@ myCombo : Task Task.Error String
 myCombo =
     Task.map3 join3
         (waitThenDone 500
-            |> Task.andThenDo (waitThenDone 500)
-            |> Task.andThenDo (waitThenDone 1000)
+            |> Task.andThenDo (waitThenDone 200)
+            |> Task.andThenDo (waitThenDone 200)
+            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 200)
         )
         (waitThenDone 1000
             |> Task.andThenDo (waitThenDone 750)
@@ -214,4 +216,4 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : ({ id : String, result : Decode.Value } -> msg) -> Sub msg
+port receive : (List { id : String, result : Decode.Value } -> msg) -> Sub msg

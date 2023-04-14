@@ -10,7 +10,7 @@ module Concurrent.Task.Http exposing
     )
 
 import Concurrent.Task as Task exposing (Task)
-import Json.Decode as Decode exposing (Decoder)
+import Json.Decode exposing (Decoder)
 import Json.Encode as Encode
 
 

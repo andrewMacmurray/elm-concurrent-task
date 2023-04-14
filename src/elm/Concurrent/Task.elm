@@ -159,7 +159,7 @@ decodeResponse expect =
             (\status ->
                 case status of
                     "success" ->
-                        Decode.field "result" (Decode.map Ok expect)
+                        Decode.field "value" (Decode.map Ok expect)
 
                     "error" ->
                         Decode.field "error" (Decode.map Err errorDecoder)
@@ -425,7 +425,7 @@ type alias Attempt msg a =
 
 type alias OnProgress msg a =
     { send : Encode.Value -> Cmd msg
-    , receive : ({ id : Ids.Id, result : Decode.Value } -> msg) -> Sub msg
+    , receive : (List { id : Ids.Id, result : Decode.Value } -> msg) -> Sub msg
     , onResult : Result Error a -> msg
     , onProgress : ( Progress Error a, Cmd msg ) -> msg
     }
@@ -456,13 +456,12 @@ onProgress options ( task, model ) =
 
         Pending _ next ->
             options.receive
-                (\result ->
+                (\results ->
                     let
                         updatedResponses =
-                            Dict.insert
-                                result.id
-                                result.result
+                            List.foldl (\r dict -> Dict.insert r.id r.result dict)
                                 model.responses
+                                results
                     in
                     case next updatedResponses of
                         Done res ->
