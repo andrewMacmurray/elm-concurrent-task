@@ -57,7 +57,6 @@ app.ports.send.subscribe(async (defs) => {
         id: def.id,
         result: { status: "success", result: result },
       });
-      console.log(`sent ${def.id} back to elm`);
     } catch (e) {
       app.ports.receive.send({
         id: def.id,

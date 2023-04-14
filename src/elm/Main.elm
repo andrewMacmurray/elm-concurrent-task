@@ -106,9 +106,15 @@ myHttpTask =
 myCombo : Task Task.Error String
 myCombo =
     Task.map3 join3
-        (waitThenDone 500)
-        (waitThenDone 1000)
-        (waitThenDone 1500)
+        (waitThenDone 500
+            |> Task.andThenDo (waitThenDone 500)
+            |> Task.andThenDo (waitThenDone 1000)
+        )
+        (waitThenDone 1000
+            |> Task.andThenDo (waitThenDone 750)
+            |> Task.andThenDo (waitThenDone 250)
+        )
+        (waitThenDone 100)
 
 
 waitThenDone : Int -> Task Task.Error String
@@ -156,6 +162,11 @@ slowInt id =
 join3 : String -> String -> String -> String
 join3 a b c =
     a ++ ", " ++ b ++ ", " ++ c
+
+
+join2 : String -> String -> String
+join2 a b =
+    a ++ ", " ++ b
 
 
 

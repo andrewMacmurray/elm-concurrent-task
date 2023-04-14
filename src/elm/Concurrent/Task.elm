@@ -18,10 +18,11 @@ module Concurrent.Task exposing
     , succeed
     )
 
-import Concurrent.Ids as Ids exposing (Ids)
+import Concurrent.Ids as Ids
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+import Set exposing (Set)
 import Task as CoreTask
 
 
@@ -30,7 +31,7 @@ import Task as CoreTask
 
 
 type Task x a
-    = Task (Ids -> Progress x a)
+    = Task (Model -> Progress x a)
 
 
 type alias Progress x a =
@@ -38,13 +39,14 @@ type alias Progress x a =
 
 
 type alias Model =
-    { ids : Ids
+    { ids : Ids.Sequence
+    , sent : Set Ids.Id
     , responses : Responses
     }
 
 
 type alias Responses =
-    Dict String Decode.Value
+    Dict Ids.Id Decode.Value
 
 
 type Task_ x a
@@ -53,7 +55,7 @@ type Task_ x a
 
 
 type alias Definition =
-    { id : String
+    { id : Ids.Id
     , function : String
     , args : Encode.Value
     }
@@ -68,16 +70,16 @@ type Error
     | JsException String
     | MissingFunction String
     | UnknownStatus String
-    | MissingResponseId String
 
 
 
 -- Model
 
 
-init : Ids -> Model
-init ids =
-    { ids = ids
+init : Model
+init =
+    { ids = Ids.init
+    , sent = Set.empty
     , responses = Dict.empty
     }
 
@@ -85,6 +87,16 @@ init ids =
 nextIds_ : Model -> Model
 nextIds_ model =
     { model | ids = Ids.next model.ids }
+
+
+recordSent : List Definition -> Model -> Model
+recordSent defs model =
+    { model | sent = Set.union model.sent (toSentIds defs) }
+
+
+toSentIds : List Definition -> Set Ids.Id
+toSentIds defs =
+    Set.fromList (List.map .id defs)
 
 
 
@@ -101,12 +113,8 @@ type alias Ffi a =
 ffi : Ffi a -> Task Error a
 ffi options =
     Task
-        (\ids ->
+        (\model ->
             let
-                model : Model
-                model =
-                    init ids
-
                 id : String
                 id =
                     Ids.get model.ids
@@ -118,10 +126,6 @@ ffi options =
                   }
                 ]
                 (\results ->
-                    let
-                        _ =
-                            Debug.log "running" id
-                    in
                     case Dict.get id results of
                         Just res ->
                             res
@@ -131,7 +135,7 @@ ffi options =
                                 |> fromResult_
 
                         Nothing ->
-                            fail_ (MissingResponseId id)
+                            unwrap (ffi options) model
                 )
             , nextIds_ model
             )
@@ -230,13 +234,13 @@ map_ f task =
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
 map2 f (Task task1) (Task task2) =
     Task
-        (\ids ->
+        (\model ->
             let
                 ( task1_, model1 ) =
-                    task1 ids
+                    task1 model
 
                 ( task2_, model2 ) =
-                    task2 model1.ids
+                    task2 model1
             in
             ( map2_ f task1_ task2_
             , nextIds_ model2
@@ -286,7 +290,7 @@ andThen f (Task task) =
                     task ids
 
                 next a =
-                    unwrap (f a) model.ids
+                    unwrap (f a) model
             in
             ( andThen_ next task_
             , nextIds_ model
@@ -316,7 +320,7 @@ andThenDo task2 task1 =
 
 fail : a -> Task a b
 fail e =
-    Task (\_ -> ( fail_ e, init Ids.init ))
+    Task (\_ -> ( fail_ e, init ))
 
 
 fail_ : x -> Task_ x a
@@ -326,7 +330,7 @@ fail_ e =
 
 succeed : a -> Task x a
 succeed a =
-    Task (\_ -> ( succeed_ a, init Ids.init ))
+    Task (\_ -> ( succeed_ a, init ))
 
 
 succeed_ : a -> Task_ x a
@@ -347,7 +351,7 @@ onError f (Task task) =
                     task ids
 
                 next x =
-                    unwrap (f x) model.ids
+                    unwrap (f x) model
             in
             ( onError_ next task_
             , model
@@ -394,9 +398,9 @@ mapError_ f task =
             Pending defs (next >> mapError_ f)
 
 
-unwrap : Task x a -> Ids -> Task_ x a
-unwrap (Task task) ids =
-    Tuple.first (task ids)
+unwrap : Task x a -> Model -> Task_ x a
+unwrap (Task task) model =
+    Tuple.first (task model)
 
 
 
@@ -411,7 +415,7 @@ type alias Attempt msg a =
 
 type alias OnProgress msg a =
     { send : Encode.Value -> Cmd msg
-    , receive : ({ id : String, result : Decode.Value } -> msg) -> Sub msg
+    , receive : ({ id : Ids.Id, result : Decode.Value } -> msg) -> Sub msg
     , onResult : Result Error a -> msg
     , onProgress : ( Progress Error a, Cmd msg ) -> msg
     }
@@ -419,15 +423,17 @@ type alias OnProgress msg a =
 
 attempt : Attempt msg a -> Task Error a -> ( Progress Error a, Cmd msg )
 attempt options (Task toTask) =
-    case toTask Ids.init of
-        ( Done res, ids ) ->
-            ( ( Done res, ids )
+    case toTask init of
+        ( Done res, model ) ->
+            ( ( Done res, model )
             , CoreTask.succeed res
                 |> CoreTask.perform options.onResult
             )
 
-        ( Pending defs next, ids ) ->
-            ( ( Pending defs next, ids )
+        ( Pending defs next, model ) ->
+            ( ( Pending defs next
+              , recordSent defs model
+              )
             , options.send (Encode.list encodeDefinition defs)
             )
 
@@ -435,8 +441,8 @@ attempt options (Task toTask) =
 onProgress : OnProgress msg a -> Progress Error a -> Sub msg
 onProgress options ( task, model ) =
     case task of
-        Done _ ->
-            Sub.none
+        Done res ->
+            options.receive (\_ -> options.onResult res)
 
         Pending _ next ->
             options.receive
@@ -455,9 +461,10 @@ onProgress options ( task, model ) =
                         Pending defs next_ ->
                             options.onProgress
                                 ( ( Pending defs next_
-                                  , { model | responses = updatedResponses }
+                                  , recordSent defs { model | responses = updatedResponses }
                                   )
                                 , defs
+                                    |> List.filter (\d -> not (Set.member d.id model.sent))
                                     |> Encode.list encodeDefinition
                                     |> options.send
                                 )

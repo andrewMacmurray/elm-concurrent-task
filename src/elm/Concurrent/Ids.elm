@@ -1,5 +1,6 @@
 module Concurrent.Ids exposing
-    ( Ids
+    ( Id
+    , Sequence
     , get
     , init
     , next
@@ -8,20 +9,24 @@ module Concurrent.Ids exposing
 -- Opaque Sequence of Ids
 
 
-type Ids
-    = Ids Int
+type Sequence
+    = Sequence Int
 
 
-init : Ids
+type alias Id =
+    String
+
+
+init : Sequence
 init =
-    Ids 0
+    Sequence 0
 
 
-next : Ids -> Ids
-next (Ids id) =
-    Ids (id + 1)
+next : Sequence -> Sequence
+next (Sequence id) =
+    Sequence (id + 1)
 
 
-get : Ids -> String
-get (Ids id) =
+get : Sequence -> Id
+get (Sequence id) =
     String.fromInt id
