@@ -84,14 +84,24 @@ init =
     }
 
 
-nextIds_ : Model -> Model
-nextIds_ model =
+nextId : Model -> Model
+nextId model =
     { model | ids = Ids.next model.ids }
+
+
+combineSequences : Ids.Sequence -> Model -> Model
+combineSequences ids model =
+    { model | ids = Ids.combine ids model.ids }
 
 
 recordSent : List Definition -> Model -> Model
 recordSent defs model =
     { model | sent = Set.union model.sent (toSentIds defs) }
+
+
+updateResponses : Responses -> Model -> Model
+updateResponses responses model =
+    { model | responses = responses }
 
 
 toSentIds : List Definition -> Set Ids.Id
@@ -137,7 +147,7 @@ ffi options =
                         Nothing ->
                             unwrap (ffi options) model
                 )
-            , nextIds_ model
+            , nextId model
             )
         )
 
@@ -243,7 +253,7 @@ map2 f (Task task1) (Task task2) =
                     task2 model1
             in
             ( map2_ f task1_ task2_
-            , nextIds_ model2
+            , combineSequences model1.ids model2
             )
         )
 
@@ -293,7 +303,7 @@ andThen f (Task task) =
                     unwrap (f a) model
             in
             ( andThen_ next task_
-            , nextIds_ model
+            , nextId model
             )
         )
 
@@ -461,7 +471,10 @@ onProgress options ( task, model ) =
                         Pending defs next_ ->
                             options.onProgress
                                 ( ( Pending defs next_
-                                  , recordSent defs { model | responses = updatedResponses }
+                                  , model
+                                        |> updateResponses updatedResponses
+                                        |> recordSent defs
+                                        |> nextId
                                   )
                                 , defs
                                     |> List.filter (\d -> not (Set.member d.id model.sent))

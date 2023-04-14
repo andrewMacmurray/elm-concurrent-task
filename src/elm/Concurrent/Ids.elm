@@ -1,6 +1,7 @@
 module Concurrent.Ids exposing
     ( Id
     , Sequence
+    , combine
     , get
     , init
     , next
@@ -30,3 +31,8 @@ next (Sequence id) =
 get : Sequence -> Id
 get (Sequence id) =
     String.fromInt id
+
+
+combine : Sequence -> Sequence -> Sequence
+combine (Sequence a) (Sequence b) =
+    Sequence (a + b)

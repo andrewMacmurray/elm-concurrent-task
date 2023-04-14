@@ -103,6 +103,15 @@ myHttpTask =
         }
 
 
+manyEnvs : Task Task.Error String
+manyEnvs =
+    Task.map3 join3
+        (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
+        (getEnv "THREE")
+        getHome
+        |> Task.andThenDo (getEnv "USER")
+
+
 myCombo : Task Task.Error String
 myCombo =
     Task.map3 join3
@@ -115,6 +124,7 @@ myCombo =
             |> Task.andThenDo (waitThenDone 250)
         )
         (waitThenDone 100)
+        |> Task.andThenDo (waitThenDone 100)
 
 
 waitThenDone : Int -> Task Task.Error String
@@ -128,11 +138,16 @@ waitThenDone ms =
         }
 
 
-getEnv : Task Task.Error String
-getEnv =
+getHome : Task Task.Error String
+getHome =
+    getEnv "HOME"
+
+
+getEnv : String -> Task Task.Error String
+getEnv var =
     Task.ffi
         { function = "getEnv"
-        , args = Encode.string "HOME"
+        , args = Encode.string var
         , expect = Decode.string
         }
 
