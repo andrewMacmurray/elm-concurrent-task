@@ -70,7 +70,7 @@ subscriptions model =
 
 getInt : Int -> Task Task.Error Int
 getInt i =
-    Task.ffi
+    Task.task
         { function = "getInt"
         , args = Encode.int i
         , expect = Decode.int
@@ -79,7 +79,7 @@ getInt i =
 
 getString : String -> Task Task.Error String
 getString s =
-    Task.ffi
+    Task.task
         { function = "getString"
         , args = Encode.string s
         , expect = Decode.string
@@ -89,7 +89,7 @@ getString s =
 port send : Encode.Value -> Cmd msg
 
 
-port receive : (Task.Response -> msg) -> Sub msg
+port receive : (List Task.Response -> msg) -> Sub msg
 
 
 

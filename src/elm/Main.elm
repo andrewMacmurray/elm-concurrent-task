@@ -152,7 +152,7 @@ getHome =
 
 getEnv : String -> Task Task.Error String
 getEnv var =
-    Task.ffi
+    Task.task
         { function = "getEnv"
         , args = Encode.string var
         , expect = Decode.string
@@ -176,7 +176,7 @@ doubleSlowInt i =
 
 slowInt : Int -> Task Task.Error String
 slowInt id =
-    Task.ffi
+    Task.task
         { function = "slowInt"
         , args = Encode.int id
         , expect = Decode.map String.fromInt Decode.int
@@ -215,4 +215,4 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (Task.Response -> msg) -> Sub msg
+port receive : (List Task.Response -> msg) -> Sub msg

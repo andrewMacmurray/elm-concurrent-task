@@ -9,7 +9,6 @@ module Concurrent.Task exposing
     , andThenDo
     , attempt
     , fail
-    , ffi
     , map
     , map2
     , map3
@@ -17,6 +16,7 @@ module Concurrent.Task exposing
     , onError
     , onProgress
     , succeed
+    , task
     )
 
 import Concurrent.Ids as Ids
@@ -67,10 +67,9 @@ type alias Expect a =
 
 
 type alias Response =
-    List
-        { id : Ids.Id
-        , result : Decode.Value
-        }
+    { id : Ids.Id
+    , result : Decode.Value
+    }
 
 
 type Error
@@ -128,8 +127,8 @@ type alias Ffi a =
     }
 
 
-ffi : Ffi a -> Task Error a
-ffi options =
+task : Ffi a -> Task Error a
+task options =
     Task
         (\model ->
             let
@@ -153,7 +152,7 @@ ffi options =
                                 |> fromResult_
 
                         Nothing ->
-                            unwrap (ffi options) model
+                            unwrap (task options) model
                 )
             , nextId model
             )
@@ -213,35 +212,25 @@ fromResult_ res =
             fail_ e
 
 
-definitions : Results -> Task_ x a -> List Definition
-definitions responses task =
-    case task of
-        Done _ ->
-            []
-
-        Pending defs next ->
-            defs ++ definitions responses (next responses)
-
-
 
 -- Maps
 
 
 map : (a -> b) -> Task x a -> Task x b
-map f (Task task) =
+map f (Task toTask) =
     Task
         (\model ->
             let
                 ( task_, model1 ) =
-                    task model
+                    toTask model
             in
             ( map_ f task_, model1 )
         )
 
 
 map_ : (a -> b) -> Task_ x a -> Task_ x b
-map_ f task =
-    case task of
+map_ f task_ =
+    case task_ of
         Done res ->
             Done (Result.map f res)
 
@@ -250,15 +239,15 @@ map_ f task =
 
 
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2 f (Task task1) (Task task2) =
+map2 f (Task toTask1) (Task toTask2) =
     Task
         (\model ->
             let
                 ( task1_, model1 ) =
-                    task1 model
+                    toTask1 model
 
                 ( task2_, model2 ) =
-                    task2 model1
+                    toTask2 model1
             in
             ( map2_ f task1_ task2_
             , combineSequences model1.ids model2
@@ -300,12 +289,12 @@ map3 f task1 task2 task3 =
 
 
 andThen : (a -> Task x b) -> Task x a -> Task x b
-andThen f (Task task) =
+andThen f (Task toTask) =
     Task
         (\model ->
             let
                 ( task_, model1 ) =
-                    task model
+                    toTask model
 
                 next a =
                     unwrap (f a) model1
@@ -317,8 +306,8 @@ andThen f (Task task) =
 
 
 andThen_ : (a -> Task_ x b) -> Task_ x a -> Task_ x b
-andThen_ f task =
-    case task of
+andThen_ f task_ =
+    case task_ of
         Done res ->
             case res of
                 Ok a ->
@@ -361,12 +350,12 @@ succeed_ a =
 
 
 onError : (x -> Task y a) -> Task x a -> Task y a
-onError f (Task task) =
+onError f (Task toTask) =
     Task
         (\model ->
             let
                 ( task_, model1 ) =
-                    task model
+                    toTask model
 
                 next x =
                     unwrap (f x) model1
@@ -378,8 +367,8 @@ onError f (Task task) =
 
 
 onError_ : (x -> Task_ y a) -> Task_ x a -> Task_ y a
-onError_ f task =
-    case task of
+onError_ f task_ =
+    case task_ of
         Done res ->
             case res of
                 Ok a ->
@@ -393,12 +382,12 @@ onError_ f task =
 
 
 mapError : (x -> y) -> Task x a -> Task y a
-mapError f (Task task) =
+mapError f (Task toTask) =
     Task
         (\model ->
             let
                 ( task_, model1 ) =
-                    task model
+                    toTask model
             in
             ( mapError_ f task_
             , model1
@@ -407,8 +396,8 @@ mapError f (Task task) =
 
 
 mapError_ : (x -> y) -> Task_ x a -> Task_ y a
-mapError_ f task =
-    case task of
+mapError_ f task_ =
+    case task_ of
         Done res ->
             Done (Result.mapError f res)
 
@@ -417,8 +406,8 @@ mapError_ f task =
 
 
 unwrap : Task x a -> Model -> Task_ x a
-unwrap (Task task) model =
-    Tuple.first (task model)
+unwrap (Task toTask) model =
+    Tuple.first (toTask model)
 
 
 
@@ -433,15 +422,15 @@ type alias Attempt msg a =
 
 type alias OnProgress msg a =
     { send : Encode.Value -> Cmd msg
-    , receive : (Response -> msg) -> Sub msg
+    , receive : (List Response -> msg) -> Sub msg
     , onComplete : Result Error a -> msg
     , onProgress : ( Progress Error a, Cmd msg ) -> msg
     }
 
 
 attempt : Attempt msg a -> Task Error a -> ( Progress Error a, Cmd msg )
-attempt options (Task task) =
-    case task init of
+attempt options (Task toTask) =
+    case toTask init of
         ( Done res, model ) ->
             ( ( Done res, model )
             , CoreTask.succeed res
@@ -457,8 +446,8 @@ attempt options (Task task) =
 
 
 onProgress : OnProgress msg a -> Progress Error a -> Sub msg
-onProgress options ( task, model ) =
-    case task of
+onProgress options ( task_, model ) =
+    case task_ of
         Done res ->
             options.receive (\_ -> options.onComplete res)
 
@@ -494,6 +483,6 @@ clearDoneResponses defs =
     Dict.filter (\id _ -> not (List.member id (List.map .id defs)))
 
 
-addResponse : { id : String, result : Decode.Value } -> Results -> Results
-addResponse r responses =
-    Dict.insert r.id r.result responses
+addResponse : Response -> Results -> Results
+addResponse r results =
+    Dict.insert r.id r.result results

@@ -22,7 +22,7 @@ generate generator =
 
 randomSeed : Task x Int
 randomSeed =
-    Task.ffi
+    Task.task
         { function = "randomSeed"
         , args = Encode.null
         , expect = Decode.int

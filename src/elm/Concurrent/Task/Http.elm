@@ -72,7 +72,7 @@ emptyBody =
 
 request : Request a -> Task Task.Error a
 request r =
-    Task.ffi
+    Task.task
         { function = "httpRequest"
         , args = encode r
         , expect = toTaskExpect r.expect
