@@ -1,5 +1,6 @@
 module Concurrent.Task.Http exposing
     ( Body
+    , Error(..)
     , Expect
     , Header
     , Request
@@ -10,7 +11,7 @@ module Concurrent.Task.Http exposing
     )
 
 import Concurrent.Task as Task exposing (Task)
-import Json.Decode exposing (Decoder)
+import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
@@ -37,6 +38,21 @@ type Expect a
 
 type Header
     = Header String String
+
+
+type Error
+    = BadUrl String
+    | Timeout
+    | NetworkError
+    | BadStatus StatusDetails
+    | TaskError Task.Error
+
+
+type alias StatusDetails =
+    { code : Int
+    , text : String
+    , body : Decode.Value
+    }
 
 
 
@@ -70,18 +86,67 @@ emptyBody =
 -- Send Request
 
 
-request : Request a -> Task Task.Error a
+request : Request a -> Task Error a
 request r =
     Task.task
         { function = "httpRequest"
         , args = encode r
-        , expect = toTaskExpect r.expect
+        , expect = decodeResponse r
         }
+        |> Task.mapError TaskError
+        |> Task.andThen Task.fromResult
 
 
-toTaskExpect : Expect a -> Decoder a
-toTaskExpect (ExpectJson decoder) =
-    decoder
+decodeResponse : Request a -> Decoder (Result Error a)
+decodeResponse r =
+    Decode.oneOf
+        [ decodeExpect r.expect
+        , decodeError r
+        ]
+
+
+decodeError : Request a -> Decoder (Result Error value)
+decodeError r =
+    Decode.field "errorCode" Decode.string
+        |> Decode.andThen
+            (\code ->
+                case code of
+                    "ECONNABORTED" ->
+                        Decode.succeed (Err Timeout)
+
+                    "ERR_NETWORK" ->
+                        Decode.succeed (Err NetworkError)
+
+                    "ERR_INVALID_URL" ->
+                        Decode.succeed (Err (BadUrl r.url))
+
+                    _ ->
+                        Decode.fail ("Unknown error code: " ++ code)
+            )
+
+
+decodeExpect : Expect a -> Decoder (Result Error a)
+decodeExpect (ExpectJson decoder) =
+    Decode.field "status" Decode.int
+        |> Decode.andThen
+            (\code ->
+                if code >= 200 && code < 300 then
+                    Decode.field "data" (Decode.map Ok decoder)
+
+                else
+                    Decode.map2
+                        (\text body ->
+                            Err
+                                (BadStatus
+                                    { code = code
+                                    , text = text
+                                    , body = body
+                                    }
+                                )
+                        )
+                        (Decode.field "statusText" Decode.string)
+                        (Decode.field "data" Decode.value)
+            )
 
 
 

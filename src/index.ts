@@ -18,7 +18,17 @@ const Tasks = {
         headers: Object.fromEntries(r.headers.map((h) => [h.name, h.value])),
         data: r.body,
       })
-      .then((response) => response.data);
+      .then((response) => ({
+        data: response.data,
+        status: response.status,
+        statusText: response.statusText,
+      }))
+      .catch((err) => ({
+        errorCode: err.code,
+        data: err.response?.data,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+      }));
   },
 };
 

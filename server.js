@@ -9,6 +9,11 @@ app.get("/wait-then-respond/:time", (req, res) => {
   }, parseInt(req.params.time));
 });
 
+app.get("/boom", (req, res) => {
+  res.status(400);
+  res.send({ message: "error" });
+});
+
 app.listen(PORT, () => {
   console.log(`Listening on port ${PORT}`);
 });

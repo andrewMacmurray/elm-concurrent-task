@@ -32,13 +32,13 @@ type alias Flags =
 
 
 type alias Model =
-    { task : Task.Progress Task.Error String
+    { task : Task.Progress Http.Error String
     }
 
 
 type Msg
-    = OnComplete (Result Task.Error String)
-    | OnProgress ( Task.Progress Task.Error String, Cmd Msg )
+    = OnComplete (Result Http.Error String)
+    | OnProgress ( Task.Progress Http.Error String, Cmd Msg )
 
 
 
@@ -92,7 +92,7 @@ timeNowTask =
     Concurrent.Task.Time.now
 
 
-myHttpTask : Task Task.Error String
+myHttpTask : Task Http.Error String
 myHttpTask =
     Http.request
         { url = "https://jsonplaceholder.typicode.com/todos/1"
@@ -112,7 +112,7 @@ manyEnvs =
         |> Task.andThenDo (getEnv "USER")
 
 
-myCombo : Task Task.Error String
+myCombo : Task Http.Error String
 myCombo =
     Task.map3 join3
         (waitThenDone 500
@@ -126,6 +126,8 @@ myCombo =
         )
         (waitThenDone 100
             |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 100)
         )
         |> Task.andThenDo
             (Task.map2 join2
@@ -134,7 +136,7 @@ myCombo =
             )
 
 
-waitThenDone : Int -> Task Task.Error String
+waitThenDone : Int -> Task Http.Error String
 waitThenDone ms =
     Http.request
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
@@ -142,6 +144,17 @@ waitThenDone ms =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "message" Decode.string)
+        }
+
+
+getHttpError : Task Http.Error String
+getHttpError =
+    Http.request
+        { url = "http://localhost:4000/boom"
+        , method = "GET"
+        , headers = []
+        , body = Http.emptyBody
+        , expect = Http.expectJson (Decode.succeed "whatever")
         }
 
 

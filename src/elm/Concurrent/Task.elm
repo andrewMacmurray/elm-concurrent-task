@@ -9,6 +9,7 @@ module Concurrent.Task exposing
     , andThenDo
     , attempt
     , fail
+    , fromResult
     , map
     , map2
     , map3
@@ -202,6 +203,16 @@ encodeDefinition definition =
         ]
 
 
+fromResult : Result x a -> Task x a
+fromResult res =
+    case res of
+        Ok a ->
+            succeed a
+
+        Err e ->
+            fail e
+
+
 fromResult_ : Result x a -> Task_ x a
 fromResult_ res =
     case res of
@@ -354,14 +365,14 @@ onError f (Task toTask) =
     Task
         (\model ->
             let
-                ( task_, model1 ) =
+                ( task_, _ ) =
                     toTask model
 
                 next x =
-                    unwrap (f x) model1
+                    unwrap (f x) model
             in
             ( onError_ next task_
-            , model1
+            , model
             )
         )
 
@@ -386,11 +397,11 @@ mapError f (Task toTask) =
     Task
         (\model ->
             let
-                ( task_, model1 ) =
+                ( task_, _ ) =
                     toTask model
             in
             ( mapError_ f task_
-            , model1
+            , model
             )
         )
 
@@ -414,21 +425,21 @@ unwrap (Task toTask) model =
 -- Attempt
 
 
-type alias Attempt msg a =
+type alias Attempt msg x a =
     { send : Encode.Value -> Cmd msg
-    , onComplete : Result Error a -> msg
+    , onComplete : Result x a -> msg
     }
 
 
-type alias OnProgress msg a =
+type alias OnProgress msg x a =
     { send : Encode.Value -> Cmd msg
     , receive : (List Response -> msg) -> Sub msg
-    , onComplete : Result Error a -> msg
-    , onProgress : ( Progress Error a, Cmd msg ) -> msg
+    , onComplete : Result x a -> msg
+    , onProgress : ( Progress x a, Cmd msg ) -> msg
     }
 
 
-attempt : Attempt msg a -> Task Error a -> ( Progress Error a, Cmd msg )
+attempt : Attempt msg x a -> Task x a -> ( Progress x a, Cmd msg )
 attempt options (Task toTask) =
     case toTask init of
         ( Done res, model ) ->
@@ -445,7 +456,7 @@ attempt options (Task toTask) =
             )
 
 
-onProgress : OnProgress msg a -> Progress Error a -> Sub msg
+onProgress : OnProgress msg x a -> Progress x a -> Sub msg
 onProgress options ( task_, model ) =
     case task_ of
         Done res ->
