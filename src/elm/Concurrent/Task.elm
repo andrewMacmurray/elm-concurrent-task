@@ -107,8 +107,8 @@ recordSent defs model =
     { model | started = Set.union model.started (toSentIds defs) }
 
 
-updateResponses : Results -> Model -> Model
-updateResponses responses model =
+withResponses : Results -> Model -> Model
+withResponses responses model =
     { model | results = responses }
 
 
@@ -133,7 +133,7 @@ ffi options =
     Task
         (\model ->
             let
-                id : String
+                id : Ids.Id
                 id =
                     Ids.get model.ids
             in
@@ -230,12 +230,12 @@ definitions responses task =
 map : (a -> b) -> Task x a -> Task x b
 map f (Task task) =
     Task
-        (\ids ->
+        (\model ->
             let
-                ( tsk, nextIds ) =
-                    task ids
+                ( task_, model1 ) =
+                    task model
             in
-            ( map_ f tsk, nextIds )
+            ( map_ f task_, model1 )
         )
 
 
@@ -426,7 +426,7 @@ unwrap (Task task) model =
 
 
 type alias Attempt msg a =
-    { send : Decode.Value -> Cmd msg
+    { send : Encode.Value -> Cmd msg
     , onComplete : Result Error a -> msg
     }
 
@@ -477,8 +477,7 @@ onProgress options ( task, model ) =
                             options.onProgress
                                 ( ( Pending defs next_
                                   , model
-                                        |> updateResponses updatedResponses
-                                        |> clearDoneResponses defs_
+                                        |> withResponses (clearDoneResponses defs_ updatedResponses)
                                         |> recordSent defs
                                         |> nextId
                                   )
@@ -490,9 +489,9 @@ onProgress options ( task, model ) =
                 )
 
 
-clearDoneResponses : List Definition -> Model -> Model
-clearDoneResponses defs model =
-    { model | results = Dict.filter (\id _ -> not (List.member id (List.map .id defs))) model.results }
+clearDoneResponses : List Definition -> Results -> Results
+clearDoneResponses defs =
+    Dict.filter (\id _ -> not (List.member id (List.map .id defs)))
 
 
 addResponse : { id : String, result : Decode.Value } -> Results -> Results

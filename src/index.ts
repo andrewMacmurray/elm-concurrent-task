@@ -1,10 +1,11 @@
 import axios from "axios";
 import { Elm } from "./elm/Main.elm";
 import crypto from "node:crypto";
+import * as TaskRunner from "./task-runner";
 
-// Ffi
+// Task
 
-const Ffi = {
+const Tasks = {
   slowInt: (i) => waitRandom().then(() => i),
   timeNow: () => Date.now(),
   randomSeed: () => crypto.randomInt(0, 1000000000),
@@ -33,48 +34,7 @@ function waitRandom() {
 
 const app = Elm.Main.init({ flags: null });
 
-app.ports.send.subscribe(async (defs) => {
-  for (let i = 0; i < defs.length; i++) {
-    const def = defs[i];
-    if (!Ffi[def.function]) {
-      return app.ports.receive.send([
-        {
-          id: def.id,
-          result: {
-            status: "error",
-            error: {
-              reason: "missing_function",
-              message: `${def.function} is not registered`,
-            },
-          },
-        },
-      ]);
-    }
-  }
-
-  defs.map(async (def) => {
-    try {
-      console.log("--STARTING--", def.function, def.id);
-      const result = await Ffi[def.function](def.args);
-      app.ports.receive.send([
-        {
-          id: def.id,
-          result: { status: "success", value: result },
-        },
-      ]);
-    } catch (e) {
-      app.ports.receive.send([
-        {
-          id: def.id,
-          result: {
-            status: "error",
-            error: {
-              reason: "js_exception",
-              message: `${def.function} threw an execption: ${e.message}`,
-            },
-          },
-        },
-      ]);
-    }
-  });
+TaskRunner.register({
+  tasks: Tasks,
+  ports: app.ports,
 });
