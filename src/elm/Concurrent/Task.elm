@@ -98,8 +98,8 @@ nextId model =
 
 
 combineSequences : Id.Sequence -> Model -> Model
-combineSequences ids model =
-    { model | sequence = Id.combine ids model.sequence }
+combineSequences sequence model =
+    { model | sequence = Id.combine sequence model.sequence }
 
 
 recordSent : List Definition -> Model -> Model
