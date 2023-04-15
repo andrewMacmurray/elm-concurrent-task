@@ -20,7 +20,7 @@ module Concurrent.Task exposing
     , task
     )
 
-import Concurrent.Ids as Ids
+import Concurrent.Id as Id exposing (Id)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -41,14 +41,14 @@ type alias Progress x a =
 
 
 type alias Model =
-    { ids : Ids.Sequence
-    , started : Set Ids.Id
+    { sequence : Id.Sequence
+    , started : Set Id
     , results : Results
     }
 
 
 type alias Results =
-    Dict Ids.Id Decode.Value
+    Dict Id Decode.Value
 
 
 type Task_ x a
@@ -57,7 +57,7 @@ type Task_ x a
 
 
 type alias Definition =
-    { id : Ids.Id
+    { id : Id
     , function : String
     , args : Encode.Value
     }
@@ -68,7 +68,7 @@ type alias Expect a =
 
 
 type alias Response =
-    { id : Ids.Id
+    { id : Id
     , result : Decode.Value
     }
 
@@ -77,7 +77,7 @@ type Error
     = DecodeResponseError Decode.Error
     | JsException String
     | MissingFunction String
-    | UnknownStatus String
+    | InternalError String
 
 
 
@@ -86,7 +86,7 @@ type Error
 
 init : Model
 init =
-    { ids = Ids.init
+    { sequence = Id.init
     , started = Set.empty
     , results = Dict.empty
     }
@@ -94,12 +94,12 @@ init =
 
 nextId : Model -> Model
 nextId model =
-    { model | ids = Ids.next model.ids }
+    { model | sequence = Id.next model.sequence }
 
 
-combineSequences : Ids.Sequence -> Model -> Model
+combineSequences : Id.Sequence -> Model -> Model
 combineSequences ids model =
-    { model | ids = Ids.combine ids model.ids }
+    { model | sequence = Id.combine ids model.sequence }
 
 
 recordSent : List Definition -> Model -> Model
@@ -112,7 +112,7 @@ withResponses responses model =
     { model | results = responses }
 
 
-toSentIds : List Definition -> Set Ids.Id
+toSentIds : List Definition -> Set Id
 toSentIds defs =
     Set.fromList (List.map .id defs)
 
@@ -133,9 +133,9 @@ task options =
     Task
         (\model ->
             let
-                id : Ids.Id
+                id : Id
                 id =
-                    Ids.get model.ids
+                    Id.get model.sequence
             in
             ( Pending
                 [ { id = id
@@ -173,7 +173,7 @@ decodeResponse expect =
                         Decode.field "error" (Decode.map Err errorDecoder)
 
                     _ ->
-                        Decode.succeed (Err (UnknownStatus status))
+                        Decode.succeed (Err (InternalError ("Unknown response status: " ++ status)))
             )
 
 
@@ -190,7 +190,7 @@ errorDecoder =
                         Decode.field "message" (Decode.map MissingFunction Decode.string)
 
                     _ ->
-                        Decode.succeed (UnknownStatus ("Unknown error reason: " ++ reason))
+                        Decode.succeed (InternalError ("Unknown error reason: " ++ reason))
             )
 
 
@@ -261,7 +261,7 @@ map2 f (Task toTask1) (Task toTask2) =
                     toTask2 model1
             in
             ( map2_ f task1_ task2_
-            , combineSequences model1.ids model2
+            , combineSequences model1.sequence model2
             )
         )
 
@@ -482,11 +482,16 @@ onProgress options ( task_, model ) =
                                         |> nextId
                                   )
                                 , defs
-                                    |> List.filter (\d -> not (Set.member d.id model.started))
+                                    |> List.filter (notStarted model)
                                     |> Encode.list encodeDefinition
                                     |> options.send
                                 )
                 )
+
+
+notStarted : Model -> Definition -> Bool
+notStarted model def =
+    not (Set.member def.id model.started)
 
 
 clearDoneResponses : List Definition -> Results -> Results
@@ -495,5 +500,5 @@ clearDoneResponses defs =
 
 
 addResponse : Response -> Results -> Results
-addResponse r results =
-    Dict.insert r.id r.result results
+addResponse r =
+    Dict.insert r.id r.result

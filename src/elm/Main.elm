@@ -4,6 +4,7 @@ import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Random
 import Concurrent.Task.Time
+import Dict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -118,21 +119,23 @@ myCombo =
         (waitThenDone 500
             |> Task.andThenDo (waitThenDone 200)
             |> Task.andThenDo (waitThenDone 200)
-            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 20)
         )
         (waitThenDone 1000
             |> Task.andThenDo (waitThenDone 750)
-            |> Task.andThenDo (waitThenDone 100)
+            |> Task.andThenDo (waitThenDone 500)
         )
-        (waitThenDone 100
-            |> Task.andThenDo (waitThenDone 100)
-            |> Task.andThenDo (waitThenDone 100)
-            |> Task.andThenDo (waitThenDone 100)
+        (Task.map2 join2
+            (waitThenDone 70)
+            (waitThenDone 80)
         )
-        |> Task.andThenDo
-            (Task.map2 join2
-                (waitThenDone 100)
-                (waitThenDone 200)
+        |> Task.andThen
+            (\res ->
+                Task.map (join2 res)
+                    (Task.map2 join2
+                        (waitThenDone 100)
+                        (waitThenDone 200)
+                    )
             )
 
 

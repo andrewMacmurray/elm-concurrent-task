@@ -5,7 +5,7 @@ const PORT = 4000;
 
 app.get("/wait-then-respond/:time", (req, res) => {
   setTimeout(() => {
-    res.send({ message: "done" });
+    res.send({ message: `done:${req.params.time}` });
   }, parseInt(req.params.time));
 });
 
