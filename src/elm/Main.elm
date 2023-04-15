@@ -58,7 +58,7 @@ init _ =
                 { send = send
                 , onComplete = OnComplete
                 }
-                manyEnvs
+                httpCombo
     in
     ( { task = progress }
     , cmd
@@ -119,8 +119,8 @@ manyEnvs =
         )
 
 
-myCombo : Task Error String
-myCombo =
+httpCombo : Task Error String
+httpCombo =
     Task.mapError HttpError
         (Task.map3 join3
             (waitThenDone 500
@@ -158,8 +158,8 @@ waitThenDone ms =
         }
 
 
-getHttpError : Task Http.Error String
-getHttpError =
+httpError : Task Http.Error String
+httpError =
     Http.request
         { url = "http://localhost:4000/boom"
         , method = "GET"
@@ -183,12 +183,14 @@ getEnv var =
         }
 
 
-slowInts : Task Task.Error String
+slowInts : Task Error String
 slowInts =
-    Task.map3 join3
-        (doubleSlowInt 1)
-        (doubleSlowInt 3)
-        (doubleSlowInt 5)
+    Task.mapError TaskError
+        (Task.map3 join3
+            (doubleSlowInt 1)
+            (doubleSlowInt 3)
+            (doubleSlowInt 5)
+        )
 
 
 doubleSlowInt : Int -> Task Task.Error String

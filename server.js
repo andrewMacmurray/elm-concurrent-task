@@ -1,7 +1,10 @@
 import express from "express";
+import morgan from "morgan";
 
 const app = express();
 const PORT = 4000;
+
+app.use(morgan("tiny"));
 
 app.get("/wait-then-respond/:time", (req, res) => {
   setTimeout(() => {

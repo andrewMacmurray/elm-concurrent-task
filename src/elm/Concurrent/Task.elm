@@ -43,6 +43,7 @@ type alias Progress x a =
 type alias Model =
     { sequence : Id.Sequence
     , started : Set Id
+    , hasErrors : Bool
     }
 
 
@@ -87,6 +88,7 @@ init : Model
 init =
     { sequence = Id.init
     , started = Set.empty
+    , hasErrors = False
     }
 
 
@@ -266,10 +268,20 @@ map2_ f task1 task2 =
             Done (Result.map2 f res1 res2)
 
         ( Done res1, Pending defs next ) ->
-            Pending defs (\res -> map2_ f (Done res1) (next res))
+            case res1 of
+                Ok _ ->
+                    Pending defs (\res -> map2_ f (Done res1) (next res))
+
+                Err e ->
+                    Done (Err e)
 
         ( Pending defs next, Done res2 ) ->
-            Pending defs (\res -> map2_ f (next res) (Done res2))
+            case res2 of
+                Ok _ ->
+                    Pending defs (\res -> map2_ f (next res) (Done res2))
+
+                Err e ->
+                    Done (Err e)
 
         ( Pending defs1 next1, Pending defs2 next2 ) ->
             Pending (defs1 ++ defs2) (\res -> map2_ f (next1 res) (next2 res))
@@ -437,8 +449,7 @@ attempt options (Task toTask) =
     case toTask init of
         ( Done res, model ) ->
             ( ( Done res, model )
-            , CoreTask.succeed res
-                |> CoreTask.perform options.onComplete
+            , sendResult options.onComplete res
             )
 
         ( Pending defs next, model ) ->
@@ -452,8 +463,8 @@ attempt options (Task toTask) =
 onProgress : OnProgress msg x a -> Progress x a -> Sub msg
 onProgress options ( task_, model ) =
     case task_ of
-        Done res ->
-            options.receive (\_ -> options.onComplete res)
+        Done _ ->
+            Sub.none
 
         Pending _ next ->
             options.receive
@@ -464,21 +475,50 @@ onProgress options ( task_, model ) =
                     in
                     case next results_ of
                         Done res ->
-                            options.onComplete res
+                            case res of
+                                Ok a ->
+                                    options.onComplete (Ok a)
+
+                                Err e ->
+                                    if not model.hasErrors then
+                                        options.onProgress
+                                            ( ( Done res, { model | hasErrors = True } )
+                                            , sendResult options.onComplete (Err e)
+                                            )
+
+                                    else
+                                        options.onProgress
+                                            ( ( Done res, model )
+                                            , Cmd.none
+                                            )
 
                         Pending defs next_ ->
-                            options.onProgress
-                                ( ( Pending defs next_
-                                  , model
-                                        |> recordSent defs
-                                        |> nextId
-                                  )
-                                , defs
-                                    |> List.filter (notStarted model)
-                                    |> Encode.list encodeDefinition
-                                    |> options.send
-                                )
+                            if not model.hasErrors then
+                                options.onProgress
+                                    ( ( Pending defs next_
+                                      , model
+                                            |> recordSent defs
+                                            |> nextId
+                                      )
+                                    , defs
+                                        |> List.filter (notStarted model)
+                                        |> Encode.list encodeDefinition
+                                        |> options.send
+                                    )
+
+                            else
+                                options.onProgress
+                                    ( ( Pending defs next_
+                                      , model
+                                      )
+                                    , Cmd.none
+                                    )
                 )
+
+
+sendResult : (Result x a -> msg) -> Result x a -> Cmd msg
+sendResult onComplete res =
+    CoreTask.succeed res |> CoreTask.perform onComplete
 
 
 notStarted : Model -> Definition -> Bool
