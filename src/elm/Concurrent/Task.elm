@@ -2,7 +2,7 @@ module Concurrent.Task exposing
     ( Definition
     , Error(..)
     , Progress
-    , Response
+    , RawResult
     , Task
     , andMap
     , andThen
@@ -43,7 +43,6 @@ type alias Progress x a =
 type alias Model =
     { sequence : Id.Sequence
     , started : Set Id
-    , results : Results
     }
 
 
@@ -67,7 +66,7 @@ type alias Expect a =
     Decoder a
 
 
-type alias Response =
+type alias RawResult =
     { id : Id
     , result : Decode.Value
     }
@@ -88,7 +87,6 @@ init : Model
 init =
     { sequence = Id.init
     , started = Set.empty
-    , results = Dict.empty
     }
 
 
@@ -105,11 +103,6 @@ combineSequences sequence model =
 recordSent : List Definition -> Model -> Model
 recordSent defs model =
     { model | started = Set.union model.started (toSentIds defs) }
-
-
-withResponses : Results -> Model -> Model
-withResponses responses model =
-    { model | results = responses }
 
 
 toSentIds : List Definition -> Set Id
@@ -433,7 +426,7 @@ type alias Attempt msg x a =
 
 type alias OnProgress msg x a =
     { send : Encode.Value -> Cmd msg
-    , receive : (List Response -> msg) -> Sub msg
+    , receive : (List RawResult -> msg) -> Sub msg
     , onComplete : Result x a -> msg
     , onProgress : ( Progress x a, Cmd msg ) -> msg
     }
@@ -462,14 +455,14 @@ onProgress options ( task_, model ) =
         Done res ->
             options.receive (\_ -> options.onComplete res)
 
-        Pending defs_ next ->
+        Pending _ next ->
             options.receive
                 (\results ->
                     let
-                        updatedResponses =
-                            List.foldl addResponse model.results results
+                        results_ =
+                            List.foldl addResponse Dict.empty results
                     in
-                    case next updatedResponses of
+                    case next results_ of
                         Done res ->
                             options.onComplete res
 
@@ -477,7 +470,6 @@ onProgress options ( task_, model ) =
                             options.onProgress
                                 ( ( Pending defs next_
                                   , model
-                                        |> withResponses (clearDoneResponses defs_ updatedResponses)
                                         |> recordSent defs
                                         |> nextId
                                   )
@@ -494,11 +486,6 @@ notStarted model def =
     not (Set.member def.id model.started)
 
 
-clearDoneResponses : List Definition -> Results -> Results
-clearDoneResponses defs =
-    Dict.filter (\id _ -> not (List.member id (List.map .id defs)))
-
-
-addResponse : Response -> Results -> Results
+addResponse : RawResult -> Results -> Results
 addResponse r =
     Dict.insert r.id r.result

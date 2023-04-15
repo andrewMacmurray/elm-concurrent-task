@@ -4,7 +4,6 @@ import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Random
 import Concurrent.Task.Time
-import Dict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -33,13 +32,18 @@ type alias Flags =
 
 
 type alias Model =
-    { task : Task.Progress Http.Error String
+    { task : Task.Progress Error String
     }
 
 
 type Msg
-    = OnComplete (Result Http.Error String)
-    | OnProgress ( Task.Progress Http.Error String, Cmd Msg )
+    = OnComplete (Result Error String)
+    | OnProgress ( Task.Progress Error String, Cmd Msg )
+
+
+type Error
+    = HttpError Http.Error
+    | TaskError Task.Error
 
 
 
@@ -54,7 +58,7 @@ init _ =
                 { send = send
                 , onComplete = OnComplete
                 }
-                myCombo
+                manyEnvs
     in
     ( { task = progress }
     , cmd
@@ -104,39 +108,43 @@ myHttpTask =
         }
 
 
-manyEnvs : Task Task.Error String
+manyEnvs : Task Error String
 manyEnvs =
-    Task.map3 join3
-        (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
-        (getEnv "THREE")
-        getHome
-        |> Task.andThenDo (getEnv "USER")
+    Task.mapError TaskError
+        (Task.map3 join3
+            (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
+            (getEnv "THREE")
+            getHome
+            |> Task.andThenDo (getEnv "USER")
+        )
 
 
-myCombo : Task Http.Error String
+myCombo : Task Error String
 myCombo =
-    Task.map3 join3
-        (waitThenDone 500
-            |> Task.andThenDo (waitThenDone 200)
-            |> Task.andThenDo (waitThenDone 200)
-            |> Task.andThenDo (waitThenDone 20)
-        )
-        (waitThenDone 1000
-            |> Task.andThenDo (waitThenDone 750)
-            |> Task.andThenDo (waitThenDone 500)
-        )
-        (Task.map2 join2
-            (waitThenDone 70)
-            (waitThenDone 80)
-        )
-        |> Task.andThen
-            (\res ->
-                Task.map (join2 res)
-                    (Task.map2 join2
-                        (waitThenDone 100)
-                        (waitThenDone 200)
-                    )
+    Task.mapError HttpError
+        (Task.map3 join3
+            (waitThenDone 500
+                |> Task.andThenDo (waitThenDone 200)
+                |> Task.andThenDo (waitThenDone 200)
+                |> Task.andThenDo (waitThenDone 20)
             )
+            (waitThenDone 1000
+                |> Task.andThenDo (waitThenDone 750)
+                |> Task.andThenDo (waitThenDone 500)
+            )
+            (Task.map2 join2
+                (waitThenDone 70)
+                (waitThenDone 80)
+            )
+            |> Task.andThen
+                (\res ->
+                    Task.map (join2 res)
+                        (Task.map2 join2
+                            (waitThenDone 100)
+                            (waitThenDone 200)
+                        )
+                )
+        )
 
 
 waitThenDone : Int -> Task Http.Error String
@@ -231,4 +239,4 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (List Task.Response -> msg) -> Sub msg
+port receive : (List Task.RawResult -> msg) -> Sub msg

@@ -88,7 +88,7 @@ getString s =
 port send : Encode.Value -> Cmd msg
 
 
-port receive : (List Task.Response -> msg) -> Sub msg
+port receive : (List Task.RawResult -> msg) -> Sub msg
 
 
 
