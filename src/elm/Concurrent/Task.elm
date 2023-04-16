@@ -52,11 +52,11 @@ type alias Results =
 
 
 type Task_ x a
-    = Pending (List Definition) (Results -> Task_ x a)
+    = Pending (List Definition_) (Results -> Task_ x a)
     | Done (Result x a)
 
 
-type alias Definition =
+type alias Definition_ =
     { id : Id
     , function : String
     , args : Encode.Value
@@ -102,7 +102,7 @@ combineSequences sequence model =
     { model | sequence = Id.combine sequence model.sequence }
 
 
-recordSent : List Definition -> Model -> Model
+recordSent : List Definition_ -> Model -> Model
 recordSent defs model =
     { model | started = Set.union model.started (toSentIds defs) }
 
@@ -112,7 +112,7 @@ haltProgress model =
     { model | hasErrors = True }
 
 
-toSentIds : List Definition -> Set Id
+toSentIds : List Definition_ -> Set Id
 toSentIds defs =
     Set.fromList (List.map .id defs)
 
@@ -121,14 +121,14 @@ toSentIds defs =
 -- Create
 
 
-type alias Ffi a =
+type alias Definition a =
     { function : String
     , args : Encode.Value
     , expect : Expect a
     }
 
 
-task : Ffi a -> Task Error a
+task : Definition a -> Task Error a
 task options =
     Task
         (\model ->
@@ -194,12 +194,12 @@ errorDecoder =
             )
 
 
-encodeDefinition : Definition -> Encode.Value
-encodeDefinition definition =
+encodeDefinition : Definition_ -> Encode.Value
+encodeDefinition def =
     Encode.object
-        [ ( "id", Encode.string definition.id )
-        , ( "function", Encode.string definition.function )
-        , ( "args", definition.args )
+        [ ( "id", Encode.string def.id )
+        , ( "function", Encode.string def.function )
+        , ( "args", def.args )
         ]
 
 
@@ -262,24 +262,24 @@ map2_ f task1 task2 =
         ( Done res1, Done res2 ) ->
             Done (Result.map2 f res1 res2)
 
+        ( Done res1, Pending defs next ) ->
+            haltOnError res1 (Pending defs (\res -> map2_ f (Done res1) (next res)))
+
+        ( Pending defs next, Done res2 ) ->
+            haltOnError res2 (Pending defs (\res -> map2_ f (next res) (Done res2)))
+
         ( Pending defs1 next1, Pending defs2 next2 ) ->
             Pending (defs1 ++ defs2) (\res -> map2_ f (next1 res) (next2 res))
 
-        ( Done res1, Pending defs next ) ->
-            case res1 of
-                Ok _ ->
-                    Pending defs (\res -> map2_ f (Done res1) (next res))
 
-                Err e ->
-                    fail_ e
+haltOnError : Result x a -> Task_ x b -> Task_ x b
+haltOnError res task_ =
+    case res of
+        Ok _ ->
+            task_
 
-        ( Pending defs next, Done res2 ) ->
-            case res2 of
-                Ok _ ->
-                    Pending defs (\res -> map2_ f (next res) (Done res2))
-
-                Err e ->
-                    fail_ e
+        Err e ->
+            fail_ e
 
 
 andMap : Task x a -> Task x (a -> b) -> Task x b
@@ -516,7 +516,7 @@ sendResult onComplete res =
     CoreTask.succeed res |> CoreTask.perform onComplete
 
 
-notStarted : Model -> Definition -> Bool
+notStarted : Model -> Definition_ -> Bool
 notStarted model def =
     not (Set.member def.id model.started)
 
