@@ -4,7 +4,8 @@ import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Runner
-import Spec exposing (Spec, describe, given, it, scenario, when)
+import Set
+import Spec exposing (Spec, describe, given, it, observeThat, scenario, when)
 import Spec.Claim as Claim
 import Spec.Extra exposing (equals)
 import Spec.Observer exposing (observeModel)
@@ -189,6 +190,49 @@ errorSpec =
                         )
                     )
             )
+        , scenario "Chained tasks with an error"
+            (Task.map2 (++)
+                (getString "42")
+                (getString "42")
+                |> Task.andThenDo
+                    (Task.map2 (++)
+                        (getString "42")
+                        (getString "42")
+                    )
+                |> givenATask
+                |> when "a chained task fails"
+                    [ sendProgress
+                        [ { id = "0"
+                          , function = "getString"
+                          , args = Encode.string ""
+                          }
+                        ]
+                    , sendSingleError
+                        { id = "1"
+                        , error = "js_exception"
+                        , reason = "something went wrong"
+                        }
+                    , sendProgress
+                        [ { id = "2"
+                          , function = "getString"
+                          , args = Encode.string ""
+                          }
+                        ]
+                    ]
+                |> observeThat
+                    [ it "returns an error" (expectResult (Err (Task.JsException "something went wrong")))
+                    , it "short-circuits the chain"
+                        (observeModel
+                            (\model ->
+                                model.task
+                                    |> Tuple.second
+                                    |> .started
+                                    |> Set.size
+                            )
+                            |> Spec.expect (equals 2)
+                        )
+                    ]
+            )
         ]
 
 
@@ -254,6 +298,20 @@ runBatch =
 sendError : String -> String -> Step.Context model -> Step.Command msg
 sendError error reason =
     Spec.Port.respond "send" decodeTaskDefinitions (sendError_ error reason)
+
+
+sendSingleError : { id : String, error : String, reason : String } -> Step.Context model -> Step.Command msg
+sendSingleError { id, error, reason } =
+    Spec.Port.send "receive"
+        (Encode.list identity
+            [ encodeError error
+                reason
+                { id = id
+                , function = "getString"
+                , args = Encode.string "something"
+                }
+            ]
+        )
 
 
 sendError_ : String -> String -> List TaskDefinition -> Step.Context model -> Step.Command msg
