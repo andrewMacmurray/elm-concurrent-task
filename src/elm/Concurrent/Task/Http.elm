@@ -90,7 +90,7 @@ emptyBody =
 request : Request a -> Task Error a
 request r =
     Task.task
-        { function = "httpRequest"
+        { function = "builtin:httpRequest"
         , args = encode r
         , expect = decodeResponse r
         }
@@ -118,17 +118,17 @@ decodeResponse r =
 
 decodeError : Request a -> Decoder (Result Error value)
 decodeError r =
-    Decode.field "errorCode" Decode.string
+    Decode.field "error" Decode.string
         |> Decode.andThen
             (\code ->
                 case code of
-                    "ECONNABORTED" ->
+                    "TIMEOUT" ->
                         Decode.succeed (Err Timeout)
 
-                    "ERR_NETWORK" ->
+                    "NETWORK_ERROR" ->
                         Decode.succeed (Err NetworkError)
 
-                    "ERR_INVALID_URL" ->
+                    "BAD_URL" ->
                         Decode.succeed (Err (BadUrl r.url))
 
                     _ ->
@@ -142,7 +142,7 @@ decodeExpect (ExpectJson decoder) =
         |> Decode.andThen
             (\code ->
                 if code >= 200 && code < 300 then
-                    Decode.field "data" (Decode.map Ok decoder)
+                    Decode.field "body" (Decode.map Ok decoder)
 
                 else
                     Decode.map2
@@ -156,7 +156,7 @@ decodeExpect (ExpectJson decoder) =
                                 )
                         )
                         (Decode.field "statusText" Decode.string)
-                        (Decode.field "data" Decode.value)
+                        (Decode.field "body" Decode.value)
             )
 
 

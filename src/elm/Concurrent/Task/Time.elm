@@ -13,7 +13,7 @@ import Time
 now : Task x Time.Posix
 now =
     Task.task
-        { function = "timeNow"
+        { function = "builtin:timeNow"
         , args = Encode.null
         , expect = Decode.map Time.millisToPosix Decode.int
         }

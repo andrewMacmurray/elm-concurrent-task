@@ -1,3 +1,5 @@
+import axios, { AxiosError } from "axios";
+
 interface ElmPorts {
   send: {
     subscribe: (callback: (defs: TaskDefinition[]) => Promise<void>) => void;
@@ -29,6 +31,76 @@ interface Error {
   };
 }
 
+// Built In Tasks
+
+const BuiltInTasks = {
+  "builtin:timeNow": () => Date.now(),
+  "builtin:randomSeed": () => Math.round(Math.random() * 1000000000000),
+  "builtin:httpRequest": (request) => doAxiosRequest(request),
+};
+
+// Http Task
+
+interface HttpRequest {
+  url: string;
+  method: string;
+  headers: { name: string; value: string }[];
+  body: any;
+}
+
+type HttpResponse = HttpResponseSuccess | HttpResponseError;
+
+interface HttpResponseSuccess {
+  body: any;
+  status: number;
+  statusText: string;
+}
+
+type HttpError = "BAD_URL" | "NETWORK_ERROR" | "TIMEOUT" | "UNKNOWN";
+
+interface HttpResponseError {
+  error: HttpError;
+  body: any;
+  status: number;
+  statusText: string;
+}
+
+function doAxiosRequest(request: HttpRequest): Promise<HttpResponse> {
+  return axios
+    .request({
+      method: request.method,
+      url: request.url,
+      data: request.body,
+      headers: Object.fromEntries(
+        request.headers.map((header) => [header.name, header.value])
+      ),
+    })
+    .then((response) => ({
+      body: response.data,
+      status: response.status,
+      statusText: response.statusText,
+    }))
+    .catch((err) => ({
+      error: toHttpError(err),
+      body: err.response?.data,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+    }));
+}
+
+function toHttpError(err: AxiosError): HttpError {
+  switch (err.code) {
+    case "ECONNABORTED":
+      return "TIMEOUT";
+    case "ERR_NETWORK":
+      return "NETWORK_ERROR";
+    case "ERR_INVALID_URL":
+      return "BAD_URL";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 // Register Runner
 
 interface Options {
@@ -37,7 +109,7 @@ interface Options {
 }
 
 export function register(options: Options): void {
-  const tasks = options.tasks;
+  const tasks = { ...BuiltInTasks, ...options.tasks };
   const subscribe = options.ports.send.subscribe;
   const send = options.ports.receive.send;
 

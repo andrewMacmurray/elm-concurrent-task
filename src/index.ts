@@ -7,29 +7,7 @@ import * as TaskRunner from "./task-runner";
 
 const Tasks = {
   slowInt: (i) => waitRandom().then(() => i),
-  timeNow: () => Date.now(),
-  randomSeed: () => crypto.randomInt(0, 1000000000),
   getEnv: (x) => process.env[x],
-  httpRequest: (r) => {
-    return axios
-      .request({
-        method: r.method,
-        url: r.url,
-        headers: Object.fromEntries(r.headers.map((h) => [h.name, h.value])),
-        data: r.body,
-      })
-      .then((response) => ({
-        data: response.data,
-        status: response.status,
-        statusText: response.statusText,
-      }))
-      .catch((err) => ({
-        errorCode: err.code,
-        data: err.response?.data,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-      }));
-  },
 };
 
 function waitRandom() {
