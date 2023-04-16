@@ -1,29 +1,37 @@
-import axios, { AxiosError } from "axios";
+import * as http from "./http";
+import { HttpResponse, HttpRequest } from "./http";
 
-interface ElmPorts {
+export interface ElmPorts {
   send: {
     subscribe: (callback: (defs: TaskDefinition[]) => Promise<void>) => void;
   };
   receive: { send: (result: Result[]) => void };
 }
 
-interface TaskDefinition {
+export interface Builtins {
+  http?: (HttpRequest) => Promise<HttpResponse>;
+  random?: () => number;
+}
+
+export type Tasks = { [fn: string]: (any) => any };
+
+export interface TaskDefinition {
   id: string;
   function: string;
   args: any;
 }
 
-interface Result {
+export interface Result {
   id: string;
   result: Success | Error;
 }
 
-interface Success {
+export interface Success {
   status: "success";
   value: any;
 }
 
-interface Error {
+export interface Error {
   status: "error";
   error: {
     reason: string;
@@ -35,81 +43,19 @@ interface Error {
 
 const BuiltInTasks = {
   "builtin:timeNow": () => Date.now(),
-  "builtin:randomSeed": () => Math.round(Math.random() * 1000000000000),
-  "builtin:httpRequest": (request) => doAxiosRequest(request),
+  "builtin:httpRequest": (request) => http.doRequest(request),
 };
-
-// Http Task
-
-interface HttpRequest {
-  url: string;
-  method: string;
-  headers: { name: string; value: string }[];
-  body: any;
-}
-
-type HttpResponse = HttpResponseSuccess | HttpResponseError;
-
-interface HttpResponseSuccess {
-  body: any;
-  status: number;
-  statusText: string;
-}
-
-type HttpError = "BAD_URL" | "NETWORK_ERROR" | "TIMEOUT" | "UNKNOWN";
-
-interface HttpResponseError {
-  error: HttpError;
-  body: any;
-  status: number;
-  statusText: string;
-}
-
-function doAxiosRequest(request: HttpRequest): Promise<HttpResponse> {
-  return axios
-    .request({
-      method: request.method,
-      url: request.url,
-      data: request.body,
-      headers: Object.fromEntries(
-        request.headers.map((header) => [header.name, header.value])
-      ),
-    })
-    .then((response) => ({
-      body: response.data,
-      status: response.status,
-      statusText: response.statusText,
-    }))
-    .catch((err) => ({
-      error: toHttpError(err),
-      body: err.response?.data,
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-    }));
-}
-
-function toHttpError(err: AxiosError): HttpError {
-  switch (err.code) {
-    case "ECONNABORTED":
-      return "TIMEOUT";
-    case "ERR_NETWORK":
-      return "NETWORK_ERROR";
-    case "ERR_INVALID_URL":
-      return "BAD_URL";
-    default:
-      return "UNKNOWN";
-  }
-}
 
 // Register Runner
 
-interface Options {
-  tasks: any;
+export interface Options {
+  tasks: Tasks;
   ports: ElmPorts;
+  builtins?: Builtins;
 }
 
 export function register(options: Options): void {
-  const tasks = { ...BuiltInTasks, ...options.tasks };
+  const tasks = createTasks(options);
   const subscribe = options.ports.send.subscribe;
   const send = options.ports.receive.send;
 
@@ -158,4 +104,12 @@ export function register(options: Options): void {
       }
     });
   });
+}
+
+function createTasks(options: Options): Tasks {
+  const tasks = { ...BuiltInTasks, ...options.tasks };
+  if (options.builtins?.http) {
+    tasks["builtin:httpRequest"] = options.builtins.http;
+  }
+  return tasks;
 }
