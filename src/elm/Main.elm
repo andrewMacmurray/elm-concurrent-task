@@ -179,7 +179,7 @@ getEnv var =
     Task.task
         { function = "getEnv"
         , args = Encode.string var
-        , expect = Decode.string
+        , expect = Task.expectJson Decode.string
         }
 
 
@@ -205,7 +205,7 @@ slowInt id =
     Task.task
         { function = "slowInt"
         , args = Encode.int id
-        , expect = Decode.map String.fromInt Decode.int
+        , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
         }
 
 

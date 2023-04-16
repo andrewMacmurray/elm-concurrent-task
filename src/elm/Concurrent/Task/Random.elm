@@ -25,6 +25,6 @@ randomSeed =
     Task.task
         { function = "builtin:randomSeed"
         , args = Encode.null
-        , expect = Decode.int
+        , expect = Task.expectJson Decode.int
         }
         |> Task.onError (\_ -> Task.succeed 0)

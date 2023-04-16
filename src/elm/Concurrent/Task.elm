@@ -8,6 +8,7 @@ module Concurrent.Task exposing
     , andThen
     , andThenDo
     , attempt
+    , expectJson
     , fail
     , fromResult
     , map
@@ -63,8 +64,8 @@ type alias Definition_ =
     }
 
 
-type alias Expect a =
-    Decoder a
+type Expect a
+    = ExpectJson (Decoder a)
 
 
 type alias RawResult =
@@ -118,6 +119,15 @@ toSentIds defs =
 
 
 
+-- Expect
+
+
+expectJson : Decoder a -> Expect a
+expectJson =
+    ExpectJson
+
+
+
 -- Create
 
 
@@ -160,8 +170,8 @@ task options =
         )
 
 
-decodeResponse : Decoder value -> Decoder (Result Error value)
-decodeResponse expect =
+decodeResponse : Expect value -> Decoder (Result Error value)
+decodeResponse (ExpectJson expect) =
     Decode.field "status" Decode.string
         |> Decode.andThen
             (\status ->

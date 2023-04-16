@@ -92,7 +92,7 @@ request r =
     Task.task
         { function = "builtin:httpRequest"
         , args = encode r
-        , expect = decodeResponse r
+        , expect = Task.expectJson (decodeResponse r)
         }
         |> Task.onError wrapError
         |> Task.andThen Task.fromResult

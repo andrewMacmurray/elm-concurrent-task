@@ -73,7 +73,7 @@ getInt i =
     Task.task
         { function = "getInt"
         , args = Encode.int i
-        , expect = Decode.int
+        , expect = Task.expectJson Decode.int
         }
 
 
@@ -82,7 +82,7 @@ getString s =
     Task.task
         { function = "getString"
         , args = Encode.string s
-        , expect = Decode.string
+        , expect = Task.expectJson Decode.string
         }
 
 
