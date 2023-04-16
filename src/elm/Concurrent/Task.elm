@@ -205,22 +205,12 @@ encodeDefinition definition =
 
 fromResult : Result x a -> Task x a
 fromResult res =
-    case res of
-        Ok a ->
-            succeed a
-
-        Err e ->
-            fail e
+    Task (\_ -> ( Done res, init ))
 
 
 fromResult_ : Result x a -> Task_ x a
-fromResult_ res =
-    case res of
-        Ok a ->
-            succeed_ a
-
-        Err e ->
-            fail_ e
+fromResult_ =
+    Done
 
 
 
