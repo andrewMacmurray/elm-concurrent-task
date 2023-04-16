@@ -192,8 +192,8 @@ errorSpec =
             )
         , scenario "Chained tasks with an error"
             (Task.map2 (++)
-                (getString "42")
-                (getString "42")
+                (getString "42" |> Task.andThenDo (getString "42"))
+                (getString "42" |> Task.andThenDo (getString "42"))
                 |> Task.andThenDo
                     (Task.map2 (++)
                         (getString "42")
@@ -202,13 +202,13 @@ errorSpec =
                 |> givenATask
                 |> when "a chained task fails"
                     [ sendProgress
-                        [ { id = "0"
+                        [ { id = "1"
                           , function = "getString"
                           , args = Encode.string ""
                           }
                         ]
                     , sendSingleError
-                        { id = "1"
+                        { id = "0"
                         , error = "js_exception"
                         , reason = "something went wrong"
                         }
