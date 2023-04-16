@@ -1,5 +1,4 @@
 import * as http from "./http";
-import { HttpResponse, HttpRequest } from "./http";
 
 export interface ElmPorts {
   send: {
@@ -9,8 +8,8 @@ export interface ElmPorts {
 }
 
 export interface Builtins {
-  http?: (HttpRequest) => Promise<HttpResponse>;
-  random?: () => number;
+  http?: (request: http.Request) => Promise<http.Response>;
+  timeNow?: () => number;
 }
 
 export type Tasks = { [fn: string]: (any) => any };
@@ -110,6 +109,9 @@ function createTasks(options: Options): Tasks {
   const tasks = { ...BuiltInTasks, ...options.tasks };
   if (options.builtins?.http) {
     tasks["builtin:httpRequest"] = options.builtins.http;
+  }
+  if (options.builtins?.timeNow) {
+    tasks["builtin:timeNow"] = options.builtins.timeNow;
   }
   return tasks;
 }

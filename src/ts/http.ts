@@ -2,16 +2,16 @@ import axios, { AxiosError } from "axios";
 
 // Http Task
 
-export interface HttpRequest {
+export interface Request {
   url: string;
   method: string;
   headers: { name: string; value: string }[];
   body: any;
 }
 
-export type HttpResponse = HttpResponseSuccess | HttpResponseError;
+export type Response = ResponseSuccess | ResponseError;
 
-export interface HttpResponseSuccess {
+export interface ResponseSuccess {
   body: any;
   status: number;
   statusText: string;
@@ -19,14 +19,14 @@ export interface HttpResponseSuccess {
 
 export type HttpError = "BAD_URL" | "NETWORK_ERROR" | "TIMEOUT" | "UNKNOWN";
 
-export interface HttpResponseError {
+export interface ResponseError {
   error: HttpError;
   body: any;
   status: number;
   statusText: string;
 }
 
-export function doRequest(request: HttpRequest): Promise<HttpResponse> {
+export function doRequest(request: Request): Promise<Response> {
   return axios
     .request({
       method: request.method,

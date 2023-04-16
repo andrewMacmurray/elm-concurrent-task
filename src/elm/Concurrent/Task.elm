@@ -2,7 +2,6 @@ module Concurrent.Task exposing
     ( Definition
     , Error(..)
     , Progress
-    , RawResult
     , RawResults
     , Task
     , andMap
