@@ -107,6 +107,11 @@ recordSent defs model =
     { model | started = Set.union model.started (toSentIds defs) }
 
 
+haltProgress : Model -> Model
+haltProgress model =
+    { model | hasErrors = True }
+
+
 toSentIds : List Definition -> Set Id
 toSentIds defs =
     Set.fromList (List.map .id defs)
@@ -267,13 +272,16 @@ map2_ f task1 task2 =
         ( Done res1, Done res2 ) ->
             Done (Result.map2 f res1 res2)
 
+        ( Pending defs1 next1, Pending defs2 next2 ) ->
+            Pending (defs1 ++ defs2) (\res -> map2_ f (next1 res) (next2 res))
+
         ( Done res1, Pending defs next ) ->
             case res1 of
                 Ok _ ->
                     Pending defs (\res -> map2_ f (Done res1) (next res))
 
                 Err e ->
-                    Done (Err e)
+                    fail_ e
 
         ( Pending defs next, Done res2 ) ->
             case res2 of
@@ -281,10 +289,7 @@ map2_ f task1 task2 =
                     Pending defs (\res -> map2_ f (next res) (Done res2))
 
                 Err e ->
-                    Done (Err e)
-
-        ( Pending defs1 next1, Pending defs2 next2 ) ->
-            Pending (defs1 ++ defs2) (\res -> map2_ f (next1 res) (next2 res))
+                    fail_ e
 
 
 andMap : Task x a -> Task x (a -> b) -> Task x b
@@ -482,7 +487,7 @@ onProgress options ( task_, model ) =
                                 Err e ->
                                     if not model.hasErrors then
                                         options.onProgress
-                                            ( ( Done res, { model | hasErrors = True } )
+                                            ( ( Done res, haltProgress model )
                                             , sendResult options.onComplete (Err e)
                                             )
 

@@ -1,4 +1,4 @@
-port module Runner exposing
+port module Spec.Runner exposing
     ( elmSpecOut
     , pick
     , program

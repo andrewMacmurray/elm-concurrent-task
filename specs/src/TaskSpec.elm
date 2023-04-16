@@ -3,7 +3,6 @@ port module TaskSpec exposing (main)
 import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Runner
 import Set
 import Spec exposing (Spec, describe, given, it, observeThat, scenario, when)
 import Spec.Claim as Claim
@@ -11,6 +10,7 @@ import Spec.Extra exposing (equals)
 import Spec.Observer exposing (observeModel)
 import Spec.Port
 import Spec.Report as Report
+import Spec.Runner as Runner
 import Spec.Setup as Spec
 import Spec.Step as Step
 
