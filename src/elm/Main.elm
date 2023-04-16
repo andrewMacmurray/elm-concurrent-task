@@ -241,4 +241,4 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (List Task.RawResult -> msg) -> Sub msg
+port receive : (Task.RawResults -> msg) -> Sub msg

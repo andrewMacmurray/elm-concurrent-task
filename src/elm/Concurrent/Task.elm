@@ -3,6 +3,7 @@ module Concurrent.Task exposing
     , Error(..)
     , Progress
     , RawResult
+    , RawResults
     , Task
     , andMap
     , andThen
@@ -66,6 +67,10 @@ type alias Definition_ =
 
 type Expect a
     = ExpectJson (Decoder a)
+
+
+type alias RawResults =
+    List RawResult
 
 
 type alias RawResult =
@@ -443,7 +448,7 @@ type alias Attempt msg x a =
 
 type alias OnProgress msg x a =
     { send : Encode.Value -> Cmd msg
-    , receive : (List RawResult -> msg) -> Sub msg
+    , receive : (RawResults -> msg) -> Sub msg
     , onComplete : Result x a -> msg
     , onProgress : ( Progress x a, Cmd msg ) -> msg
     }
