@@ -1,4 +1,4 @@
-import * as http from "./http";
+import * as http from "./http/task";
 
 export interface ElmPorts {
   send: {
@@ -42,7 +42,6 @@ export interface Error {
 
 const BuiltInTasks = {
   "builtin:timeNow": () => Date.now(),
-  "builtin:httpRequest": (request) => http.doRequest(request),
 };
 
 // Register Runner
