@@ -9,3 +9,5 @@ dist
 .env
 .idea
 .vscode
+
+500kb.csv

@@ -21,7 +21,7 @@ module Concurrent.Task exposing
     , task
     )
 
-import Concurrent.Id as Id exposing (Id)
+import Concurrent.Internal.Id as Id exposing (Id)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode

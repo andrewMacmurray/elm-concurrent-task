@@ -158,6 +158,17 @@ waitThenDone ms =
         }
 
 
+getBigFile : Task Http.Error String
+getBigFile =
+    Http.request
+        { url = "http://localhost:4000/big-file"
+        , method = "GET"
+        , headers = []
+        , body = Http.emptyBody
+        , expect = Http.expectJson Decode.string
+        }
+
+
 httpError : Task Http.Error String
 httpError =
     Http.request

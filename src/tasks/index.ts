@@ -1,4 +1,4 @@
-import * as http from "./http/task";
+import * as http from "./http";
 
 export interface ElmPorts {
   send: {

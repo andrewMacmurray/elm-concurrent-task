@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
-import { Request, Response } from "./task";
+import { Request, Response, HttpError } from "./index";
 
-export function driver(request: Request): Promise<Response> {
+export function http(request: Request): Promise<Response> {
   return axios
     .request({
       method: request.method,
@@ -30,9 +30,11 @@ function toHttpError(err: AxiosError): HttpError {
       return "TIMEOUT";
     case "ERR_NETWORK":
       return "NETWORK_ERROR";
+    case "ECONNREFUSED":
+      return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
     default:
-      return "UNKNOWN";
+      return err.code || "";
   }
 }

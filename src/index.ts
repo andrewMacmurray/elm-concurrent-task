@@ -1,7 +1,7 @@
 import { Elm } from "./elm/Main.elm";
 import crypto from "node:crypto";
-import * as TaskRunner from "./ts/task-runner";
-import * as http from "./ts/http/axios";
+import * as TaskRunner from "./tasks";
+import { http } from "./tasks/http/axios";
 
 // Task
 
@@ -25,7 +25,5 @@ const app = Elm.Main.init({ flags: null });
 TaskRunner.register({
   tasks: Tasks,
   ports: app.ports,
-  builtins: {
-    http: http.driver,
-  },
+  builtins: { http },
 });
