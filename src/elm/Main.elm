@@ -2,6 +2,7 @@ port module Main exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
+import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
 import Dict exposing (Dict)
@@ -98,6 +99,11 @@ timeNowTask =
     Concurrent.Task.Time.now
 
 
+sleep : Int -> Task x ()
+sleep =
+    Concurrent.Task.Process.sleep
+
+
 myHttpTask : Task Http.Error String
 myHttpTask =
     Http.request
@@ -124,33 +130,34 @@ httpCombo : Task Error String
 httpCombo =
     Task.mapError HttpError
         (Task.map3 join3
-            (waitThenDone 500
-                |> Task.andThenDo (waitThenDone 200)
-                |> Task.andThenDo (waitThenDone 200)
-                |> Task.andThenDo (waitThenDone 20)
+            (longRequest 500
+                |> Task.andThenDo (sleep 500)
+                |> Task.andThenDo (longRequest 200)
+                |> Task.andThenDo (longRequest 200)
+                |> Task.andThenDo (longRequest 20)
             )
-            (waitThenDone 1000
-                |> Task.andThenDo (waitThenDone 750)
-                |> Task.andThenDo (waitThenDone 500)
+            (longRequest 1000
+                |> Task.andThenDo (longRequest 750)
+                |> Task.andThenDo (longRequest 500)
             )
             (Task.map2 join2
-                (waitThenDone 70)
-                (waitThenDone 80)
+                (longRequest 70)
+                (longRequest 80)
             )
             |> Task.andThen
                 (\res ->
                     Task.map (join2 res)
                         (Task.map3 join3
                             (retry 10 httpError)
-                            (waitThenDone 100)
-                            (waitThenDone 200)
+                            (longRequest 100)
+                            (longRequest 200)
                         )
                 )
         )
 
 
-waitThenDone : Int -> Task Http.Error String
-waitThenDone ms =
+longRequest : Int -> Task Http.Error String
+longRequest ms =
     Http.request
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
         , method = "GET"

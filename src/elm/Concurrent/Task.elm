@@ -10,6 +10,7 @@ module Concurrent.Task exposing
     , attempt
     , errorToString
     , expectJson
+    , expectWhatever
     , fail
     , fromResult
     , map
@@ -130,6 +131,11 @@ toSentIds defs =
 expectJson : Decoder a -> Expect a
 expectJson =
     ExpectJson
+
+
+expectWhatever : Expect ()
+expectWhatever =
+    ExpectJson (Decode.succeed ())
 
 
 

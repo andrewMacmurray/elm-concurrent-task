@@ -10,6 +10,7 @@ export interface ElmPorts {
 export interface Builtins {
   http?: (request: http.Request) => Promise<http.Response>;
   timeNow?: () => number;
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export type Tasks = { [fn: string]: (any) => any };
@@ -42,7 +43,12 @@ export interface Error {
 
 const BuiltInTasks = {
   "builtin:timeNow": () => Date.now(),
+  "builtin:sleep": (ms: number) => sleep(ms),
 };
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // Register Runner
 
