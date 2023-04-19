@@ -380,14 +380,14 @@ onError f (Task toTask) =
     Task
         (\model ->
             let
-                ( task_, _ ) =
+                ( task_, model1 ) =
                     toTask model
 
                 next x =
-                    unwrap (f x) model
+                    unwrap (f x) model1
             in
             ( onError_ next task_
-            , model
+            , model1
             )
         )
 
@@ -412,11 +412,11 @@ mapError f (Task toTask) =
     Task
         (\model ->
             let
-                ( task_, _ ) =
+                ( task_, model1 ) =
                     toTask model
             in
             ( mapError_ f task_
-            , model
+            , model1
             )
         )
 

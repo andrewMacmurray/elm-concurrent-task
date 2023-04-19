@@ -4,6 +4,7 @@ import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Random
 import Concurrent.Task.Time
+import Dict exposing (Dict)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -139,7 +140,8 @@ httpCombo =
             |> Task.andThen
                 (\res ->
                     Task.map (join2 res)
-                        (Task.map2 join2
+                        (Task.map3 join3
+                            (retry 10 httpError)
                             (waitThenDone 100)
                             (waitThenDone 200)
                         )
@@ -218,6 +220,35 @@ slowInt id =
         , args = Encode.int id
         , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
         }
+
+
+
+-- Retry
+
+
+retry : Int -> Task b a -> Task b a
+retry n task =
+    retry_ (Task.mapError (Tuple.pair n) task)
+        |> Task.mapError Tuple.second
+
+
+retry_ : Task ( Int, x ) a -> Task ( Int, x ) a
+retry_ task =
+    task
+        |> Task.onError
+            (\( n, err ) ->
+                if n > 0 then
+                    task
+                        |> Task.mapError (Tuple.mapFirst (\n_ -> n_ - 1))
+                        |> retry_
+
+                else
+                    Task.fail ( n, err )
+            )
+
+
+
+-- Helpers
 
 
 join3 : String -> String -> String -> String
