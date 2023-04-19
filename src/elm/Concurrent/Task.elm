@@ -8,6 +8,7 @@ module Concurrent.Task exposing
     , andThen
     , andThenDo
     , attempt
+    , errorToString
     , expectJson
     , fail
     , fromResult
@@ -433,6 +434,22 @@ mapError_ f task_ =
 unwrap : Task x a -> Model -> Task_ x a
 unwrap (Task toTask) model =
     Tuple.first (toTask model)
+
+
+errorToString : Error -> String
+errorToString err =
+    case err of
+        DecodeResponseError error ->
+            "DecodeResponseError: " ++ Decode.errorToString error
+
+        JsException string ->
+            "JsException: " ++ string
+
+        MissingFunction string ->
+            "MissingFunction: " ++ string
+
+        InternalError string ->
+            "InternalError: " ++ string
 
 
 
