@@ -13,8 +13,8 @@ const Tasks = {
 function waitRandom() {
   const randomN = crypto.randomInt(0, 500);
   console.log(`Waiting for ${randomN}`);
-  return new Promise((res) => {
-    setTimeout(res, randomN);
+  return new Promise((resolve) => {
+    setTimeout(resolve, randomN);
   });
 }
 

@@ -5,7 +5,6 @@ import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
-import Dict exposing (Dict)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -34,13 +33,13 @@ type alias Flags =
 
 
 type alias Model =
-    { task : Task.Progress Error String
+    { tasks : Task.Pool Error String
     }
 
 
 type Msg
-    = OnComplete (Result Error String)
-    | OnProgress ( Task.Progress Error String, Cmd Msg )
+    = OnComplete String (Result Error String)
+    | OnProgress ( Task.Pool Error String, Cmd Msg )
 
 
 type Error
@@ -55,14 +54,16 @@ type Error
 init : Flags -> ( Model, Cmd Msg )
 init _ =
     let
-        ( progress, cmd ) =
+        ( tasks, cmd ) =
             Task.attempt
                 { send = send
                 , onComplete = OnComplete
+                , execution = "123"
+                , pool = Task.pool
                 }
                 httpCombo
     in
-    ( { task = progress }
+    ( { tasks = tasks }
     , cmd
     )
 
@@ -74,15 +75,15 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnComplete result ->
+        OnComplete id result ->
             let
                 _ =
-                    Debug.log "result" result
+                    Debug.log ("result for " ++ id) result
             in
             ( model, Cmd.none )
 
         OnProgress ( task, cmd ) ->
-            ( { model | task = task }, cmd )
+            ( { model | tasks = task }, cmd )
 
 
 
@@ -132,12 +133,12 @@ httpCombo =
         (Task.map3 join3
             (longRequest 500
                 |> Task.andThenDo (sleep 500)
-                |> Task.andThenDo (longRequest 200)
-                |> Task.andThenDo (longRequest 200)
+                |> Task.andThenDo (longRequest 50)
+                |> Task.andThenDo (longRequest 50)
                 |> Task.andThenDo (longRequest 20)
             )
-            (longRequest 1000
-                |> Task.andThenDo (longRequest 750)
+            (longRequest 200
+                |> Task.andThenDo (longRequest 100)
                 |> Task.andThenDo (longRequest 500)
             )
             (Task.map2 join2
@@ -148,7 +149,7 @@ httpCombo =
                 (\res ->
                     Task.map (join2 res)
                         (Task.map3 join3
-                            (retry 10 httpError)
+                            (longRequest 50)
                             (longRequest 100)
                             (longRequest 200)
                         )
@@ -280,7 +281,7 @@ subscriptions model =
         , onComplete = OnComplete
         , onProgress = OnProgress
         }
-        model.task
+        model.tasks
 
 
 

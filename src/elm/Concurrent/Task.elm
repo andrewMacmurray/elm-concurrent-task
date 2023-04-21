@@ -1,6 +1,7 @@
 module Concurrent.Task exposing
     ( Definition
     , Error(..)
+    , Pool
     , Progress
     , RawResults
     , Task
@@ -19,6 +20,7 @@ module Concurrent.Task exposing
     , mapError
     , onError
     , onProgress
+    , pool
     , succeed
     , task
     )
@@ -46,7 +48,6 @@ type alias Progress x a =
 type alias Model =
     { sequence : Id.Sequence
     , started : Set Id
-    , hasErrors : Bool
     }
 
 
@@ -71,7 +72,9 @@ type Expect a
 
 
 type alias RawResults =
-    List RawResult
+    { execution : Id
+    , results : List RawResult
+    }
 
 
 type alias RawResult =
@@ -95,7 +98,6 @@ init : Model
 init =
     { sequence = Id.init
     , started = Set.empty
-    , hasErrors = False
     }
 
 
@@ -112,11 +114,6 @@ combineSequences sequence model =
 recordSent : List Definition_ -> Model -> Model
 recordSent defs model =
     { model | started = Set.union model.started (toSentIds defs) }
-
-
-haltProgress : Model -> Model
-haltProgress model =
-    { model | hasErrors = True }
 
 
 toSentIds : List Definition_ -> Set Id
@@ -215,10 +212,11 @@ errorDecoder =
             )
 
 
-encodeDefinition : Definition_ -> Encode.Value
-encodeDefinition def =
+encodeDefinition : Id -> Definition_ -> Encode.Value
+encodeDefinition execution def =
     Encode.object
         [ ( "id", Encode.string def.id )
+        , ( "execution", Encode.string execution )
         , ( "function", Encode.string def.function )
         , ( "args", def.args )
         ]
@@ -393,7 +391,7 @@ onError f (Task toTask) =
                     unwrap (f x) model1
             in
             ( onError_ next task_
-            , model1
+            , model
             )
         )
 
@@ -422,7 +420,7 @@ mapError f (Task toTask) =
                     toTask model
             in
             ( mapError_ f task_
-            , model1
+            , model
             )
         )
 
@@ -459,103 +457,121 @@ errorToString err =
 
 
 
--- Attempt
+-- Execute a Task
+
+
+type alias Pool x a =
+    Dict Id (Progress x a)
 
 
 type alias Attempt msg x a =
     { send : Encode.Value -> Cmd msg
-    , onComplete : Result x a -> msg
+    , execution : Id
+    , pool : Pool x a
+    , onComplete : Id -> Result x a -> msg
     }
 
 
 type alias OnProgress msg x a =
     { send : Encode.Value -> Cmd msg
     , receive : (RawResults -> msg) -> Sub msg
-    , onComplete : Result x a -> msg
-    , onProgress : ( Progress x a, Cmd msg ) -> msg
+    , onComplete : Id -> Result x a -> msg
+    , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
 
 
-attempt : Attempt msg x a -> Task x a -> ( Progress x a, Cmd msg )
+pool : Pool x a
+pool =
+    Dict.empty
+
+
+attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
 attempt options (Task toTask) =
     case toTask init of
-        ( Done res, model ) ->
-            ( ( Done res, model )
-            , sendResult options.onComplete res
+        ( Done res, _ ) ->
+            ( options.pool
+            , sendResult options.onComplete options.execution res
             )
 
         ( Pending defs next, model ) ->
-            ( ( Pending defs next
-              , recordSent defs model
-              )
-            , options.send (Encode.list encodeDefinition defs)
+            ( startTaskExecution options.execution
+                ( Pending defs next
+                , recordSent defs model
+                )
+                options.pool
+            , options.send (Encode.list (encodeDefinition options.execution) defs)
             )
 
 
-onProgress : OnProgress msg x a -> Progress x a -> Sub msg
-onProgress options ( task_, model ) =
-    case task_ of
-        Done _ ->
-            Sub.none
+startTaskExecution : Id -> Progress x a -> Pool x a -> Pool x a
+startTaskExecution execution =
+    Dict.insert execution
 
-        Pending _ next ->
-            options.receive
-                (\results ->
-                    let
-                        results_ =
-                            List.foldl addResponse Dict.empty results
-                    in
-                    case next results_ of
+
+updateProgressFor : Id -> Progress x a -> Pool x a -> Pool x a
+updateProgressFor execution progress_ =
+    Dict.update execution (Maybe.map (always progress_))
+
+
+removeFromPool : Id -> Pool x a -> Pool x a
+removeFromPool execution =
+    Dict.remove execution
+
+
+onProgress : OnProgress msg x a -> Pool x a -> Sub msg
+onProgress options pool_ =
+    options.receive
+        (\result ->
+            case Dict.get result.execution pool_ of
+                Just ( Pending _ next, model ) ->
+                    case next (toResults result) of
                         Done res ->
                             case res of
                                 Ok a ->
-                                    options.onComplete (Ok a)
+                                    options.onProgress
+                                        ( pool_
+                                        , sendResult options.onComplete result.execution (Ok a)
+                                        )
 
                                 Err e ->
-                                    if not model.hasErrors then
-                                        options.onProgress
-                                            ( ( Done res, haltProgress model )
-                                            , sendResult options.onComplete (Err e)
-                                            )
-
-                                    else
-                                        options.onProgress
-                                            ( ( Done res, model )
-                                            , Cmd.none
-                                            )
+                                    options.onProgress
+                                        ( removeFromPool result.execution pool_
+                                        , sendResult options.onComplete result.execution (Err e)
+                                        )
 
                         Pending defs next_ ->
-                            if not model.hasErrors then
-                                options.onProgress
-                                    ( ( Pending defs next_
-                                      , model
-                                            |> recordSent defs
-                                            |> nextId
-                                      )
-                                    , defs
-                                        |> List.filter (notStarted model)
-                                        |> Encode.list encodeDefinition
-                                        |> options.send
+                            options.onProgress
+                                ( updateProgressFor result.execution
+                                    ( Pending defs next_
+                                    , model
+                                        |> recordSent defs
+                                        |> nextId
                                     )
+                                    pool_
+                                , defs
+                                    |> List.filter (notStarted model)
+                                    |> Encode.list (encodeDefinition result.execution)
+                                    |> options.send
+                                )
 
-                            else
-                                options.onProgress
-                                    ( ( Pending defs next_
-                                      , model
-                                      )
-                                    , Cmd.none
-                                    )
-                )
+                _ ->
+                    options.onProgress ( pool, Cmd.none )
+        )
 
 
-sendResult : (Result x a -> msg) -> Result x a -> Cmd msg
-sendResult onComplete res =
-    CoreTask.succeed res |> CoreTask.perform onComplete
+sendResult : (Id -> Result x a -> msg) -> Id -> Result x a -> Cmd msg
+sendResult onComplete id res =
+    CoreTask.succeed res |> CoreTask.perform (onComplete id)
 
 
 notStarted : Model -> Definition_ -> Bool
 notStarted model def =
     not (Set.member def.id model.started)
+
+
+toResults : RawResults -> Results
+toResults result =
+    List.foldl addResponse Dict.empty result.results
 
 
 addResponse : RawResult -> Results -> Results
