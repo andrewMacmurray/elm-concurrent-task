@@ -14,6 +14,7 @@ module Concurrent.Task exposing
     , expectWhatever
     , fail
     , fromResult
+    , isRunning
     , map
     , map2
     , map3
@@ -460,8 +461,8 @@ errorToString err =
 -- Execute a Task
 
 
-type alias Pool x a =
-    Dict Id (Progress x a)
+type Pool x a
+    = Pool (Dict Id (Progress x a))
 
 
 type alias Attempt msg x a =
@@ -478,11 +479,6 @@ type alias OnProgress msg x a =
     , onComplete : Id -> Result x a -> msg
     , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
-
-
-pool : Pool x a
-pool =
-    Dict.empty
 
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
@@ -503,26 +499,11 @@ attempt options (Task toTask) =
             )
 
 
-startTaskExecution : Id -> Progress x a -> Pool x a -> Pool x a
-startTaskExecution execution =
-    Dict.insert execution
-
-
-updateProgressFor : Id -> Progress x a -> Pool x a -> Pool x a
-updateProgressFor execution progress_ =
-    Dict.update execution (Maybe.map (always progress_))
-
-
-removeFromPool : Id -> Pool x a -> Pool x a
-removeFromPool execution =
-    Dict.remove execution
-
-
 onProgress : OnProgress msg x a -> Pool x a -> Sub msg
 onProgress options pool_ =
     options.receive
         (\result ->
-            case Dict.get result.execution pool_ of
+            case findExecution result.execution pool_ of
                 Just ( Pending _ next, model ) ->
                     case next (toResults result) of
                         Done res ->
@@ -555,7 +536,7 @@ onProgress options pool_ =
                                 )
 
                 _ ->
-                    options.onProgress ( pool, Cmd.none )
+                    options.onProgress ( pool_, Cmd.none )
         )
 
 
@@ -577,3 +558,42 @@ toResults result =
 addResponse : RawResult -> Results -> Results
 addResponse r =
     Dict.insert r.id r.result
+
+
+
+-- Pool
+
+
+pool : Pool x a
+pool =
+    Pool Dict.empty
+
+
+isRunning : Id -> Pool x a -> Bool
+isRunning execution (Pool p) =
+    Dict.member execution p
+
+
+startTaskExecution : Id -> Progress x a -> Pool x a -> Pool x a
+startTaskExecution execution progress =
+    mapPool (Dict.insert execution progress)
+
+
+updateProgressFor : Id -> Progress x a -> Pool x a -> Pool x a
+updateProgressFor execution progress_ =
+    mapPool (Dict.update execution (Maybe.map (always progress_)))
+
+
+removeFromPool : Id -> Pool x a -> Pool x a
+removeFromPool execution =
+    mapPool (Dict.remove execution)
+
+
+findExecution : Id -> Pool x a -> Maybe (Progress x a)
+findExecution execution (Pool p) =
+    Dict.get execution p
+
+
+mapPool : (Dict Id (Progress x a) -> Dict Id (Progress x a)) -> Pool x a -> Pool x a
+mapPool f (Pool p) =
+    Pool (f p)

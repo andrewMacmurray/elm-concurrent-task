@@ -1,7 +1,6 @@
 port module TaskSpec exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
-import Dict
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Spec exposing (Spec, describe, given, it, observeThat, scenario, when)
@@ -30,12 +29,17 @@ type Msg
     | OnComplete String (Result Task.Error String)
 
 
+execution : String
+execution =
+    "123"
+
+
 init : Task Task.Error String -> ( Model, Cmd Msg )
 init task =
     let
         ( progress, cmd ) =
             Task.attempt
-                { execution = "123"
+                { execution = execution
                 , send = send
                 , onComplete = OnComplete
                 , pool = Task.pool
@@ -224,9 +228,8 @@ errorSpec =
                 |> observeThat
                     [ it "returns an error" (expectResult (Err (Task.JsException "something went wrong")))
                     , it "short-circuits the chain"
-                        (observeModel
-                            (.tasks >> Dict.get "123")
-                            |> Spec.expect (equals Nothing)
+                        (observeModel (.tasks >> Task.isRunning execution)
+                            |> Spec.expect (equals False)
                         )
                     ]
             )
@@ -301,7 +304,7 @@ sendSingleError : { id : String, error : String, reason : String } -> Step.Conte
 sendSingleError { id, error, reason } =
     Spec.Port.send "receive"
         (Encode.object
-            [ ( "execution", Encode.string "123" )
+            [ ( "execution", Encode.string execution )
             , ( "results"
               , Encode.list identity
                     [ encodeError error
@@ -320,7 +323,7 @@ sendError_ : String -> String -> List TaskDefinition -> Step.Context model -> St
 sendError_ error reason defs =
     Spec.Port.send "receive"
         (Encode.object
-            [ ( "execution", Encode.string "123" )
+            [ ( "execution", Encode.string execution )
             , ( "results", Encode.list (encodeError error reason) defs )
             ]
         )
@@ -344,7 +347,7 @@ sendProgress : List TaskDefinition -> Step.Context model -> Step.Command msg
 sendProgress defs =
     Spec.Port.send "receive"
         (Encode.object
-            [ ( "execution", Encode.string "123" )
+            [ ( "execution", Encode.string execution )
             , ( "results", Encode.list encodeSuccess defs )
             ]
         )
