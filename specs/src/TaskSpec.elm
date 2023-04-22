@@ -20,17 +20,18 @@ import Spec.Step as Step
 
 type alias Model =
     { tasks : Task.Pool Task.Error String
-    , result : Maybe (Result Task.Error String)
+    , result : Maybe ( String, Result Task.Error String )
     }
 
 
 type Msg
-    = OnProgress ( Task.Pool Task.Error String, Cmd Msg )
+    = OnStartTask String
+    | OnProgress ( Task.Pool Task.Error String, Cmd Msg )
     | OnComplete String (Result Task.Error String)
 
 
-attemptId : String
-attemptId =
+defaultAttempt : String
+defaultAttempt =
     "123"
 
 
@@ -53,25 +54,41 @@ init attempt task =
     )
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+update : Task Task.Error String -> Msg -> Model -> ( Model, Cmd Msg )
+update task_ msg model =
     case msg of
+        OnStartTask id ->
+            let
+                ( tasks, cmd ) =
+                    Task.attempt
+                        { send = send
+                        , id = id
+                        , pool = model.tasks
+                        , onComplete = OnComplete
+                        }
+                        task_
+            in
+            ( { model | tasks = tasks }, cmd )
+
         OnProgress ( task, cmd ) ->
             ( { model | tasks = task }, cmd )
 
         OnComplete id result ->
-            ( { model | result = Just result }, Cmd.none )
+            ( { model | result = Just ( id, result ) }, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Task.onProgress
-        { send = send
-        , receive = receive
-        , onComplete = OnComplete
-        , onProgress = OnProgress
-        }
-        model.tasks
+    Sub.batch
+        [ startTask OnStartTask
+        , Task.onProgress
+            { send = send
+            , receive = receive
+            , onComplete = OnComplete
+            , onProgress = OnProgress
+            }
+            model.tasks
+        ]
 
 
 getInt : Int -> Task Task.Error Int
@@ -98,6 +115,9 @@ port send : Encode.Value -> Cmd msg
 port receive : (Task.RawResults -> msg) -> Sub msg
 
 
+port startTask : (String -> msg) -> Sub msg
+
+
 
 -- Spec
 
@@ -107,6 +127,7 @@ main =
     Runner.program
         [ pendingSpec
         , errorSpec
+        , multiAttemptSpec
         , hardcodedSpec
         ]
 
@@ -117,7 +138,7 @@ pendingSpec =
         [ scenario "Single Task"
             (getString "42"
                 |> givenATask
-                |> when "a single task is run" [ runBatch ]
+                |> when "a single task is run" [ runBatch defaultAttempt ]
                 |> it "decodes its results successfully" (expectResult (Ok "42"))
             )
         , scenario "Two Tasks"
@@ -127,7 +148,7 @@ pendingSpec =
                     (getInt 3)
                 )
                 |> givenATask
-                |> when "two concurrent tasks are run" [ runBatch ]
+                |> when "two concurrent tasks are run" [ runBatch defaultAttempt ]
                 |> it "combines the results" (expectResult (Ok "4"))
             )
         , scenario "Three Tasks"
@@ -136,7 +157,7 @@ pendingSpec =
                 (getString "3")
                 (getString "5")
                 |> givenATask
-                |> when "three concurrent tasks are run" [ runBatch ]
+                |> when "three concurrent tasks are run" [ runBatch defaultAttempt ]
                 |> it "combines the results" (expectResult (Ok "135"))
             )
         , scenario "Chained Tasks"
@@ -150,7 +171,7 @@ pendingSpec =
                             (getString "D")
                     )
                 |> givenATask
-                |> when "chained tasks are run" [ runBatch, runBatch ]
+                |> when "chained tasks are run" [ runBatch defaultAttempt, runBatch defaultAttempt ]
                 |> it "chains and combines the results" (expectResult (Ok "ABCD"))
             )
         ]
@@ -177,7 +198,7 @@ errorSpec =
             (getString "42"
                 |> givenATask
                 |> when "a function returns the wrong type"
-                    [ sendProgress
+                    [ sendProgress defaultAttempt
                         [ { id = "0"
                           , function = "getString"
                           , args = Encode.int 42
@@ -207,18 +228,18 @@ errorSpec =
                     )
                 |> givenATask
                 |> when "a chained task fails"
-                    [ sendProgress
+                    [ sendProgress defaultAttempt
                         [ { id = "1"
                           , function = "getString"
                           , args = Encode.string ""
                           }
                         ]
-                    , sendSingleError
+                    , sendSingleError defaultAttempt
                         { id = "0"
                         , error = "js_exception"
                         , reason = "something went wrong"
                         }
-                    , sendProgress
+                    , sendProgress defaultAttempt
                         [ { id = "2"
                           , function = "getString"
                           , args = Encode.string ""
@@ -228,9 +249,53 @@ errorSpec =
                 |> observeThat
                     [ it "returns an error" (expectResult (Err (Task.JsException "something went wrong")))
                     , it "short-circuits the chain"
-                        (observeModel (.tasks >> Task.isRunning attemptId)
+                        (observeModel (.tasks >> Task.isRunning defaultAttempt)
                             |> Spec.expect (equals False)
                         )
+                    ]
+            )
+        ]
+
+
+multiAttemptSpec : Spec Model Msg
+multiAttemptSpec =
+    describe "Multiple Attempts"
+        [ scenario "Multiple Attempts"
+            (getString "42"
+                |> givenATask
+                |> when "multiple tasks are started" [ startAttempt "456" ]
+                |> it "keeps track of progress of both"
+                    ((.tasks
+                        >> (\t ->
+                                [ Task.isRunning "456" t
+                                , Task.isRunning defaultAttempt t
+                                ]
+                           )
+                     )
+                        |> observeModel
+                        |> Spec.expect (equals [ True, True ])
+                    )
+            )
+        , scenario "Completing one attempt"
+            (getString "42"
+                |> givenATask
+                |> when "one attempt completes"
+                    [ startAttempt "456"
+                    , runBatch defaultAttempt
+                    ]
+                |> observeThat
+                    [ it "keeps track of the other attempt"
+                        ((.tasks
+                            >> (\t ->
+                                    [ Task.isRunning "456" t
+                                    , Task.isRunning defaultAttempt t
+                                    ]
+                               )
+                         )
+                            |> observeModel
+                            |> Spec.expect (equals [ True, False ])
+                        )
+                    , it "returns a result from the completed task" (expectResult (Ok "42"))
                     ]
             )
         ]
@@ -290,9 +355,14 @@ type alias TaskDefinition =
     }
 
 
-runBatch : Step.Context model -> Step.Command msg
-runBatch =
-    Spec.Port.respond "send" decodeResults sendProgress
+startAttempt : String -> Step.Context model -> Step.Command msg
+startAttempt attemptId =
+    Spec.Port.send "startTask" (Encode.string attemptId)
+
+
+runBatch : String -> Step.Context model -> Step.Command msg
+runBatch attemptId =
+    Spec.Port.respond "send" decodeResults (sendProgress attemptId)
 
 
 sendError : String -> String -> Step.Context model -> Step.Command msg
@@ -300,8 +370,8 @@ sendError error reason =
     Spec.Port.respond "send" decodeResults (sendError_ error reason)
 
 
-sendSingleError : { id : String, error : String, reason : String } -> Step.Context model -> Step.Command msg
-sendSingleError { id, error, reason } =
+sendSingleError : String -> { id : String, error : String, reason : String } -> Step.Context model -> Step.Command msg
+sendSingleError attemptId { id, error, reason } =
     Spec.Port.send "receive"
         (Encode.object
             [ ( "attempt", Encode.string attemptId )
@@ -323,7 +393,7 @@ sendError_ : String -> String -> List TaskDefinition -> Step.Context model -> St
 sendError_ error reason defs =
     Spec.Port.send "receive"
         (Encode.object
-            [ ( "attempt", Encode.string attemptId )
+            [ ( "attempt", Encode.string defaultAttempt )
             , ( "results", Encode.list (encodeError error reason) defs )
             ]
         )
@@ -343,8 +413,8 @@ decodeTaskDefinition =
         (Decode.field "args" Decode.value)
 
 
-sendProgress : List TaskDefinition -> Step.Context model -> Step.Command msg
-sendProgress defs =
+sendProgress : String -> List TaskDefinition -> Step.Context model -> Step.Command msg
+sendProgress attemptId defs =
     Spec.Port.send "receive"
         (Encode.object
             [ ( "attempt", Encode.string attemptId )
@@ -386,7 +456,7 @@ encodeError error message def =
 
 expectResultIs : (Result Task.Error String -> Bool) -> Spec.Expectation Model
 expectResultIs toExpected =
-    observeModel .result
+    observeModel (.result >> Maybe.map Tuple.second)
         |> Spec.expect
             (\res ->
                 case res of
@@ -404,19 +474,20 @@ expectResultIs toExpected =
 
 expectResult : Result Task.Error String -> Spec.Expectation Model
 expectResult expected =
-    observeModel .result
+    (.result >> Maybe.map Tuple.second)
+        |> observeModel
         |> Spec.expect (equals (Just expected))
 
 
 givenATask : Task Task.Error String -> Spec.Script Model Msg
 givenATask =
-    givenAnAttempt attemptId
+    givenAnAttempt defaultAttempt
 
 
 givenAnAttempt : String -> Task Task.Error String -> Spec.Script Model Msg
 givenAnAttempt attempt task_ =
     given
         (Spec.init (init attempt task_)
-            |> Spec.withUpdate update
+            |> Spec.withUpdate (update task_)
             |> Spec.withSubscriptions subscriptions
         )

@@ -514,7 +514,7 @@ onProgress options pool_ =
                             case res of
                                 Ok a ->
                                     options.onProgress
-                                        ( pool_
+                                        ( removeFromPool result.attempt pool_
                                         , sendResult options.onComplete result.attempt (Ok a)
                                         )
 
