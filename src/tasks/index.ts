@@ -10,6 +10,7 @@ export interface ElmPorts {
 export interface Builtins {
   http?: (request: http.Request) => Promise<http.Response>;
   timeNow?: () => number;
+  randomSeed?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -50,6 +51,7 @@ export interface Error {
 const BuiltInTasks = {
   "builtin:timeNow": () => Date.now(),
   "builtin:sleep": (ms: number) => sleep(ms),
+  "builtin:randomSeed": () => Date.now(),
 };
 
 function sleep(ms) {
@@ -136,6 +138,9 @@ function createTasks(options: Options): Tasks {
   }
   if (options.builtins?.timeNow) {
     tasks["builtin:timeNow"] = options.builtins.timeNow;
+  }
+  if (options.builtins?.randomSeed) {
+    tasks["builtin:randomSeed"] = options.builtins.randomSeed;
   }
   return tasks;
 }

@@ -94,18 +94,18 @@ request r =
         , args = encode r
         , expect = Task.expectJson (decodeResponse r)
         }
-        |> Task.onError wrapError
+        |> Task.mapError wrapError
         |> Task.andThen Task.fromResult
 
 
-wrapError : Task.Error -> Task Error a
+wrapError : Task.Error -> Error
 wrapError err =
     case err of
         Task.DecodeResponseError e ->
-            Task.fail (BadBody (Decode.errorToString e))
+            BadBody (Decode.errorToString e)
 
         _ ->
-            Task.fail (TaskError err)
+            TaskError err
 
 
 decodeResponse : Request a -> Decoder (Result Error a)

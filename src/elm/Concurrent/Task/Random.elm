@@ -1,9 +1,9 @@
 module Concurrent.Task.Random exposing (generate)
 
 import Concurrent.Task as Task exposing (Task)
-import Concurrent.Task.Time
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Random
-import Time
 
 
 
@@ -22,4 +22,9 @@ generate generator =
 
 randomSeed : Task x Int
 randomSeed =
-    Task.map Time.posixToMillis Concurrent.Task.Time.now
+    Task.task
+        { function = "builtin:randomSeed"
+        , args = Encode.null
+        , expect = Task.expectJson Decode.int
+        }
+        |> Task.onError (\_ -> Task.succeed 0)

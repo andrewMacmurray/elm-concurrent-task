@@ -462,7 +462,11 @@ errorToString err =
 
 
 type Pool x a
-    = Pool (Dict Id (Progress x a))
+    = Pool (Pool_ x a)
+
+
+type alias Pool_ x a =
+    Dict Id (Progress x a)
 
 
 type alias Attempt msg x a =
@@ -594,6 +598,6 @@ findExecution execution (Pool p) =
     Dict.get execution p
 
 
-mapPool : (Dict Id (Progress x a) -> Dict Id (Progress x a)) -> Pool x a -> Pool x a
+mapPool : (Pool_ x a -> Pool_ x a) -> Pool x a -> Pool x a
 mapPool f (Pool p) =
     Pool (f p)
