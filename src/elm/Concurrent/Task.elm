@@ -392,7 +392,7 @@ onError f (Task toTask) =
                     unwrap (f x) model1
             in
             ( onError_ next task_
-            , model
+            , model1
             )
         )
 
@@ -421,7 +421,7 @@ mapError f (Task toTask) =
                     toTask model
             in
             ( mapError_ f task_
-            , model
+            , model1
             )
         )
 
@@ -494,7 +494,7 @@ attempt attempt_ (Task toTask) =
             )
 
         ( Pending defs next, model ) ->
-            ( startTaskExecution attempt_.id
+            ( startAttempt attempt_.id
                 ( Pending defs next
                 , recordSent defs model
                 )
@@ -578,8 +578,8 @@ isRunning execution (Pool p) =
     Dict.member execution p
 
 
-startTaskExecution : Id -> Progress x a -> Pool x a -> Pool x a
-startTaskExecution execution progress =
+startAttempt : Id -> Progress x a -> Pool x a -> Pool x a
+startAttempt execution progress =
     mapPool (Dict.insert execution progress)
 
 
