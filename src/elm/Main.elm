@@ -38,7 +38,9 @@ type alias Model =
 
 
 type Msg
-    = OnComplete String (Result Error String)
+    = OnFireMany Int
+    | OnManualEnter String
+    | OnComplete String (Result Error String)
     | OnProgress ( Task.Pool Error String, Cmd Msg )
 
 
@@ -53,18 +55,8 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    let
-        ( tasks, cmd ) =
-            Task.attempt
-                { send = send
-                , onComplete = OnComplete
-                , id = "123"
-                , pool = Task.pool
-                }
-                httpCombo
-    in
-    ( { tasks = tasks }
-    , cmd
+    ( { tasks = Task.pool }
+    , Cmd.none
     )
 
 
@@ -75,6 +67,32 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        OnManualEnter id ->
+            let
+                ( tasks, cmd ) =
+                    Task.attempt
+                        { send = send
+                        , onComplete = OnComplete
+                        , id = id
+                        , pool = model.tasks
+                        }
+                        httpCombo
+            in
+            ( { tasks = tasks }, cmd )
+
+        OnFireMany id ->
+            let
+                ( tasks, cmd ) =
+                    Task.attempt
+                        { send = send
+                        , onComplete = OnComplete
+                        , id = String.fromInt id
+                        , pool = model.tasks
+                        }
+                        (slowSequence id)
+            in
+            ( { tasks = tasks }, cmd )
+
         OnComplete id result ->
             let
                 _ =
@@ -124,6 +142,17 @@ manyEnvs =
             (getEnv "THREE")
             getHome
             |> Task.andThenDo (getEnv "USER")
+        )
+
+
+slowSequence : Int -> Task Error String
+slowSequence i =
+    Task.mapError HttpError
+        (longRequest 1000
+            |> Task.andThenDo (longRequest 1000)
+            |> Task.andThenDo (longRequest 1000)
+            |> Task.andThenDo (longRequest 1000)
+            |> Task.andThenDo (longRequest i)
         )
 
 
@@ -275,13 +304,17 @@ join2 a b =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Task.onProgress
-        { send = send
-        , receive = receive
-        , onComplete = OnComplete
-        , onProgress = OnProgress
-        }
-        model.tasks
+    Sub.batch
+        [ manualEnter OnManualEnter
+        , fireMany OnFireMany
+        , Task.onProgress
+            { send = send
+            , receive = receive
+            , onComplete = OnComplete
+            , onProgress = OnProgress
+            }
+            model.tasks
+        ]
 
 
 
@@ -292,3 +325,9 @@ port send : Decode.Value -> Cmd msg
 
 
 port receive : (Task.RawResults -> msg) -> Sub msg
+
+
+port manualEnter : (String -> msg) -> Sub msg
+
+
+port fireMany : (Int -> msg) -> Sub msg
