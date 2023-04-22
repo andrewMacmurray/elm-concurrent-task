@@ -73,7 +73,7 @@ type Expect a
 
 
 type alias RawResults =
-    { execution : Id
+    { attempt : Id
     , results : List RawResult
     }
 
@@ -214,10 +214,10 @@ errorDecoder =
 
 
 encodeDefinition : Id -> Definition_ -> Encode.Value
-encodeDefinition execution def =
+encodeDefinition attemptId def =
     Encode.object
         [ ( "id", Encode.string def.id )
-        , ( "execution", Encode.string execution )
+        , ( "attempt", Encode.string attemptId )
         , ( "function", Encode.string def.function )
         , ( "args", def.args )
         ]
@@ -471,7 +471,7 @@ type alias Pool_ x a =
 
 type alias Attempt msg x a =
     { send : Encode.Value -> Cmd msg
-    , execution : Id
+    , id : Id
     , pool : Pool x a
     , onComplete : Id -> Result x a -> msg
     }
@@ -486,20 +486,20 @@ type alias OnProgress msg x a =
 
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
-attempt options (Task toTask) =
+attempt attempt_ (Task toTask) =
     case toTask init of
         ( Done res, _ ) ->
-            ( options.pool
-            , sendResult options.onComplete options.execution res
+            ( attempt_.pool
+            , sendResult attempt_.onComplete attempt_.id res
             )
 
         ( Pending defs next, model ) ->
-            ( startTaskExecution options.execution
+            ( startTaskExecution attempt_.id
                 ( Pending defs next
                 , recordSent defs model
                 )
-                options.pool
-            , options.send (Encode.list (encodeDefinition options.execution) defs)
+                attempt_.pool
+            , attempt_.send (Encode.list (encodeDefinition attempt_.id) defs)
             )
 
 
@@ -507,7 +507,7 @@ onProgress : OnProgress msg x a -> Pool x a -> Sub msg
 onProgress options pool_ =
     options.receive
         (\result ->
-            case findExecution result.execution pool_ of
+            case findAttempt result.attempt pool_ of
                 Just ( Pending _ next, model ) ->
                     case next (toResults result) of
                         Done res ->
@@ -515,18 +515,18 @@ onProgress options pool_ =
                                 Ok a ->
                                     options.onProgress
                                         ( pool_
-                                        , sendResult options.onComplete result.execution (Ok a)
+                                        , sendResult options.onComplete result.attempt (Ok a)
                                         )
 
                                 Err e ->
                                     options.onProgress
-                                        ( removeFromPool result.execution pool_
-                                        , sendResult options.onComplete result.execution (Err e)
+                                        ( removeFromPool result.attempt pool_
+                                        , sendResult options.onComplete result.attempt (Err e)
                                         )
 
                         Pending defs next_ ->
                             options.onProgress
-                                ( updateProgressFor result.execution
+                                ( updateProgressFor result.attempt
                                     ( Pending defs next_
                                     , model
                                         |> recordSent defs
@@ -535,7 +535,7 @@ onProgress options pool_ =
                                     pool_
                                 , defs
                                     |> List.filter (notStarted model)
-                                    |> Encode.list (encodeDefinition result.execution)
+                                    |> Encode.list (encodeDefinition result.attempt)
                                     |> options.send
                                 )
 
@@ -593,9 +593,9 @@ removeFromPool execution =
     mapPool (Dict.remove execution)
 
 
-findExecution : Id -> Pool x a -> Maybe (Progress x a)
-findExecution execution (Pool p) =
-    Dict.get execution p
+findAttempt : Id -> Pool x a -> Maybe (Progress x a)
+findAttempt attemptId (Pool p) =
+    Dict.get attemptId p
 
 
 mapPool : (Pool_ x a -> Pool_ x a) -> Pool x a -> Pool x a

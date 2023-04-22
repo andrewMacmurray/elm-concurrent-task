@@ -18,13 +18,13 @@ export type Tasks = { [fn: string]: (any) => any };
 
 export interface TaskDefinition {
   id: string;
-  execution: string;
+  attempt: string;
   function: string;
   args: any;
 }
 
 export interface Results {
-  execution: string;
+  attempt: string;
   results: Result[];
 }
 
@@ -76,7 +76,7 @@ export function register(options: Options): void {
       const def = defs[i];
       if (!tasks[def.function]) {
         return send({
-          execution: def.execution,
+          attempt: def.attempt,
           results: [
             {
               id: def.id,
@@ -95,14 +95,10 @@ export function register(options: Options): void {
 
     defs.map(async (def) => {
       try {
-        console.log(
-          "--STARTING--",
-          def.function,
-          `${def.execution} - ${def.id}`
-        );
+        console.log("--STARTING--", def.function, `${def.attempt} - ${def.id}`);
         const result = await tasks[def.function](def.args);
         send({
-          execution: def.execution,
+          attempt: def.attempt,
           results: [
             {
               id: def.id,
@@ -112,7 +108,7 @@ export function register(options: Options): void {
         });
       } catch (e) {
         send({
-          execution: def.execution,
+          attempt: def.attempt,
           results: [
             {
               id: def.id,

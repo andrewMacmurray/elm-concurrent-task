@@ -29,17 +29,17 @@ type Msg
     | OnComplete String (Result Task.Error String)
 
 
-execution : String
-execution =
+attemptId : String
+attemptId =
     "123"
 
 
-init : Task Task.Error String -> ( Model, Cmd Msg )
-init task =
+init : String -> Task Task.Error String -> ( Model, Cmd Msg )
+init attempt task =
     let
         ( progress, cmd ) =
             Task.attempt
-                { execution = execution
+                { id = attempt
                 , send = send
                 , onComplete = OnComplete
                 , pool = Task.pool
@@ -228,7 +228,7 @@ errorSpec =
                 |> observeThat
                     [ it "returns an error" (expectResult (Err (Task.JsException "something went wrong")))
                     , it "short-circuits the chain"
-                        (observeModel (.tasks >> Task.isRunning execution)
+                        (observeModel (.tasks >> Task.isRunning attemptId)
                             |> Spec.expect (equals False)
                         )
                     ]
@@ -304,7 +304,7 @@ sendSingleError : { id : String, error : String, reason : String } -> Step.Conte
 sendSingleError { id, error, reason } =
     Spec.Port.send "receive"
         (Encode.object
-            [ ( "execution", Encode.string execution )
+            [ ( "attempt", Encode.string attemptId )
             , ( "results"
               , Encode.list identity
                     [ encodeError error
@@ -323,7 +323,7 @@ sendError_ : String -> String -> List TaskDefinition -> Step.Context model -> St
 sendError_ error reason defs =
     Spec.Port.send "receive"
         (Encode.object
-            [ ( "execution", Encode.string execution )
+            [ ( "attempt", Encode.string attemptId )
             , ( "results", Encode.list (encodeError error reason) defs )
             ]
         )
@@ -347,7 +347,7 @@ sendProgress : List TaskDefinition -> Step.Context model -> Step.Command msg
 sendProgress defs =
     Spec.Port.send "receive"
         (Encode.object
-            [ ( "execution", Encode.string execution )
+            [ ( "attempt", Encode.string attemptId )
             , ( "results", Encode.list encodeSuccess defs )
             ]
         )
@@ -409,9 +409,14 @@ expectResult expected =
 
 
 givenATask : Task Task.Error String -> Spec.Script Model Msg
-givenATask t =
+givenATask =
+    givenAnAttempt attemptId
+
+
+givenAnAttempt : String -> Task Task.Error String -> Spec.Script Model Msg
+givenAnAttempt attempt task_ =
     given
-        (Spec.init (init t)
+        (Spec.init (init attempt task_)
             |> Spec.withUpdate update
             |> Spec.withSubscriptions subscriptions
         )
