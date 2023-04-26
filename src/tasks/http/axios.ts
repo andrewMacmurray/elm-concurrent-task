@@ -16,12 +16,15 @@ export function http(request: Request): Promise<Response> {
       status: response.status,
       statusText: response.statusText,
     }))
-    .catch((err) => ({
-      error: toHttpError(err),
-      body: err.response?.data,
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-    }));
+    .catch((err) => {
+      console.log(err.response?.data);
+      return {
+        error: toHttpError(err),
+        body: err.response?.data,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+      };
+    });
 }
 
 function toHttpError(err: AxiosError): HttpError {

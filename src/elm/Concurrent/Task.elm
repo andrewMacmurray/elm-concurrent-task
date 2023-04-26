@@ -1,6 +1,8 @@
 module Concurrent.Task exposing
-    ( Definition
+    ( Attempt
+    , Definition
     , Error(..)
+    , OnProgress
     , Pool
     , Progress
     , RawResults
@@ -225,7 +227,7 @@ encodeDefinition attemptId def =
 
 fromResult : Result x a -> Task x a
 fromResult res =
-    Task (\_ -> ( Done res, init ))
+    Task (\model -> ( Done res, model ))
 
 
 fromResult_ : Result x a -> Task_ x a
@@ -358,7 +360,7 @@ andThenDo task2 task1 =
 
 fail : a -> Task a b
 fail e =
-    Task (\_ -> ( fail_ e, init ))
+    Task (\model -> ( fail_ e, model ))
 
 
 fail_ : x -> Task_ x a
@@ -368,7 +370,7 @@ fail_ e =
 
 succeed : a -> Task x a
 succeed a =
-    Task (\_ -> ( succeed_ a, init ))
+    Task (\model -> ( succeed_ a, model ))
 
 
 succeed_ : a -> Task_ x a

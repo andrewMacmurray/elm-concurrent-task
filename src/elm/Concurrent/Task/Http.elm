@@ -6,7 +6,9 @@ module Concurrent.Task.Http exposing
     , Request
     , emptyBody
     , expectJson
+    , expectString
     , header
+    , jsonBody
     , request
     )
 
@@ -74,6 +76,11 @@ expectJson =
     ExpectJson
 
 
+expectString : Expect String
+expectString =
+    ExpectJson Decode.string
+
+
 
 -- Body
 
@@ -81,6 +88,11 @@ expectJson =
 emptyBody : Body
 emptyBody =
     Json Encode.null
+
+
+jsonBody : Encode.Value -> Body
+jsonBody =
+    Json
 
 
 
@@ -137,12 +149,14 @@ decodeError r =
 
 
 decodeExpect : Expect a -> Decoder (Result Error a)
-decodeExpect (ExpectJson decoder) =
+decodeExpect expect =
     Decode.field "status" Decode.int
         |> Decode.andThen
             (\code ->
                 if code >= 200 && code < 300 then
-                    Decode.field "body" (Decode.map Ok decoder)
+                    case expect of
+                        ExpectJson decoder ->
+                            Decode.field "body" (Decode.map Ok decoder)
 
                 else
                     Decode.map2

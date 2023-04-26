@@ -76,7 +76,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        httpCombo
+                        (getProfile |> Task.andThenDo clientRequest)
             in
             ( { tasks = tasks }, cmd )
 
@@ -105,6 +105,75 @@ update msg model =
 
 
 
+-- Test
+-- Load
+-- (getProfile: (config
+-- |> andThen (getAccessToken: (oauthRequest: (httpRequest: (task |> mapError |> fromResult) |> mapError)))
+-- |> andThen (getProfileData: (httpRequest |> mapError)
+-- (config: (map2 f (load) (oauthCredentialsFor)))
+--
+-- (load: (loadEnv: task |> mapError) |> andThen |> fromResult |> mapError)
+-- (loadWith: (load |> andThen)
+-- (oauth2CredentialsFor: (loadWith |> (failOnMissingOAuth2: succeed || fail |> mapError))
+
+
+clientRequest =
+    Task.andThen identity
+        (Task.map2 (\a b -> getEnv "USER")
+            (Task.map identity (getEnv "HOME"))
+            load
+        )
+
+
+getProfile =
+    config
+        |> Task.andThen getAccessToken
+        |> Task.andThen getProfileData
+
+
+getAccessToken _ =
+    --longRequest 10
+    getEnv "HOME"
+        |> Task.mapError identity
+
+
+getProfileData _ =
+    --longRequest 10
+    getEnv "HOME"
+        |> Task.mapError identity
+
+
+config =
+    Task.map2 join2
+        load
+        oauth2CredentialsFor
+
+
+oauth2CredentialsFor : Task Error String
+oauth2CredentialsFor =
+    loadWith
+        (\_ ->
+            failOnNothing
+                (TaskError (Task.InternalError "Waa"))
+                (Just "hello")
+        )
+
+
+failOnNothing e =
+    Maybe.map Task.succeed >> Maybe.withDefault (Task.fail e)
+
+
+loadWith f =
+    load |> Task.andThen f
+
+
+load =
+    getEnv "HOME"
+        |> Task.andThenDo (Task.fromResult (Ok "hello"))
+        |> Task.mapError identity
+
+
+
 -- Task
 
 
@@ -123,9 +192,9 @@ sleep =
     Concurrent.Task.Process.sleep
 
 
-myHttpTask : Task Http.Error String
+myHttpTask : Task Error String
 myHttpTask =
-    Http.request
+    request
         { url = "https://jsonplaceholder.typicode.com/todos/1"
         , method = "GET"
         , headers = []
@@ -136,59 +205,53 @@ myHttpTask =
 
 manyEnvs : Task Error String
 manyEnvs =
-    Task.mapError TaskError
-        (Task.map3 join3
-            (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
-            (getEnv "THREE")
-            getHome
-            |> Task.andThenDo (getEnv "USER")
-        )
+    Task.map3 join3
+        (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
+        (getEnv "THREE")
+        getHome
+        |> Task.andThenDo getUser
 
 
 slowSequence : Int -> Task Error String
 slowSequence i =
-    Task.mapError HttpError
-        (longRequest 1000
-            |> Task.andThenDo (longRequest 1000)
-            |> Task.andThenDo (longRequest 1000)
-            |> Task.andThenDo (longRequest 1000)
-            |> Task.andThenDo (longRequest i)
-        )
+    longRequest 1000
+        |> Task.andThenDo (longRequest 1000)
+        |> Task.andThenDo (longRequest 1000)
+        |> Task.andThenDo (longRequest 1000)
+        |> Task.andThenDo (longRequest i)
 
 
 httpCombo : Task Error String
 httpCombo =
-    Task.mapError HttpError
-        (Task.map3 join3
-            (longRequest 500
-                |> Task.andThenDo (sleep 500)
-                |> Task.andThenDo (longRequest 50)
-                |> Task.andThenDo (longRequest 50)
-                |> Task.andThenDo (longRequest 20)
-            )
-            (longRequest 200
-                |> Task.andThenDo (longRequest 100)
-                |> Task.andThenDo (longRequest 500)
-            )
-            (Task.map2 join2
-                (longRequest 70)
-                (longRequest 80)
-            )
-            |> Task.andThen
-                (\res ->
-                    Task.map (join2 res)
-                        (Task.map3 join3
-                            (longRequest 50)
-                            (longRequest 100)
-                            (longRequest 200)
-                        )
-                )
+    Task.map3 join3
+        (longRequest 500
+            |> Task.andThenDo (longRequest 500)
+            |> Task.andThenDo (longRequest 50)
+            |> Task.andThenDo (longRequest 50)
+            |> Task.andThenDo (longRequest 20)
         )
+        (longRequest 100
+            |> Task.andThenDo (longRequest 100)
+            |> Task.andThenDo (longRequest 500)
+        )
+        (Task.map2 join2
+            (longRequest 70)
+            (longRequest 80)
+        )
+        |> Task.andThen
+            (\res ->
+                Task.map (join2 res)
+                    (Task.map3 join3
+                        (longRequest 50)
+                        (longRequest 100)
+                        (longRequest 200)
+                    )
+            )
 
 
-longRequest : Int -> Task Http.Error String
+longRequest : Int -> Task Error String
 longRequest ms =
-    Http.request
+    request
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
         , method = "GET"
         , headers = []
@@ -197,9 +260,9 @@ longRequest ms =
         }
 
 
-getBigFile : Task Http.Error String
+getBigFile : Task Error String
 getBigFile =
-    Http.request
+    request
         { url = "http://localhost:4000/big-file"
         , method = "GET"
         , headers = []
@@ -208,9 +271,9 @@ getBigFile =
         }
 
 
-httpError : Task Http.Error String
+httpError : Task Error String
 httpError =
-    Http.request
+    request
         { url = "http://localhost:4000/boom"
         , method = "GET"
         , headers = []
@@ -219,44 +282,56 @@ httpError =
         }
 
 
-getHome : Task Task.Error String
+request : Http.Request a -> Task Error a
+request =
+    Http.request >> Task.mapError HttpError
+
+
+getHome : Task Error String
 getHome =
     getEnv "HOME"
 
 
-getEnv : String -> Task Task.Error String
+getUser : Task Error String
+getUser =
+    getEnv "USER"
+
+
+getEnv : String -> Task Error String
 getEnv var =
-    Task.task
-        { function = "getEnv"
-        , args = Encode.string var
-        , expect = Task.expectJson Decode.string
-        }
+    Task.mapError TaskError
+        (Task.task
+            { function = "getEnv"
+            , args = Encode.string var
+            , expect = Task.expectJson Decode.string
+            }
+        )
 
 
 slowInts : Task Error String
 slowInts =
-    Task.mapError TaskError
-        (Task.map3 join3
-            (doubleSlowInt 1)
-            (doubleSlowInt 3)
-            (doubleSlowInt 5)
-        )
+    Task.map3 join3
+        (doubleSlowInt 1)
+        (doubleSlowInt 3)
+        (doubleSlowInt 5)
 
 
-doubleSlowInt : Int -> Task Task.Error String
+doubleSlowInt : Int -> Task Error String
 doubleSlowInt i =
     Task.map2 join2
         (slowInt i)
         (slowInt (i + 1))
 
 
-slowInt : Int -> Task Task.Error String
+slowInt : Int -> Task Error String
 slowInt id =
-    Task.task
-        { function = "slowInt"
-        , args = Encode.int id
-        , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
-        }
+    Task.mapError TaskError
+        (Task.task
+            { function = "slowInt"
+            , args = Encode.int id
+            , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
+            }
+        )
 
 
 
