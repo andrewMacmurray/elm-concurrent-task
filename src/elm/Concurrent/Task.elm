@@ -104,8 +104,8 @@ init =
     }
 
 
-nextId : Model -> Model
-nextId model =
+nextId : String -> Model -> Model
+nextId fn model =
     { model | sequence = Id.next model.sequence }
 
 
@@ -176,7 +176,7 @@ task options =
                         Nothing ->
                             unwrap (task options) model
                 )
-            , nextId model
+            , nextId options.function model
             )
         )
 
@@ -227,12 +227,22 @@ encodeDefinition attemptId def =
 
 fromResult : Result x a -> Task x a
 fromResult res =
-    Task (\model -> ( Done res, model ))
+    case res of
+        Ok a ->
+            succeed a
+
+        Err e ->
+            fail e
 
 
 fromResult_ : Result x a -> Task_ x a
-fromResult_ =
-    Done
+fromResult_ res =
+    case res of
+        Ok a ->
+            succeed_ a
+
+        Err e ->
+            fail_ e
 
 
 
@@ -333,7 +343,7 @@ andThen f (Task toTask) =
                     unwrap (f a) model1
             in
             ( andThen_ next task_
-            , nextId model1
+            , nextId "andThen" model1
             )
         )
 
@@ -360,7 +370,7 @@ andThenDo task2 task1 =
 
 fail : a -> Task a b
 fail e =
-    Task (\model -> ( fail_ e, model ))
+    Task (\model -> ( fail_ e, init ))
 
 
 fail_ : x -> Task_ x a
@@ -370,7 +380,7 @@ fail_ e =
 
 succeed : a -> Task x a
 succeed a =
-    Task (\model -> ( succeed_ a, model ))
+    Task (\model -> ( succeed_ a, init ))
 
 
 succeed_ : a -> Task_ x a
@@ -389,6 +399,12 @@ onError f (Task toTask) =
             let
                 ( task_, model1 ) =
                     toTask model
+
+                _ =
+                    --Debug.log "onError (prev, next)"
+                    ( Id.get model.sequence
+                    , Id.get model1.sequence
+                    )
 
                 next x =
                     unwrap (f x) model1
@@ -421,6 +437,12 @@ mapError f (Task toTask) =
             let
                 ( task_, model1 ) =
                     toTask model
+
+                _ =
+                    --Debug.log "mapError (prev, next)"
+                    ( Id.get model.sequence
+                    , Id.get model1.sequence
+                    )
             in
             ( mapError_ f task_
             , model1
@@ -499,6 +521,7 @@ attempt attempt_ (Task toTask) =
             ( startAttempt attempt_.id
                 ( Pending defs next
                 , recordSent defs model
+                    |> nextId "attempt"
                 )
                 attempt_.pool
             , attempt_.send (Encode.list (encodeDefinition attempt_.id) defs)
@@ -532,7 +555,7 @@ onProgress options pool_ =
                                     ( Pending defs next_
                                     , model
                                         |> recordSent defs
-                                        |> nextId
+                                        |> nextId "pending"
                                     )
                                     pool_
                                 , defs

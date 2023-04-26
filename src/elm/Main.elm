@@ -76,7 +76,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (getProfile |> Task.andThenDo clientRequest)
+                        httpCombo
             in
             ( { tasks = tasks }, cmd )
 
@@ -94,83 +94,12 @@ update msg model =
             ( { tasks = tasks }, cmd )
 
         OnComplete id result ->
-            let
-                _ =
-                    Debug.log ("result for " ++ id) result
-            in
-            ( model, Cmd.none )
+            ( model
+            , sendResult ("result for " ++ id ++ ": " ++ Debug.toString result)
+            )
 
         OnProgress ( task, cmd ) ->
             ( { model | tasks = task }, cmd )
-
-
-
--- Test
--- Load
--- (getProfile: (config
--- |> andThen (getAccessToken: (oauthRequest: (httpRequest: (task |> mapError |> fromResult) |> mapError)))
--- |> andThen (getProfileData: (httpRequest |> mapError)
--- (config: (map2 f (load) (oauthCredentialsFor)))
---
--- (load: (loadEnv: task |> mapError) |> andThen |> fromResult |> mapError)
--- (loadWith: (load |> andThen)
--- (oauth2CredentialsFor: (loadWith |> (failOnMissingOAuth2: succeed || fail |> mapError))
-
-
-clientRequest =
-    Task.andThen identity
-        (Task.map2 (\a b -> getEnv "USER")
-            (Task.map identity (getEnv "HOME"))
-            load
-        )
-
-
-getProfile =
-    config
-        |> Task.andThen getAccessToken
-        |> Task.andThen getProfileData
-
-
-getAccessToken _ =
-    --longRequest 10
-    getEnv "HOME"
-        |> Task.mapError identity
-
-
-getProfileData _ =
-    --longRequest 10
-    getEnv "HOME"
-        |> Task.mapError identity
-
-
-config =
-    Task.map2 join2
-        load
-        oauth2CredentialsFor
-
-
-oauth2CredentialsFor : Task Error String
-oauth2CredentialsFor =
-    loadWith
-        (\_ ->
-            failOnNothing
-                (TaskError (Task.InternalError "Waa"))
-                (Just "hello")
-        )
-
-
-failOnNothing e =
-    Maybe.map Task.succeed >> Maybe.withDefault (Task.fail e)
-
-
-loadWith f =
-    load |> Task.andThen f
-
-
-load =
-    getEnv "HOME"
-        |> Task.andThenDo (Task.fromResult (Ok "hello"))
-        |> Task.mapError identity
 
 
 
@@ -250,8 +179,13 @@ httpCombo =
 
 
 longRequest : Int -> Task Error String
-longRequest ms =
-    request
+longRequest =
+    longRequest_ >> Task.mapError HttpError
+
+
+longRequest_ : Int -> Task Http.Error String
+longRequest_ ms =
+    Http.request
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
         , method = "GET"
         , headers = []
@@ -406,3 +340,6 @@ port manualEnter : (String -> msg) -> Sub msg
 
 
 port fireMany : (Int -> msg) -> Sub msg
+
+
+port sendResult : String -> Cmd msg

@@ -12,9 +12,12 @@ const Tasks = {
 };
 
 function waitRandom() {
-  const randomN = crypto.randomInt(0, 500);
+  return wait(crypto.randomInt(0, 500));
+}
+
+function wait(ms) {
   return new Promise((resolve) => {
-    setTimeout(resolve, randomN);
+    setTimeout(resolve, ms);
   });
 }
 
@@ -33,7 +36,12 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-loopAsk();
+ask();
+
+app.ports.sendResult.subscribe((result) => {
+  console.log(result);
+  ask();
+});
 
 function fireMany() {
   for (let i = 0; i < 10; i++) {
@@ -43,10 +51,8 @@ function fireMany() {
   }
 }
 
-function loopAsk() {
-  rl.question("enter an attempt id: ")
-    .then((id) => {
-      app.ports.manualEnter.send(id);
-    })
-    .then(() => loopAsk());
+function ask() {
+  rl.question("enter an attempt id: ").then((id) => {
+    app.ports.manualEnter.send(id);
+  });
 }
