@@ -76,7 +76,20 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        httpCombo
+                        (Task.mapError HttpError
+                            (Task.map2 join2
+                                (longRequest_ 200)
+                                (longRequest_ 500)
+                                |> Task.andThenDo (longRequest_ 500)
+                                |> Task.andThenDo
+                                    (httpError
+                                        |> Task.onError (\_ -> httpError)
+                                        |> Task.onError (\_ -> longRequest_ 500)
+                                        |> Task.andThenDo (longRequest_ 500)
+                                    )
+                                |> Task.andThenDo (longRequest_ 300)
+                            )
+                        )
             in
             ( { tasks = tasks }, cmd )
 
@@ -121,9 +134,9 @@ sleep =
     Concurrent.Task.Process.sleep
 
 
-myHttpTask : Task Error String
+myHttpTask : Task Http.Error String
 myHttpTask =
-    request
+    Http.request
         { url = "https://jsonplaceholder.typicode.com/todos/1"
         , method = "GET"
         , headers = []
@@ -194,9 +207,9 @@ longRequest_ ms =
         }
 
 
-getBigFile : Task Error String
+getBigFile : Task Http.Error String
 getBigFile =
-    request
+    Http.request
         { url = "http://localhost:4000/big-file"
         , method = "GET"
         , headers = []
@@ -205,20 +218,15 @@ getBigFile =
         }
 
 
-httpError : Task Error String
+httpError : Task Http.Error String
 httpError =
-    request
+    Http.request
         { url = "http://localhost:4000/boom"
         , method = "GET"
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.succeed "whatever")
         }
-
-
-request : Http.Request a -> Task Error a
-request =
-    Http.request >> Task.mapError HttpError
 
 
 getHome : Task Error String

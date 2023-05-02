@@ -11,13 +11,14 @@ export function http(request: Request): Promise<Response> {
         request.headers.map((header) => [header.name, header.value])
       ),
     })
-    .then((response) => ({
-      body: response.data,
-      status: response.status,
-      statusText: response.statusText,
-    }))
+    .then((response) => {
+      return {
+        body: response.data,
+        status: response.status,
+        statusText: response.statusText,
+      };
+    })
     .catch((err) => {
-      console.log(err.response?.data);
       return {
         error: toHttpError(err),
         body: err.response?.data,

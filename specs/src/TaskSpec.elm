@@ -177,6 +177,11 @@ pendingSpec =
         ]
 
 
+
+-- Write a generator to make random tasks with a mixture of map2, andThen, onError etc
+-- Fuzz test it
+
+
 errorSpec : Spec Model Msg
 errorSpec =
     describe "Error spec"

@@ -104,8 +104,8 @@ init =
     }
 
 
-nextId : String -> Model -> Model
-nextId fn model =
+nextId : Model -> Model
+nextId model =
     { model | sequence = Id.next model.sequence }
 
 
@@ -176,7 +176,7 @@ task options =
                         Nothing ->
                             unwrap (task options) model
                 )
-            , nextId options.function model
+            , nextId model
             )
         )
 
@@ -343,7 +343,7 @@ andThen f (Task toTask) =
                     unwrap (f a) model1
             in
             ( andThen_ next task_
-            , nextId "andThen" model1
+            , nextId model1
             )
         )
 
@@ -370,7 +370,7 @@ andThenDo task2 task1 =
 
 fail : a -> Task a b
 fail e =
-    Task (\model -> ( fail_ e, init ))
+    Task (\model -> ( fail_ e, model ))
 
 
 fail_ : x -> Task_ x a
@@ -380,7 +380,7 @@ fail_ e =
 
 succeed : a -> Task x a
 succeed a =
-    Task (\model -> ( succeed_ a, init ))
+    Task (\model -> ( succeed_ a, model ))
 
 
 succeed_ : a -> Task_ x a
@@ -399,12 +399,6 @@ onError f (Task toTask) =
             let
                 ( task_, model1 ) =
                     toTask model
-
-                _ =
-                    --Debug.log "onError (prev, next)"
-                    ( Id.get model.sequence
-                    , Id.get model1.sequence
-                    )
 
                 next x =
                     unwrap (f x) model1
@@ -437,12 +431,6 @@ mapError f (Task toTask) =
             let
                 ( task_, model1 ) =
                     toTask model
-
-                _ =
-                    --Debug.log "mapError (prev, next)"
-                    ( Id.get model.sequence
-                    , Id.get model1.sequence
-                    )
             in
             ( mapError_ f task_
             , model1
@@ -520,8 +508,7 @@ attempt attempt_ (Task toTask) =
         ( Pending defs next, model ) ->
             ( startAttempt attempt_.id
                 ( Pending defs next
-                , recordSent defs model
-                    |> nextId "attempt"
+                , nextId (recordSent defs model)
                 )
                 attempt_.pool
             , attempt_.send (Encode.list (encodeDefinition attempt_.id) defs)
@@ -555,7 +542,7 @@ onProgress options pool_ =
                                     ( Pending defs next_
                                     , model
                                         |> recordSent defs
-                                        |> nextId "pending"
+                                        |> nextId
                                     )
                                     pool_
                                 , defs
