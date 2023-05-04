@@ -5,6 +5,7 @@ import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
+import Dict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -55,6 +56,42 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
+    let
+        complexTask =
+            getUser
+                |> Task.andThenDo getHome
+                |> Task.onError (\_ -> getHome)
+                |> Task.onError (\_ -> getHome)
+                |> Task.onError (\_ -> getHome)
+                |> Task.onError (\_ -> getHome)
+                |> Task.andThenDo getHome
+                |> Task.andThenDo getHome
+                |> Task.andThenDo getHome
+
+        _ =
+            Debug.log "testAttempt"
+                (Task.testAttempt 10
+                    (Dict.fromList
+                        [ toRes 0
+                        , toRes 1
+                        , toRes 3
+                        , toRes 4
+                        , toRes 5
+                        , toRes 6
+                        , toRes 7
+                        ]
+                    )
+                    complexTask
+                )
+
+        toRes i =
+            ( String.fromInt i
+            , Encode.object
+                [ ( "status", Encode.string "success" )
+                , ( "value", Encode.string "foo" )
+                ]
+            )
+    in
     ( { tasks = Task.pool }
     , Cmd.none
     )
@@ -83,6 +120,12 @@ update msg model =
                                 |> Task.andThenDo (longRequest_ 500)
                                 |> Task.andThenDo
                                     (httpError
+                                        |> Task.onError (\_ -> httpError)
+                                        |> Task.onError (\_ -> longRequest_ 100)
+                                    )
+                                |> Task.andThenDo
+                                    (httpError
+                                        |> Task.onError (\_ -> httpError)
                                         |> Task.onError (\_ -> httpError)
                                         |> Task.onError (\_ -> longRequest_ 500)
                                         |> Task.andThenDo (longRequest_ 500)
