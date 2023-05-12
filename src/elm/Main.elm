@@ -57,33 +57,32 @@ type Error
 init : Flags -> ( Model, Cmd Msg )
 init _ =
     let
-        complexTask =
-            getUser
-                |> Task.andThenDo getHome
-                |> Task.onError (\_ -> getHome)
-                |> Task.onError (\_ -> getHome)
-                |> Task.onError (\_ -> getHome)
-                |> Task.onError (\_ -> getHome)
-                |> Task.andThenDo getHome
-                |> Task.andThenDo getHome
-                |> Task.andThenDo getHome
-
-        _ =
-            Debug.log "testAttempt"
-                (Task.testAttempt 10
-                    (Dict.fromList
-                        [ toRes 0
-                        , toRes 1
-                        , toRes 3
-                        , toRes 4
-                        , toRes 5
-                        , toRes 6
-                        , toRes 7
-                        ]
-                    )
-                    complexTask
-                )
-
+        --complexTask =
+        --    getUser
+        --        |> Task.andThenDo getHome
+        --        |> Task.onError (\_ -> getHome)
+        --        |> Task.onError (\_ -> getHome)
+        --        |> Task.onError (\_ -> getHome)
+        --        |> Task.onError (\_ -> getHome)
+        --        |> Task.andThenDo getHome
+        --        |> Task.andThenDo getHome
+        --        |> Task.andThenDo getHome
+        --
+        --_ =
+        --    Debug.log "testAttempt"
+        --        (Task.testAttempt 10
+        --            (Dict.fromList
+        --                [ toRes 0
+        --                , toRes 1
+        --                , toRes 3
+        --                , toRes 4
+        --                , toRes 5
+        --                , toRes 6
+        --                , toRes 7
+        --                ]
+        --            )
+        --            complexTask
+        --        )
         toRes i =
             ( String.fromInt i
             , Encode.object
@@ -101,6 +100,126 @@ init _ =
 -- Update
 
 
+longChain : Task Error String
+longChain =
+    Task.mapError HttpError
+        (Task.map3 join3
+            (longRequest_ 100)
+            (longRequest_ 100)
+            (httpError
+                |> Task.onError (\_ -> longRequest_ 100)
+                |> Task.andThen (\_ -> longRequest_ 100)
+            )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 1000)
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> longRequest_ 500)
+                    |> Task.andThenDo (longRequest_ 500)
+                )
+            |> Task.andThenDo (longRequest_ 300)
+        )
+
+
+simpleChain : Task Error String
+simpleChain =
+    Task.mapError TaskError
+        (idTask "a"
+            |> Task.andThenDo (idTask "b")
+            |> Task.andThenDo (idTask "c")
+            |> Task.andThenDo (idTask "d")
+            |> Task.andThenDo (idTask "e")
+        )
+
+
+someChain : Task Error String
+someChain =
+    Task.mapError HttpError
+        (Task.map2 join2
+            (Task.map3 join3
+                (httpError
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                )
+                (httpError |> Task.onError (\_ -> longRequest_ 100))
+                (longRequest_ 100)
+            )
+            (Task.map3 join3
+                (longRequest_ 100)
+                (longRequest_ 100)
+                (longRequest_ 100)
+            )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
+badChain : Task Error String
+badChain =
+    Task.mapError HttpError
+        (Task.map2 join2
+            (longRequest_ 100)
+            (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                )
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError (\_ -> longRequest_ 100)
+                 --|> Task.onError (\_ -> httpError)
+                 --|> Task.onError (\_ -> longRequest_ 100)
+                 --|> Task.andThenDo (longRequest_ 100)
+                )
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
+badChain2 =
+    Task.mapError HttpError
+        (longRequest_ 100
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError
+                        (\_ ->
+                            httpError
+                                |> Task.onError
+                                    (\_ ->
+                                        httpError
+                                            |> Task.onError
+                                                (\_ ->
+                                                    longRequest_ 100
+                                                )
+                                    )
+                        )
+                )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -113,26 +232,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError
-                            (Task.map2 join2
-                                (longRequest_ 200)
-                                (longRequest_ 500)
-                                |> Task.andThenDo (longRequest_ 500)
-                                |> Task.andThenDo
-                                    (httpError
-                                        |> Task.onError (\_ -> httpError)
-                                        |> Task.onError (\_ -> longRequest_ 100)
-                                    )
-                                |> Task.andThenDo
-                                    (httpError
-                                        |> Task.onError (\_ -> httpError)
-                                        |> Task.onError (\_ -> httpError)
-                                        |> Task.onError (\_ -> longRequest_ 500)
-                                        |> Task.andThenDo (longRequest_ 500)
-                                    )
-                                |> Task.andThenDo (longRequest_ 300)
-                            )
-                        )
+                        badChain2
             in
             ( { tasks = tasks }, cmd )
 
@@ -186,6 +286,17 @@ myHttpTask =
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "title" Decode.string)
         }
+
+
+idTask : String -> Task Task.Error String
+idTask name =
+    Task.mapError identity
+        (Task.define
+            { function = name
+            , args = Encode.string name
+            , expect = Task.expectJson Decode.string
+            }
+        )
 
 
 manyEnvs : Task Error String
@@ -285,7 +396,7 @@ getUser =
 getEnv : String -> Task Error String
 getEnv var =
     Task.mapError TaskError
-        (Task.task
+        (Task.define
             { function = "getEnv"
             , args = Encode.string var
             , expect = Task.expectJson Decode.string
@@ -311,7 +422,7 @@ doubleSlowInt i =
 slowInt : Int -> Task Error String
 slowInt id =
     Task.mapError TaskError
-        (Task.task
+        (Task.define
             { function = "slowInt"
             , args = Encode.int id
             , expect = Task.expectJson (Decode.map String.fromInt Decode.int)

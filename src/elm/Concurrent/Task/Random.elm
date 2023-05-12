@@ -22,7 +22,7 @@ generate generator =
 
 randomSeed : Task x Int
 randomSeed =
-    Task.task
+    Task.define
         { function = "builtin:randomSeed"
         , args = Encode.null
         , expect = Task.expectJson Decode.int

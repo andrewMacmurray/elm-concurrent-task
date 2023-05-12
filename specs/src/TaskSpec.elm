@@ -93,7 +93,7 @@ subscriptions model =
 
 getInt : Int -> Task Task.Error Int
 getInt i =
-    Task.task
+    Task.define
         { function = "getInt"
         , args = Encode.int i
         , expect = Task.expectJson Decode.int
@@ -102,7 +102,7 @@ getInt i =
 
 getString : String -> Task Task.Error String
 getString s =
-    Task.task
+    Task.define
         { function = "getString"
         , args = Encode.string s
         , expect = Task.expectJson Decode.string

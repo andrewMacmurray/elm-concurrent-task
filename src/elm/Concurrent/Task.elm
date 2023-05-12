@@ -11,6 +11,7 @@ module Concurrent.Task exposing
     , andThen
     , andThenDo
     , attempt
+    , define
     , errorToString
     , expectJson
     , expectWhatever
@@ -25,7 +26,6 @@ module Concurrent.Task exposing
     , onProgress
     , pool
     , succeed
-    , task
     , testAttempt
     )
 
@@ -149,8 +149,8 @@ type alias Definition a =
     }
 
 
-task : Definition a -> Task Error a
-task options =
+define : Definition a -> Task Error a
+define options =
     Task
         (\model ->
             let
@@ -174,7 +174,7 @@ task options =
                                 |> fromResult_
 
                         Nothing ->
-                            unwrap (task options) model
+                            unwrap (define options) model
                 )
             , nextId model
             )

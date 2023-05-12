@@ -101,7 +101,7 @@ jsonBody =
 
 request : Request a -> Task Error a
 request r =
-    Task.task
+    Task.define
         { function = "builtin:httpRequest"
         , args = encode r
         , expect = Task.expectJson (decodeResponse r)
