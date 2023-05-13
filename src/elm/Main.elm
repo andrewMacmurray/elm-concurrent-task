@@ -5,7 +5,6 @@ import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
-import Dict
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -56,41 +55,6 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    let
-        --complexTask =
-        --    getUser
-        --        |> Task.andThenDo getHome
-        --        |> Task.onError (\_ -> getHome)
-        --        |> Task.onError (\_ -> getHome)
-        --        |> Task.onError (\_ -> getHome)
-        --        |> Task.onError (\_ -> getHome)
-        --        |> Task.andThenDo getHome
-        --        |> Task.andThenDo getHome
-        --        |> Task.andThenDo getHome
-        --
-        --_ =
-        --    Debug.log "testAttempt"
-        --        (Task.testAttempt 10
-        --            (Dict.fromList
-        --                [ toRes 0
-        --                , toRes 1
-        --                , toRes 3
-        --                , toRes 4
-        --                , toRes 5
-        --                , toRes 6
-        --                , toRes 7
-        --                ]
-        --            )
-        --            complexTask
-        --        )
-        toRes i =
-            ( String.fromInt i
-            , Encode.object
-                [ ( "status", Encode.string "success" )
-                , ( "value", Encode.string "foo" )
-                ]
-            )
-    in
     ( { tasks = Task.pool }
     , Cmd.none
     )
@@ -188,15 +152,16 @@ badChain =
                 )
             |> Task.andThenDo
                 (httpError
+                    |> Task.onError (\_ -> httpError)
                     |> Task.onError (\_ -> longRequest_ 100)
-                 --|> Task.onError (\_ -> httpError)
-                 --|> Task.onError (\_ -> longRequest_ 100)
-                 --|> Task.andThenDo (longRequest_ 100)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                    |> Task.andThenDo (longRequest_ 100)
                 )
             |> Task.andThenDo (longRequest_ 100)
         )
 
 
+badChain2 : Task Error String
 badChain2 =
     Task.mapError HttpError
         (longRequest_ 100
@@ -220,6 +185,46 @@ badChain2 =
         )
 
 
+badChain3 : Task Error String
+badChain3 =
+    Task.mapError HttpError
+        (Task.map3 join3
+            doThree
+            doThree
+            doThree
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError (\_ -> longRequest_ 100)
+                )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
+doThree : Task Http.Error String
+doThree =
+    Task.map3 join3
+        (httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 50)
+        )
+        (httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 100)
+        )
+        (httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 150)
+        )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -232,7 +237,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        badChain2
+                        badChain
             in
             ( { tasks = tasks }, cmd )
 

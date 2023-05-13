@@ -26,13 +26,13 @@ module Concurrent.Task exposing
     , onProgress
     , pool
     , succeed
-    , testAttempt
     )
 
 import Concurrent.Internal.Id as Id exposing (Id)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+import Set exposing (Set)
 import Task as CoreTask
 
 
@@ -50,7 +50,7 @@ type alias Progress x a =
 
 type alias Model =
     { ids : Id.Sequence
-    , started : List Id
+    , started : Set Id
     }
 
 
@@ -100,7 +100,7 @@ type Error
 init : Model
 init =
     { ids = Id.init
-    , started = []
+    , started = Set.empty
     }
 
 
@@ -116,12 +116,17 @@ combineSequences sequence model =
 
 recordSent : List Definition_ -> Model -> Model
 recordSent defs model =
-    { model | started = List.append model.started (toSentIds defs) }
+    { model | started = Set.union model.started (toSentIds defs) }
 
 
-toSentIds : List Definition_ -> List Id
+recordComplete : Results -> Model -> Model
+recordComplete results model =
+    { model | started = Set.diff model.started (Set.fromList (Dict.keys results)) }
+
+
+toSentIds : List Definition_ -> Set Id
 toSentIds defs =
-    List.map .id defs
+    Set.fromList (List.map .id defs)
 
 
 
@@ -537,16 +542,19 @@ onProgress options pool_ =
                                         )
 
                         Pending defs next_ ->
+                            let
+                                model_ =
+                                    recordComplete (toResults result) model
+                            in
                             options.onProgress
                                 ( updateProgressFor result.attempt
                                     ( Pending defs next_
-                                    , model
+                                    , model_
                                         |> recordSent defs
-                                        |> nextId
                                     )
                                     pool_
                                 , defs
-                                    |> List.filter (notStarted model)
+                                    |> List.filter (notStarted model_)
                                     |> Encode.list (encodeDefinition result.attempt)
                                     |> options.send
                                 )
@@ -556,32 +564,6 @@ onProgress options pool_ =
         )
 
 
-
--- Test Runner
-
-
-testAttempt : Int -> Results -> Task x a -> ( Task_ x a, Model )
-testAttempt maxDepth res_ (Task toTask) =
-    case toTask init of
-        ( Done res, model ) ->
-            ( Done res, model )
-
-        ( Pending defs next, model ) ->
-            if maxDepth > 0 then
-                testAttempt (maxDepth - 1)
-                    res_
-                    (Task
-                        (\_ ->
-                            ( next res_
-                            , recordSent defs model
-                            )
-                        )
-                    )
-
-            else
-                ( Pending defs next, model )
-
-
 sendResult : (Id -> Result x a -> msg) -> Id -> Result x a -> Cmd msg
 sendResult onComplete id res =
     CoreTask.succeed res |> CoreTask.perform (onComplete id)
@@ -589,7 +571,7 @@ sendResult onComplete id res =
 
 notStarted : Model -> Definition_ -> Bool
 notStarted model def =
-    not (List.member def.id model.started)
+    not (Set.member def.id model.started)
 
 
 toResults : RawResults -> Results
