@@ -1,5 +1,10 @@
 module Concurrent.Fake exposing (runExample)
 
+import Json.Decode as Decode
+import Json.Encode as Encode
+
+
+
 -- Task
 
 
@@ -8,7 +13,7 @@ type Task x a
 
 
 type Task_ x a
-    = Pending (List Definition_) (Task x a)
+    = Pending (List Definition_) (Results -> Task x a)
     | Done (Result x a)
 
 
@@ -16,6 +21,10 @@ type alias Definition_ =
     { id : Int
     , function : String
     }
+
+
+type alias Results =
+    Decode.Value
 
 
 
@@ -33,7 +42,7 @@ define a =
     State
         (\s ->
             ( s + 1
-            , Pending [ { id = s, function = a.function } ] (fromResult a.expect)
+            , Pending [ { id = s, function = a.function } ] (\_ -> fromResult a.expect)
             )
         )
 
@@ -58,7 +67,7 @@ mapTask : (a -> b) -> Task_ x a -> Task_ x b
 mapTask f task =
     case task of
         Pending defs next ->
-            Pending defs (map f next)
+            Pending defs (next >> map f)
 
         Done a ->
             Done (Result.map f a)
@@ -83,13 +92,13 @@ mapTask2 : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
 mapTask2 f task1 task2 =
     case ( task1, task2 ) of
         ( Pending defs1 next1, Pending defs2 next2 ) ->
-            Pending (defs1 ++ defs2) (map2 f next1 next2)
+            Pending (defs1 ++ defs2) (\res -> map2 f (next1 res) (next2 res))
 
         ( Pending defs next1, Done b ) ->
-            Pending defs (map2 f next1 (fromResult b))
+            Pending defs (\res -> map2 f (next1 res) (fromResult b))
 
         ( Done a, Pending defs next2 ) ->
-            Pending defs (map2 f (fromResult a) next2)
+            Pending defs (\res -> map2 f (fromResult a) (next2 res))
 
         ( Done a, Done b ) ->
             Done (Result.map2 f a b)
@@ -129,7 +138,7 @@ andThen f (State run) =
                                     fail e
 
                         Pending defs next ->
-                            State (\s__ -> ( s__, Pending defs (next |> andThen f) ))
+                            State (\s__ -> ( s__, Pending defs (next >> andThen f) ))
             in
             run_ s_
         )
@@ -159,7 +168,7 @@ onError f (State run) =
                                     f e
 
                         Pending defs next ->
-                            State (\s__ -> ( s__, Pending defs (next |> onError f) ))
+                            State (\s__ -> ( s__, Pending defs (next >> onError f) ))
             in
             run_ s_
         )
@@ -177,10 +186,13 @@ eval (State run) n =
 
         ( n_, Pending defs next ) ->
             let
+                results =
+                    Encode.null
+
                 _ =
                     Debug.log "defs" ( n_, defs )
             in
-            eval next n_
+            eval (next results) n_
 
 
 
