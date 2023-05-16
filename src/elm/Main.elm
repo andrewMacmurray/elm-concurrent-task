@@ -1,5 +1,6 @@
 port module Main exposing (main)
 
+import Concurrent.Fake as Fake
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
@@ -55,6 +56,10 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
+    let
+        _ =
+            Debug.log "fake" Fake.runExample
+    in
     ( { tasks = Task.pool }
     , Cmd.none
     )
