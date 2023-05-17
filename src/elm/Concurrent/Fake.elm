@@ -21,11 +21,37 @@ type Task_ x a
 type alias Definition_ =
     { id : Id
     , function : String
+    , args : Encode.Value
     }
 
 
 type alias AResult =
     ( Id, Decode.Value )
+
+
+type Expect a
+    = ExpectJson (Decoder a)
+
+
+type Error
+    = DecodeResponseError Decode.Error
+    | JsException String
+    | MissingFunction String
+    | InternalError String
+
+
+
+-- Expect
+
+
+expectJson : Decoder a -> Expect a
+expectJson =
+    ExpectJson
+
+
+expectWhatever : Expect ()
+expectWhatever =
+    ExpectJson (Decode.succeed ())
 
 
 
@@ -34,11 +60,12 @@ type alias AResult =
 
 type alias Definition a =
     { function : String
-    , expect : Decoder a
+    , args : Encode.Value
+    , expect : Expect a
     }
 
 
-define : Definition a -> Task String a
+define : Definition a -> Task Error a
 define a =
     State
         (\ids ->
@@ -47,23 +74,64 @@ define a =
                     Id.get ids
             in
             ( Id.next ids
-            , Pending [ { id = id, function = a.function } ]
+            , Pending
+                [ { id = id
+                  , function = a.function
+                  , args = a.args
+                  }
+                ]
                 (\( id_, resx ) ->
                     if id == id_ then
-                        Decode.decodeValue a.expect resx
-                            |> Result.mapError Decode.errorToString
+                        resx
+                            |> Decode.decodeValue (decodeResponse a.expect)
+                            |> Result.mapError DecodeResponseError
+                            |> Result.andThen identity
                             |> fromResult
 
                     else
-                        withId ids (define a)
+                        runWith ids (define a)
                 )
             )
         )
 
 
-withId : Id.Sequence -> Task x a -> Task x a
-withId s (State run) =
+runWith : Id.Sequence -> Task x a -> Task x a
+runWith s (State run) =
     State (\_ -> run s)
+
+
+decodeResponse : Expect value -> Decoder (Result Error value)
+decodeResponse (ExpectJson expect) =
+    Decode.field "status" Decode.string
+        |> Decode.andThen
+            (\status ->
+                case status of
+                    "success" ->
+                        Decode.field "value" (Decode.map Ok expect)
+
+                    "error" ->
+                        Decode.field "error" (Decode.map Err errorDecoder)
+
+                    _ ->
+                        Decode.succeed (Err (InternalError ("Unknown response status: " ++ status)))
+            )
+
+
+errorDecoder : Decoder Error
+errorDecoder =
+    Decode.field "reason" Decode.string
+        |> Decode.andThen
+            (\reason ->
+                case reason of
+                    "js_exception" ->
+                        Decode.field "message" (Decode.map JsException Decode.string)
+
+                    "missing_function" ->
+                        Decode.field "message" (Decode.map MissingFunction Decode.string)
+
+                    _ ->
+                        Decode.succeed (InternalError ("Unknown error reason: " ++ reason))
+            )
 
 
 
@@ -73,12 +141,12 @@ withId s (State run) =
 map : (a -> b) -> Task x a -> Task x b
 map f (State run) =
     State
-        (\s ->
+        (\ids ->
             let
-                ( s_, a ) =
-                    run s
+                ( ids_, a ) =
+                    run ids
             in
-            ( s_, mapTask f a )
+            ( ids_, mapTask f a )
         )
 
 
@@ -95,29 +163,16 @@ mapTask f task =
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
 map2 f (State run1) (State run2) =
     State
-        (\s ->
+        (\ids ->
             let
-                ( s1, a ) =
-                    run1 s
+                ( ids_, a ) =
+                    run1 ids
 
-                ( s2, b ) =
-                    run2 s1
+                ( ids__, b ) =
+                    run2 ids_
             in
-            ( s2, mapTask2 f a b )
+            ( ids__, mapTask2 f a b )
         )
-
-
-map3 : (a -> b -> c -> d) -> Task x a -> Task x b -> Task x c -> Task x d
-map3 f t1 t2 t3 =
-    succeed f
-        |> andMap t1
-        |> andMap t2
-        |> andMap t3
-
-
-andMap : Task x a -> Task x (a -> b) -> Task x b
-andMap =
-    map2 (|>)
 
 
 mapTask2 : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
@@ -136,6 +191,19 @@ mapTask2 f task1 task2 =
             Done (Result.map2 f a b)
 
 
+andMap : Task x a -> Task x (a -> b) -> Task x b
+andMap =
+    map2 (|>)
+
+
+map3 : (a -> b -> c -> d) -> Task x a -> Task x b -> Task x c -> Task x d
+map3 f t1 t2 t3 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+        |> andMap t3
+
+
 succeed : a -> Task x a
 succeed a =
     fromResult (Ok a)
@@ -148,7 +216,7 @@ fail x =
 
 fromResult : Result x a -> Task x a
 fromResult res =
-    State (\s -> ( s, Done res ))
+    State (\ids -> ( ids, Done res ))
 
 
 andThen : (a -> Task x b) -> Task x a -> Task x b
@@ -206,11 +274,49 @@ onError f (State run) =
         )
 
 
+mapError : (x -> y) -> Task x a -> Task y a
+mapError f (State run) =
+    State
+        (\ids ->
+            let
+                ( ids_, a ) =
+                    run ids
+            in
+            ( ids_, mapTaskError f a )
+        )
+
+
+mapTaskError : (x -> y) -> Task_ x a -> Task_ y a
+mapTaskError f task =
+    case task of
+        Pending defs next ->
+            Pending defs (next >> mapError f)
+
+        Done a ->
+            Done (Result.mapError f a)
+
+
+errorToString : Error -> String
+errorToString err =
+    case err of
+        DecodeResponseError e ->
+            "DecodeResponseError: " ++ Decode.errorToString e
+
+        JsException string ->
+            "JsException: " ++ string
+
+        MissingFunction string ->
+            "MissingFunction: " ++ string
+
+        InternalError string ->
+            "InternalError: " ++ string
+
+
 
 -- Eval
 
 
-eval : Int -> List ( Id, Encode.Value ) -> Task String a -> Id.Sequence -> ( Id.Sequence, Result String a )
+eval : Int -> List ( Id, Encode.Value ) -> Task Error a -> Id.Sequence -> ( Id.Sequence, Result Error a )
 eval attempts results (State run) n =
     case run n of
         ( n_, Done a ) ->
@@ -238,7 +344,7 @@ eval attempts results (State run) n =
                     n_
 
             else
-                ( n_, Err "timeout" )
+                ( n_, Err (InternalError "timeout") )
 
 
 
@@ -248,14 +354,16 @@ eval attempts results (State run) n =
 create a =
     define
         { function = a
-        , expect = Decode.string
+        , args = Encode.null
+        , expect = expectJson Decode.string
         }
 
 
 error =
     define
         { function = "error"
-        , expect = Decode.fail "error"
+        , args = Encode.null
+        , expect = expectJson (Decode.fail "error")
         }
 
 
@@ -264,6 +372,7 @@ join3 a b c =
     a ++ b ++ c
 
 
+example : Task Error String
 example =
     map3 join3
         (create "hello")
@@ -298,31 +407,39 @@ example =
         |> andThenDo (create "baz")
 
 
-runExample : ( Id.Sequence, Result String String )
+runExample : ( Id.Sequence, Result Error String )
 runExample =
     eval
         20
-        [ ( "0", Encode.string "zero" )
-        , ( "1", Encode.string "one" )
-        , ( "2", Encode.string "two" )
-        , ( "3", Encode.string "three" )
-        , ( "4", Encode.string "four" )
-        , ( "5", Encode.string "five" )
-        , ( "6", Encode.string "six" )
-        , ( "7", Encode.string "seven" )
-        , ( "8", Encode.string "eight" )
-        , ( "9", Encode.string "nine" )
-        , ( "10", Encode.string "ten" )
-        , ( "11", Encode.string "eleven" )
-        , ( "12", Encode.string "twelve" )
-        , ( "13", Encode.string "thirteen" )
-        , ( "14", Encode.string "fourteen" )
-        , ( "15", Encode.string "fifteen" )
-        , ( "16", Encode.string "sixteen" )
-        , ( "17", Encode.string "seventeen" )
-        , ( "18", Encode.string "eighteen" )
-        , ( "19", Encode.string "nineteen" )
-        , ( "20", Encode.string "twenty" )
+        [ ( "0", fakeResponse "zero" )
+        , ( "1", fakeResponse "one" )
+        , ( "2", fakeResponse "two" )
+        , ( "3", fakeResponse "three" )
+        , ( "4", fakeResponse "four" )
+        , ( "5", fakeResponse "five" )
+        , ( "6", fakeResponse "six" )
+        , ( "7", fakeResponse "seven" )
+        , ( "8", fakeResponse "eight" )
+        , ( "9", fakeResponse "nine" )
+        , ( "10", fakeResponse "ten" )
+        , ( "11", fakeResponse "eleven" )
+        , ( "12", fakeResponse "twelve" )
+        , ( "13", fakeResponse "thirteen" )
+        , ( "14", fakeResponse "fourteen" )
+        , ( "15", fakeResponse "fifteen" )
+        , ( "16", fakeResponse "sixteen" )
+        , ( "17", fakeResponse "seventeen" )
+        , ( "18", fakeResponse "eighteen" )
+        , ( "19", fakeResponse "nineteen" )
+        , ( "20", fakeResponse "twenty" )
         ]
         example
         Id.init
+
+
+fakeResponse : String -> Encode.Value
+fakeResponse s =
+    Encode.object
+        [ ( "status", Encode.string "success" )
+        , ( "value", Encode.string s )
+        ]

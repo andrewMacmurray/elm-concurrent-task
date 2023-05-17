@@ -242,7 +242,14 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        badChain
+                        (Task.mapError TaskError
+                            --(idTask "a")
+                            (Task.map3 join3
+                                (idTask "a")
+                                (idTask "b")
+                                (idTask "c")
+                            )
+                        )
             in
             ( { tasks = tasks }, cmd )
 
@@ -300,13 +307,11 @@ myHttpTask =
 
 idTask : String -> Task Task.Error String
 idTask name =
-    Task.mapError identity
-        (Task.define
-            { function = name
-            , args = Encode.string name
-            , expect = Task.expectJson Decode.string
-            }
-        )
+    Task.define
+        { function = name
+        , args = Encode.string name
+        , expect = Task.expectJson Decode.string
+        }
 
 
 manyEnvs : Task Error String
