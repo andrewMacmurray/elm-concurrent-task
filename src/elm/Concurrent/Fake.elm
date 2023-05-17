@@ -1,5 +1,6 @@
 module Concurrent.Fake exposing (runExample)
 
+import Concurrent.Internal.Id as Id exposing (Id)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
@@ -9,7 +10,7 @@ import Json.Encode as Encode
 
 
 type Task x a
-    = State (Int -> ( Int, Task_ x a ))
+    = State (Id.Sequence -> ( Id.Sequence, Task_ x a ))
 
 
 type Task_ x a
@@ -18,13 +19,13 @@ type Task_ x a
 
 
 type alias Definition_ =
-    { id : Int
+    { id : Id
     , function : String
     }
 
 
 type alias AResult =
-    ( Int, Decode.Value )
+    ( Id, Decode.Value )
 
 
 
@@ -40,24 +41,29 @@ type alias Definition a =
 define : Definition a -> Task String a
 define a =
     State
-        (\s ->
-            ( s + 1
-            , Pending [ { id = s, function = a.function } ]
-                (\( id, resx ) ->
-                    if id == s then
+        (\ids ->
+            let
+                id =
+                    Id.get ids
+            in
+            ( Id.next ids
+            , Pending [ { id = id, function = a.function } ]
+                (\( id_, resx ) ->
+                    if id == id_ then
                         Decode.decodeValue a.expect resx
                             |> Result.mapError Decode.errorToString
                             |> fromResult
 
                     else
-                        let
-                            (State run) =
-                                define a
-                        in
-                        State (\_ -> run s)
+                        withId ids (define a)
                 )
             )
         )
+
+
+withId : Id.Sequence -> Task x a -> Task x a
+withId s (State run) =
+    State (\_ -> run s)
 
 
 
@@ -148,10 +154,10 @@ fromResult res =
 andThen : (a -> Task x b) -> Task x a -> Task x b
 andThen f (State run) =
     State
-        (\s ->
+        (\ids ->
             let
-                ( s_, a ) =
-                    run s
+                ( ids_, a ) =
+                    run ids
 
                 (State run_) =
                     case a of
@@ -164,9 +170,9 @@ andThen f (State run) =
                                     fail e
 
                         Pending defs next ->
-                            State (\s__ -> ( s__, Pending defs (next >> andThen f) ))
+                            State (\ids__ -> ( ids__, Pending defs (next >> andThen f) ))
             in
-            run_ s_
+            run_ ids_
         )
 
 
@@ -178,10 +184,10 @@ andThenDo s2 s1 =
 onError : (x -> Task y a) -> Task x a -> Task y a
 onError f (State run) =
     State
-        (\s ->
+        (\ids ->
             let
-                ( s_, a ) =
-                    run s
+                ( ids_, a ) =
+                    run ids
 
                 (State run_) =
                     case a of
@@ -194,9 +200,9 @@ onError f (State run) =
                                     f e
 
                         Pending defs next ->
-                            State (\s__ -> ( s__, Pending defs (next >> onError f) ))
+                            State (\ids__ -> ( ids__, Pending defs (next >> onError f) ))
             in
-            run_ s_
+            run_ ids_
         )
 
 
@@ -204,7 +210,7 @@ onError f (State run) =
 -- Eval
 
 
-eval : Int -> List ( Int, Encode.Value ) -> Task String a -> Int -> ( Int, Result String a )
+eval : Int -> List ( Id, Encode.Value ) -> Task String a -> Id.Sequence -> ( Id.Sequence, Result String a )
 eval attempts results (State run) n =
     case run n of
         ( n_, Done a ) ->
@@ -226,7 +232,7 @@ eval attempts results (State run) n =
                     (List.drop 1 results)
                     (results
                         |> List.head
-                        |> Maybe.withDefault ( 100, Encode.null )
+                        |> Maybe.withDefault ( "100", Encode.null )
                         |> next
                     )
                     n_
@@ -259,9 +265,10 @@ join3 a b c =
 
 
 example =
-    map2 (++)
+    map3 join3
         (create "hello")
         (create "world")
+        (create "!")
         |> andThenDo (create "foo")
         |> andThenDo
             (create "foo"
@@ -277,7 +284,11 @@ example =
                         |> andThenDo (create "bar")
                         |> andThenDo
                             (create "bar"
-                                |> andThenDo (create "bar")
+                                |> andThenDo
+                                    (map2 (++)
+                                        (create "bar")
+                                        (create "baz")
+                                    )
                                 |> andThenDo error
                                 |> onError (\_ -> create "bar")
                             )
@@ -285,34 +296,33 @@ example =
                     )
             )
         |> andThenDo (create "baz")
-        |> andThenDo (create "baz")
-        |> andThenDo (create "baz")
 
 
+runExample : ( Id.Sequence, Result String String )
 runExample =
     eval
         20
-        [ ( 0, Encode.string "zero" )
-        , ( 1, Encode.string "one" )
-        , ( 2, Encode.string "two" )
-        , ( 3, Encode.string "three" )
-        , ( 4, Encode.string "four" )
-        , ( 5, Encode.string "five" )
-        , ( 6, Encode.string "six" )
-        , ( 7, Encode.string "seven" )
-        , ( 8, Encode.string "eight" )
-        , ( 9, Encode.string "nine" )
-        , ( 10, Encode.string "ten" )
-        , ( 11, Encode.string "eleven" )
-        , ( 12, Encode.string "twelve" )
-        , ( 13, Encode.string "thirteen" )
-        , ( 14, Encode.string "fourteen" )
-        , ( 15, Encode.string "fifteen" )
-        , ( 16, Encode.string "sixteen" )
-        , ( 17, Encode.string "seventeen" )
-        , ( 18, Encode.string "eighteen" )
-        , ( 19, Encode.string "nineteen" )
-        , ( 20, Encode.string "twenty" )
+        [ ( "0", Encode.string "zero" )
+        , ( "1", Encode.string "one" )
+        , ( "2", Encode.string "two" )
+        , ( "3", Encode.string "three" )
+        , ( "4", Encode.string "four" )
+        , ( "5", Encode.string "five" )
+        , ( "6", Encode.string "six" )
+        , ( "7", Encode.string "seven" )
+        , ( "8", Encode.string "eight" )
+        , ( "9", Encode.string "nine" )
+        , ( "10", Encode.string "ten" )
+        , ( "11", Encode.string "eleven" )
+        , ( "12", Encode.string "twelve" )
+        , ( "13", Encode.string "thirteen" )
+        , ( "14", Encode.string "fourteen" )
+        , ( "15", Encode.string "fifteen" )
+        , ( "16", Encode.string "sixteen" )
+        , ( "17", Encode.string "seventeen" )
+        , ( "18", Encode.string "eighteen" )
+        , ( "19", Encode.string "nineteen" )
+        , ( "20", Encode.string "twenty" )
         ]
         example
-        0
+        Id.init
