@@ -1,6 +1,6 @@
 module Concurrent.Fake exposing (runExample)
 
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
@@ -13,7 +13,7 @@ type Task x a
 
 
 type Task_ x a
-    = Pending (List Definition_) (Results -> Task x a)
+    = Pending (List Definition_) (AResult -> Task x a)
     | Done (Result x a)
 
 
@@ -23,8 +23,8 @@ type alias Definition_ =
     }
 
 
-type alias Results =
-    Decode.Value
+type alias AResult =
+    ( Int, Decode.Value )
 
 
 
@@ -33,7 +33,7 @@ type alias Results =
 
 type alias Definition a =
     { function : String
-    , expect : Result String a
+    , expect : Decoder a
     }
 
 
@@ -42,7 +42,20 @@ define a =
     State
         (\s ->
             ( s + 1
-            , Pending [ { id = s, function = a.function } ] (\_ -> fromResult a.expect)
+            , Pending [ { id = s, function = a.function } ]
+                (\( id, resx ) ->
+                    if id == s then
+                        Decode.decodeValue a.expect resx
+                            |> Result.mapError Decode.errorToString
+                            |> fromResult
+
+                    else
+                        let
+                            (State run) =
+                                define a
+                        in
+                        State (\_ -> run s)
+                )
             )
         )
 
@@ -86,6 +99,19 @@ map2 f (State run1) (State run2) =
             in
             ( s2, mapTask2 f a b )
         )
+
+
+map3 : (a -> b -> c -> d) -> Task x a -> Task x b -> Task x c -> Task x d
+map3 f t1 t2 t3 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+        |> andMap t3
+
+
+andMap : Task x a -> Task x (a -> b) -> Task x b
+andMap =
+    map2 (|>)
 
 
 mapTask2 : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
@@ -178,21 +204,35 @@ onError f (State run) =
 -- Eval
 
 
-eval : Task x a -> Int -> ( Int, Result x a )
-eval (State run) n =
+eval : Int -> List ( Int, Encode.Value ) -> Task String a -> Int -> ( Int, Result String a )
+eval attempts results (State run) n =
     case run n of
         ( n_, Done a ) ->
             ( n_, a )
 
         ( n_, Pending defs next ) ->
             let
-                results =
-                    Encode.null
-
                 _ =
-                    Debug.log "defs" ( n_, defs )
+                    Debug.log "(state, defs, resultn)"
+                        ( n_
+                        , defs
+                        , results
+                            |> List.head
+                            |> Maybe.map Tuple.first
+                        )
             in
-            eval (next results) n_
+            if attempts > 0 then
+                eval (attempts - 1)
+                    (List.drop 1 results)
+                    (results
+                        |> List.head
+                        |> Maybe.withDefault ( 100, Encode.null )
+                        |> next
+                    )
+                    n_
+
+            else
+                ( n_, Err "timeout" )
 
 
 
@@ -201,28 +241,28 @@ eval (State run) n =
 
 create a =
     define
-        { function = "create"
-        , expect = Ok a
+        { function = a
+        , expect = Decode.string
         }
 
 
 error =
     define
         { function = "error"
-        , expect = Err "error"
+        , expect = Decode.fail "error"
         }
+
+
+join3 : appendable -> appendable -> appendable -> appendable
+join3 a b c =
+    a ++ b ++ c
 
 
 example =
     map2 (++)
-        (map2 (++)
-            (create "hello")
-            (create "world")
-        )
-        (map2 (++)
-            (create "hello")
-            (create "world")
-        )
+        (create "hello")
+        (create "world")
+        |> andThenDo (create "foo")
         |> andThenDo
             (create "foo"
                 |> andThenDo
@@ -250,4 +290,29 @@ example =
 
 
 runExample =
-    eval example 0
+    eval
+        20
+        [ ( 0, Encode.string "zero" )
+        , ( 1, Encode.string "one" )
+        , ( 2, Encode.string "two" )
+        , ( 3, Encode.string "three" )
+        , ( 4, Encode.string "four" )
+        , ( 5, Encode.string "five" )
+        , ( 6, Encode.string "six" )
+        , ( 7, Encode.string "seven" )
+        , ( 8, Encode.string "eight" )
+        , ( 9, Encode.string "nine" )
+        , ( 10, Encode.string "ten" )
+        , ( 11, Encode.string "eleven" )
+        , ( 12, Encode.string "twelve" )
+        , ( 13, Encode.string "thirteen" )
+        , ( 14, Encode.string "fourteen" )
+        , ( 15, Encode.string "fifteen" )
+        , ( 16, Encode.string "sixteen" )
+        , ( 17, Encode.string "seventeen" )
+        , ( 18, Encode.string "eighteen" )
+        , ( 19, Encode.string "nineteen" )
+        , ( 20, Encode.string "twenty" )
+        ]
+        example
+        0
