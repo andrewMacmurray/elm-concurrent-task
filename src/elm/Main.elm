@@ -1,6 +1,5 @@
 port module Main exposing (main)
 
-import Concurrent.Fake as Fake
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
@@ -56,10 +55,10 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    let
-        _ =
-            Debug.log "fake" Fake.runExample
-    in
+    --let
+    --    _ =
+    --        Debug.log "fake" Task.runExample
+    --in
     ( { tasks = Task.pool }
     , Cmd.none
     )
@@ -207,6 +206,15 @@ badChain3 =
         )
 
 
+doThree2 =
+    Task.mapError HttpError
+        (Task.map3 join3
+            (longRequest_ 100 |> Task.andThenDo (longRequest_ 100))
+            (longRequest_ 100 |> Task.andThenDo (longRequest_ 100))
+            (longRequest_ 100 |> Task.andThenDo (longRequest_ 100))
+        )
+
+
 doThree : Task Http.Error String
 doThree =
     Task.map3 join3
@@ -242,14 +250,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError TaskError
-                            --(idTask "a")
-                            (Task.map3 join3
-                                (idTask "a")
-                                (idTask "b")
-                                (idTask "c")
-                            )
-                        )
+                        doThree2
             in
             ( { tasks = tasks }, cmd )
 

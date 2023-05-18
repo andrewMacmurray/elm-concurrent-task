@@ -9,7 +9,6 @@ import readline from "node:readline/promises";
 const Tasks = {
   slowInt: (i) => waitRandom().then(() => i),
   a: (x) => {
-    console.log(`a`, x);
     return x;
   },
   b: (x) => {
