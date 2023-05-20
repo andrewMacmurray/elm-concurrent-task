@@ -97,7 +97,6 @@ export function register(options: Options): void {
       try {
         console.log("--STARTING--", def.function, `${def.attempt} - ${def.id}`);
         const result = await tasks[def.function](def.args);
-        console.log(`--FINISHED--`, def.function, `${def.attempt} - ${def.id}`);
         send({
           attempt: def.attempt,
           results: [

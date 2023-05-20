@@ -644,10 +644,11 @@ example2 =
 runExample : ( Id.Sequence, Result Error String )
 runExample =
     eval
-        20
+        6
         [ ( "0", fakeResponse "zero" )
-        , ( "1", fakeResponse "one" )
         , ( "2", fakeResponse "two" )
+        , ( "2", fakeResponse "two" )
+        , ( "1", fakeResponse "one" )
         , ( "3", fakeResponse "three" )
         , ( "4", fakeResponse "four" )
         , ( "5", fakeResponse "five" )
@@ -667,7 +668,7 @@ runExample =
         , ( "19", fakeResponse "nineteen" )
         , ( "20", fakeResponse "twenty" )
         ]
-        example
+        example2
         Id.init
 
 

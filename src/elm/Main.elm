@@ -55,10 +55,10 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    --let
-    --    _ =
-    --        Debug.log "fake" Task.runExample
-    --in
+    let
+        _ =
+            Debug.log "fake" Task.runExample
+    in
     ( { tasks = Task.pool }
     , Cmd.none
     )
