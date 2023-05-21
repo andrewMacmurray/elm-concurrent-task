@@ -17,19 +17,15 @@ export interface Builtins {
 export type Tasks = { [fn: string]: (any) => any };
 
 export interface TaskDefinition {
-  id: string;
-  attempt: string;
+  attemptId: string;
+  taskId: string;
   function: string;
   args: any;
 }
 
 export interface Results {
-  attempt: string;
-  results: Result[];
-}
-
-export interface Result {
-  id: string;
+  attemptId: string;
+  taskId: string;
   result: Success | Error;
 }
 
@@ -76,51 +72,43 @@ export function register(options: Options): void {
       const def = defs[i];
       if (!tasks[def.function]) {
         return send({
-          attempt: def.attempt,
-          results: [
-            {
-              id: def.id,
-              result: {
-                status: "error",
-                error: {
-                  reason: "missing_function",
-                  message: `${def.function} is not registered`,
-                },
-              },
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: {
+            status: "error",
+            error: {
+              reason: "missing_function",
+              message: `${def.function} is not registered`,
             },
-          ],
+          },
         });
       }
     }
 
     defs.map(async (def) => {
       try {
-        console.log("--STARTING--", def.function, `${def.attempt} - ${def.id}`);
+        console.log(
+          "--STARTING--",
+          def.function,
+          `${def.attemptId} - ${def.taskId}`
+        );
         const result = await tasks[def.function](def.args);
         send({
-          attempt: def.attempt,
-          results: [
-            {
-              id: def.id,
-              result: { status: "success", value: result },
-            },
-          ],
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: { status: "success", value: result },
         });
       } catch (e) {
         send({
-          attempt: def.attempt,
-          results: [
-            {
-              id: def.id,
-              result: {
-                status: "error",
-                error: {
-                  reason: "js_exception",
-                  message: `${def.function} threw an execption: ${e.message}`,
-                },
-              },
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: {
+            status: "error",
+            error: {
+              reason: "js_exception",
+              message: `${def.function} threw an execption: ${e.message}`,
             },
-          ],
+          },
         });
       }
     });

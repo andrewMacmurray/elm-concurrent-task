@@ -197,7 +197,7 @@ badChain3 =
             doThree
             doThree
             |> Task.andThenDo
-                (httpError
+                (retry 100 httpError
                     |> Task.onError (\_ -> longRequest_ 100)
                 )
             |> Task.andThenDo (longRequest_ 100)
@@ -250,7 +250,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        doThree2
+                        badChain3
             in
             ( { tasks = tasks }, cmd )
 
@@ -511,7 +511,7 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (Task.RawResults -> msg) -> Sub msg
+port receive : (Task.Results -> msg) -> Sub msg
 
 
 port manualEnter : (String -> msg) -> Sub msg
