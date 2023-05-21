@@ -25,6 +25,7 @@ module Concurrent.Task exposing
     , pool
     , runExample
     , succeed
+    , testEval
     )
 
 import Concurrent.Internal.Id as Id exposing (Id)
@@ -534,45 +535,50 @@ mapPool f (Pool p) =
 -- Test Eval
 
 
-eval : Int -> List ( Id, Encode.Value ) -> Task Error a -> Ids -> ( Ids, Result Error a )
-eval attempts results (State run) n =
-    case run n of
+type alias TestEval a =
+    { maxDepth : Int
+    , results : List ( Id, Encode.Value )
+    , task : Task Error a
+    , ids : Ids
+    }
+
+
+testEval : TestEval a -> ( Ids, Result Error a )
+testEval options =
+    let
+        (State run) =
+            options.task
+    in
+    case run options.ids of
         ( n_, Done a ) ->
             ( n_, a )
 
-        ( n_, Pending defs next ) ->
-            let
-                _ =
-                    Debug.log "(state, defs, resultn)"
-                        ( n_
-                        , List.map .taskId defs
-                        , results
-                            |> List.head
-                            |> Maybe.map Tuple.first
-                        )
-            in
-            if attempts > 0 then
-                eval (attempts - 1)
-                    (List.drop 1 results)
-                    (results
-                        |> List.head
-                        |> Maybe.withDefault ( "100", Encode.null )
-                        |> (\( id, result ) ->
-                                { attemptId = "attempt"
-                                , taskId = id
-                                , result = result
-                                }
-                           )
-                        |> next
-                    )
-                    n_
+        ( n_, Pending _ next ) ->
+            if options.maxDepth > 0 then
+                testEval
+                    { options
+                        | maxDepth = options.maxDepth - 1
+                        , results = List.drop 1 options.results
+                        , task =
+                            options.results
+                                |> List.head
+                                |> Maybe.withDefault ( "100", Encode.null )
+                                |> (\( id, result ) ->
+                                        { attemptId = "attempt"
+                                        , taskId = id
+                                        , result = result
+                                        }
+                                   )
+                                |> next
+                        , ids = n_
+                    }
 
             else
                 ( n_, Err (InternalError "timeout") )
 
 
 
--- Example
+-- TaskTest
 
 
 create a =
@@ -640,32 +646,34 @@ example2 =
 
 runExample : ( Ids, Result Error String )
 runExample =
-    eval
-        20
-        [ ( "0", fakeResponse "zero" )
-        , ( "1", fakeResponse "one" )
-        , ( "2", fakeResponse "two" )
-        , ( "3", fakeResponse "three" )
-        , ( "4", fakeResponse "four" )
-        , ( "5", fakeResponse "five" )
-        , ( "6", fakeResponse "six" )
-        , ( "7", fakeResponse "seven" )
-        , ( "8", fakeResponse "eight" )
-        , ( "9", fakeResponse "nine" )
-        , ( "10", fakeResponse "ten" )
-        , ( "11", fakeResponse "eleven" )
-        , ( "12", fakeResponse "twelve" )
-        , ( "13", fakeResponse "thirteen" )
-        , ( "14", fakeResponse "fourteen" )
-        , ( "15", fakeResponse "fifteen" )
-        , ( "16", fakeResponse "sixteen" )
-        , ( "17", fakeResponse "seventeen" )
-        , ( "18", fakeResponse "eighteen" )
-        , ( "19", fakeResponse "nineteen" )
-        , ( "20", fakeResponse "twenty" )
-        ]
-        example
-        Id.init
+    testEval
+        { maxDepth = 20
+        , results =
+            [ ( "0", fakeResponse "zero" )
+            , ( "1", fakeResponse "one" )
+            , ( "2", fakeResponse "two" )
+            , ( "3", fakeResponse "three" )
+            , ( "4", fakeResponse "four" )
+            , ( "5", fakeResponse "five" )
+            , ( "6", fakeResponse "six" )
+            , ( "7", fakeResponse "seven" )
+            , ( "8", fakeResponse "eight" )
+            , ( "9", fakeResponse "nine" )
+            , ( "10", fakeResponse "ten" )
+            , ( "11", fakeResponse "eleven" )
+            , ( "12", fakeResponse "twelve" )
+            , ( "13", fakeResponse "thirteen" )
+            , ( "14", fakeResponse "fourteen" )
+            , ( "15", fakeResponse "fifteen" )
+            , ( "16", fakeResponse "sixteen" )
+            , ( "17", fakeResponse "seventeen" )
+            , ( "18", fakeResponse "eighteen" )
+            , ( "19", fakeResponse "nineteen" )
+            , ( "20", fakeResponse "twenty" )
+            ]
+        , task = example
+        , ids = Id.init
+        }
 
 
 fakeResponse : String -> Encode.Value
