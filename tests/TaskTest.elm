@@ -4,31 +4,105 @@ import Concurrent.Internal.Id as Id
 import Concurrent.Task as Task exposing (Task)
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, string)
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Test exposing (..)
 
 
 suite : Test
 suite =
-    describe "Hardcoded Tasks"
-        [ fuzz3 int int int "tasks can combine" <|
+    describe "Tasks"
+        [ hardcoded
+        , responses
+        ]
+
+
+responses : Test
+responses =
+    describe "Tasks with Responses"
+        [ fuzz3 string string string "successful responses combine" <|
             \a b c ->
-                Task.map3 (\a_ b_ c_ -> a_ + b_ + c_)
+                Task.map3 join3
+                    createTask
+                    createTask
+                    createTask
+                    |> runTask
+                        [ ( 0, Encode.string a )
+                        , ( 1, Encode.string b )
+                        , ( 2, Encode.string c )
+                        ]
+                    |> Expect.equal (Ok (join3 a b c))
+        , fuzz3 string string string "successful responses chain" <|
+            \a b c ->
+                Task.map2 (++)
+                    createTask
+                    createTask
+                    |> Task.andThen (\ab -> Task.map (join2 ab) createTask)
+                    |> runTask
+                        [ ( 0, Encode.string b )
+                        , ( 1, Encode.string a )
+                        , ( 2, Encode.string c )
+                        ]
+                    |> Expect.equal (Ok (a ++ b ++ c))
+        , fuzz3 string string string "responses can arrive out of order" <|
+            \a b c ->
+                Task.map3 join3
+                    createTask
+                    createTask
+                    createTask
+                    |> Task.andThen (\ab -> Task.map (join2 ab) createTask)
+                    |> runTask
+                        [ ( 1, Encode.string b )
+                        , ( 2, Encode.string c )
+                        , ( 0, Encode.string a )
+                        , ( 3, Encode.string c )
+                        ]
+                    |> Expect.equal (Ok (a ++ b ++ c ++ c))
+        , test "can handle nested chains" <|
+            \_ ->
+                Task.map3 join3
+                    (createTask |> Task.andThen (\x -> Task.map (join2 x) createTask))
+                    (createTask |> Task.andThen (\x -> Task.map (join2 x) createTask))
+                    (createTask |> Task.andThen (\x -> Task.map (join2 x) createTask))
+                    |> runTask
+                        [ ( 0, Encode.string "1" )
+                        , ( 1, Encode.string "3" )
+                        , ( 2, Encode.string "5" )
+                        , ( 3, Encode.string "2" )
+                        , ( 4, Encode.string "4" )
+                        , ( 5, Encode.string "6" )
+                        ]
+                    |> Expect.equal (Ok "123456")
+        ]
+
+
+createTask : Task Task.Error String
+createTask =
+    Task.define
+        { function = "aTask"
+        , args = Encode.null
+        , expect = Task.expectJson Decode.string
+        }
+
+
+hardcoded : Test
+hardcoded =
+    describe "Hardcoded Tasks"
+        [ fuzz3 string string string "tasks can combine" <|
+            \a b c ->
+                Task.map3 join3
                     (Task.succeed a)
                     (Task.succeed b)
                     (Task.succeed c)
-                    |> runTask
-                    |> Expect.equal (Ok (a + b + c))
+                    |> runTask []
+                    |> Expect.equal (Ok (join3 a b c))
         , fuzz3 string string string "tasks can chain" <|
             \a b c ->
                 Task.map2 (++)
                     (Task.succeed a)
                     (Task.succeed b)
-                    |> Task.andThen
-                        (\ab ->
-                            Task.map (\c_ -> ab ++ c_)
-                                (Task.succeed c)
-                        )
-                    |> runTask
+                    |> Task.andThen (\ab -> Task.map (join2 ab) (Task.succeed c))
+                    |> runTask []
                     |> Expect.equal (Ok (a ++ b ++ c))
         , test "tasks can short circuit" <|
             \_ ->
@@ -36,7 +110,7 @@ suite =
                     |> Task.andThenDo (Task.succeed 2)
                     |> Task.andThen (\_ -> Task.fail "hardcoded error")
                     |> Task.mapError Task.InternalError
-                    |> runTask
+                    |> runTask []
                     |> Expect.equal (Err (Task.InternalError "hardcoded error"))
         , fuzz2 int int "tasks can recover from an error" <|
             \a b ->
@@ -44,17 +118,35 @@ suite =
                     |> Task.andThen (\_ -> Task.fail "error")
                     |> Task.mapError Task.InternalError
                     |> Task.onError (\_ -> Task.succeed b)
-                    |> runTask
+                    |> runTask []
                     |> Expect.equal (Ok b)
         ]
 
 
-runTask : Task Task.Error a -> Result Task.Error a
-runTask task =
+join3 : String -> String -> String -> String
+join3 a b c =
+    a ++ b ++ c
+
+
+join2 : String -> String -> String
+join2 a b =
+    a ++ b
+
+
+runTask : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
+runTask results task =
     Task.testEval
         { maxDepth = 100
-        , results = []
+        , results = List.map (Tuple.mapSecond toResponse) results
         , task = task
         , ids = Id.init
         }
         |> Tuple.second
+
+
+toResponse : Encode.Value -> Encode.Value
+toResponse v =
+    Encode.object
+        [ ( "status", Encode.string "success" )
+        , ( "value", v )
+        ]

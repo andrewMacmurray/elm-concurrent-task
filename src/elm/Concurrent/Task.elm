@@ -537,7 +537,7 @@ mapPool f (Pool p) =
 
 type alias TestEval a =
     { maxDepth : Int
-    , results : List ( Id, Encode.Value )
+    , results : List ( Int, Encode.Value )
     , task : Task Error a
     , ids : Ids
     }
@@ -562,7 +562,8 @@ testEval options =
                         , task =
                             options.results
                                 |> List.head
-                                |> Maybe.withDefault ( "100", Encode.null )
+                                |> Maybe.withDefault ( 100, Encode.null )
+                                |> Tuple.mapFirst String.fromInt
                                 |> (\( id, result ) ->
                                         { attemptId = "attempt"
                                         , taskId = id
@@ -649,27 +650,27 @@ runExample =
     testEval
         { maxDepth = 20
         , results =
-            [ ( "0", fakeResponse "zero" )
-            , ( "1", fakeResponse "one" )
-            , ( "2", fakeResponse "two" )
-            , ( "3", fakeResponse "three" )
-            , ( "4", fakeResponse "four" )
-            , ( "5", fakeResponse "five" )
-            , ( "6", fakeResponse "six" )
-            , ( "7", fakeResponse "seven" )
-            , ( "8", fakeResponse "eight" )
-            , ( "9", fakeResponse "nine" )
-            , ( "10", fakeResponse "ten" )
-            , ( "11", fakeResponse "eleven" )
-            , ( "12", fakeResponse "twelve" )
-            , ( "13", fakeResponse "thirteen" )
-            , ( "14", fakeResponse "fourteen" )
-            , ( "15", fakeResponse "fifteen" )
-            , ( "16", fakeResponse "sixteen" )
-            , ( "17", fakeResponse "seventeen" )
-            , ( "18", fakeResponse "eighteen" )
-            , ( "19", fakeResponse "nineteen" )
-            , ( "20", fakeResponse "twenty" )
+            [ ( 0, fakeResponse "zero" )
+            , ( 1, fakeResponse "one" )
+            , ( 2, fakeResponse "two" )
+            , ( 3, fakeResponse "three" )
+            , ( 4, fakeResponse "four" )
+            , ( 5, fakeResponse "five" )
+            , ( 6, fakeResponse "six" )
+            , ( 7, fakeResponse "seven" )
+            , ( 8, fakeResponse "eight" )
+            , ( 9, fakeResponse "nine" )
+            , ( 10, fakeResponse "ten" )
+            , ( 11, fakeResponse "eleven" )
+            , ( 12, fakeResponse "twelve" )
+            , ( 13, fakeResponse "thirteen" )
+            , ( 14, fakeResponse "fourteen" )
+            , ( 15, fakeResponse "fifteen" )
+            , ( 16, fakeResponse "sixteen" )
+            , ( 17, fakeResponse "seventeen" )
+            , ( 18, fakeResponse "eighteen" )
+            , ( 19, fakeResponse "nineteen" )
+            , ( 20, fakeResponse "twenty" )
             ]
         , task = example
         , ids = Id.init
