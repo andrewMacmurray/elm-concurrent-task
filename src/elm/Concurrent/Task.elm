@@ -208,13 +208,15 @@ map2 f (State run1) (State run2) =
     State
         (\ids ->
             let
-                ( ids_, a ) =
-                    run1 ids
+                ( ids_, b ) =
+                    run2 ids
 
-                ( ids__, b ) =
-                    run2 ids_
+                ( ids__, a ) =
+                    run1 ids_
             in
-            ( ids__, mapTask2 f a b )
+            ( Id.combine ids_ ids__
+            , mapTask2 f a b
+            )
         )
 
 
