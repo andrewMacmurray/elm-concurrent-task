@@ -8,24 +8,6 @@ import readline from "node:readline/promises";
 
 const Tasks = {
   slowInt: (i) => waitRandom().then(() => i),
-  a: (x) => {
-    return x;
-  },
-  b: (x) => {
-    return x;
-  },
-  c: (x) => {
-    return x;
-  },
-  d: (x) => {
-    return x;
-  },
-  e: (x) => {
-    return x;
-  },
-  f: (x) => {
-    return x;
-  },
   getEnv: (x) => process.env[x],
 };
 
@@ -41,11 +23,11 @@ function wait(ms) {
 
 // App
 
-const app = Elm.Main.init({ flags: null });
+const { ports } = Elm.Main.init({ flags: null });
 
 TaskRunner.register({
   tasks: Tasks,
-  ports: app.ports,
+  ports: { send: ports.send, receive: ports.receive },
   builtins: { http },
 });
 
@@ -56,7 +38,7 @@ const rl = readline.createInterface({
 
 ask();
 
-app.ports.sendResult.subscribe((result) => {
+ports.sendResult.subscribe((result) => {
   console.log(result);
   ask();
 });
@@ -64,13 +46,13 @@ app.ports.sendResult.subscribe((result) => {
 function fireMany() {
   for (let i = 0; i < 10; i++) {
     waitRandom().then(() => {
-      app.ports.fireMany.send(i);
+      ports.fireMany.send(i);
     });
   }
 }
 
 function ask() {
   rl.question("enter an attempt id: ").then((id) => {
-    app.ports.manualEnter.send(id);
+    ports.manualEnter.send(id);
   });
 }

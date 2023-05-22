@@ -55,10 +55,6 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    let
-        _ =
-            Debug.log "fake" Task.runExample
-    in
     ( { tasks = Task.pool }
     , Cmd.none
     )
@@ -101,17 +97,6 @@ longChain =
                     |> Task.andThenDo (longRequest_ 500)
                 )
             |> Task.andThenDo (longRequest_ 300)
-        )
-
-
-simpleChain : Task Error String
-simpleChain =
-    Task.mapError TaskError
-        (idTask "a"
-            |> Task.andThenDo (idTask "b")
-            |> Task.andThenDo (idTask "c")
-            |> Task.andThenDo (idTask "d")
-            |> Task.andThenDo (idTask "e")
         )
 
 
@@ -303,15 +288,6 @@ myHttpTask =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "title" Decode.string)
-        }
-
-
-idTask : String -> Task Task.Error String
-idTask name =
-    Task.define
-        { function = name
-        , args = Encode.string name
-        , expect = Task.expectJson Decode.string
         }
 
 
