@@ -61,9 +61,9 @@ responses =
         , test "can handle nested chains" <|
             \_ ->
                 Task.map3 join3
-                    (createTask |> Task.andThen (\x -> Task.map (join2 x) createTask))
-                    (createTask |> Task.andThen (\x -> Task.map (join2 x) createTask))
-                    (createTask |> Task.andThen (\x -> Task.map (join2 x) createTask))
+                    (createTask |> Task.andThen withAnother)
+                    (createTask |> Task.andThen withAnother)
+                    (createTask |> Task.andThen withAnother)
                     |> runTask
                         [ ( 0, Encode.string "1" )
                         , ( 1, Encode.string "3" )
@@ -73,15 +73,64 @@ responses =
                         , ( 5, Encode.string "6" )
                         ]
                     |> Expect.equal (Ok "123456")
+        , test "can handle deeply nested chains" <|
+            \_ ->
+                Task.map2 join2
+                    (createTask
+                        |> Task.andThen
+                            (\x ->
+                                withAnother x
+                                    |> Task.andThen
+                                        (\y ->
+                                            withAnother y
+                                                |> Task.andThen
+                                                    (\z ->
+                                                        withAnother z
+                                                    )
+                                        )
+                            )
+                    )
+                    (createTask |> Task.andThen (\x -> withAnother x))
+                    |> Task.andThen withAnother
+                    |> runTask
+                        [ ( 0, Encode.string "0" )
+                        , ( 1, Encode.string "1" )
+                        , ( 2, Encode.string "2" )
+                        , ( 3, Encode.string "3" )
+                        , ( 4, Encode.string "4" )
+                        , ( 5, Encode.string "5" )
+                        , ( 6, Encode.string "6" )
+                        ]
+                    |> Expect.equal (Ok "1345026")
+        , fuzz2 int string "can handle mixed response types" <|
+            \a b ->
+                Task.map2 Tuple.pair
+                    (create Decode.int)
+                    (create Decode.string)
+                    |> runTask
+                        [ ( 0, Encode.string b )
+                        , ( 1, Encode.int a )
+                        ]
+                    |> Expect.equal (Ok ( a, b ))
         ]
+
+
+withAnother : String -> Task Task.Error String
+withAnother x =
+    Task.map (join2 x) createTask
 
 
 createTask : Task Task.Error String
 createTask =
+    create Decode.string
+
+
+create : Decode.Decoder a -> Task Task.Error a
+create decoder =
     Task.define
         { function = "aTask"
         , args = Encode.null
-        , expect = Task.expectJson Decode.string
+        , expect = Task.expectJson decoder
         }
 
 
