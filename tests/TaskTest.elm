@@ -3,7 +3,7 @@ module TaskTest exposing (suite)
 import Concurrent.Internal.Id as Id
 import Concurrent.Task as Task exposing (Task)
 import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, string)
+import Fuzz exposing (Fuzzer, int, intRange, string)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Test exposing (..)
@@ -138,7 +138,27 @@ responses =
                         , ( 2, Encode.int c )
                         ]
                     |> Expect.equal (Ok ( a, b, c ))
+        , fuzz (intRange 1 1000) "the id always increments in step with the number of tasks" <|
+            \n ->
+                repeatTask n
+                    |> evalTask
+                        (List.range 0 n
+                            |> List.map
+                                (\i ->
+                                    ( i
+                                    , success (Encode.string (String.fromInt i))
+                                    )
+                                )
+                        )
+                    |> Tuple.first
+                    |> Id.get
+                    |> Expect.equal (String.fromInt (n + 1))
         ]
+
+
+repeatTask : Int -> Task Task.Error String
+repeatTask n =
+    List.range 0 n |> List.foldl (\_ t -> t |> Task.andThenDo createTask) (Task.succeed "start")
 
 
 errors : Test
@@ -228,13 +248,17 @@ runTask results =
 
 runTaskWith : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
 runTaskWith results task =
+    Tuple.second (evalTask results task)
+
+
+evalTask : List ( Int, Encode.Value ) -> Task Task.Error a -> ( Id.Sequence, Result Task.Error a )
+evalTask results task =
     Task.testEval
-        { maxDepth = 100
+        { maxDepth = 10000
         , results = results
         , task = task
         , ids = Id.init
         }
-        |> Tuple.second
 
 
 success : Encode.Value -> Encode.Value
