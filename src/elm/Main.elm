@@ -270,7 +270,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError doFive)
+                        badChain3
             in
             ( { tasks = tasks }, cmd )
 
