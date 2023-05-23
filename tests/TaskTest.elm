@@ -100,18 +100,25 @@ responses =
                                         )
                             )
                     )
-                    (createTask |> Task.andThen (\x -> withAnother x))
+                    (createTask
+                        |> Task.andThen
+                            (\x ->
+                                withAnother x
+                                    |> Task.andThen (\y -> withAnother y)
+                            )
+                    )
                     |> Task.andThen withAnother
                     |> runTask
                         [ ( 0, Encode.string "0" )
-                        , ( 1, Encode.string "1" )
-                        , ( 2, Encode.string "2" )
-                        , ( 3, Encode.string "3" )
-                        , ( 4, Encode.string "4" )
-                        , ( 5, Encode.string "5" )
-                        , ( 6, Encode.string "6" )
+                        , ( 1, Encode.string "4" )
+                        , ( 2, Encode.string "1" )
+                        , ( 3, Encode.string "5" )
+                        , ( 4, Encode.string "2" )
+                        , ( 5, Encode.string "6" )
+                        , ( 6, Encode.string "3" )
+                        , ( 7, Encode.string "7" )
                         ]
-                    |> Expect.equal (Ok "0245136")
+                    |> Expect.equal (Ok "01234567")
         , fuzz2 int string "can handle mixed response types" <|
             \a b ->
                 Task.map2 Tuple.pair
