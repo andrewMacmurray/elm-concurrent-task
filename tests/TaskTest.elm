@@ -71,7 +71,8 @@ responses =
                     |> Expect.equal (Ok "abcd")
         , test "can handle nested chains" <|
             \_ ->
-                Task.map3 join3
+                Task.map4 join4
+                    (createTask |> Task.andThen withAnother)
                     (createTask |> Task.andThen withAnother)
                     (createTask |> Task.andThen withAnother)
                     (createTask |> Task.andThen withAnother)
@@ -79,11 +80,13 @@ responses =
                         [ ( 0, Encode.string "1" )
                         , ( 1, Encode.string "3" )
                         , ( 2, Encode.string "5" )
-                        , ( 3, Encode.string "2" )
-                        , ( 4, Encode.string "4" )
-                        , ( 5, Encode.string "6" )
+                        , ( 3, Encode.string "7" )
+                        , ( 4, Encode.string "2" )
+                        , ( 5, Encode.string "4" )
+                        , ( 6, Encode.string "6" )
+                        , ( 7, Encode.string "8" )
                         ]
-                    |> Expect.equal (Ok "123456")
+                    |> Expect.equal (Ok "12345678")
         , test "can handle deeply nested chains" <|
             \_ ->
                 Task.map2 join2
@@ -272,6 +275,11 @@ create decoder =
         , args = Encode.null
         , expect = Task.expectJson decoder
         }
+
+
+join4 : String -> String -> String -> String -> String
+join4 a b c d =
+    a ++ b ++ c ++ d
 
 
 join3 : String -> String -> String -> String
