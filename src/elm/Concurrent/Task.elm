@@ -4,8 +4,8 @@ module Concurrent.Task exposing
     , Error(..)
     , OnProgress
     , Pool
-    , Results
     , Task
+    , TaskResult
     , andMap
     , andThen
     , andThenDo
@@ -44,7 +44,7 @@ type Task x a
 
 
 type Task_ x a
-    = Pending (List Definition_) (Results -> Task x a)
+    = Pending (List Definition_) (TaskResult -> Task x a)
     | Done (Result x a)
 
 
@@ -59,7 +59,7 @@ type alias Definition_ =
     }
 
 
-type alias Results =
+type alias TaskResult =
     { attemptId : Id
     , taskId : Id
     , result : Decode.Value
@@ -135,40 +135,6 @@ define a =
 runWith : Ids -> Task x a -> Task x a
 runWith s (State run) =
     State (\_ -> run s)
-
-
-decodeResponse : Expect value -> Decoder (Result Error value)
-decodeResponse (ExpectJson expect) =
-    Decode.field "status" Decode.string
-        |> Decode.andThen
-            (\status ->
-                case status of
-                    "success" ->
-                        Decode.field "value" (Decode.map Ok expect)
-
-                    "error" ->
-                        Decode.field "error" (Decode.map Err errorDecoder)
-
-                    _ ->
-                        Decode.succeed (Err (InternalError ("Unknown response status: " ++ status)))
-            )
-
-
-errorDecoder : Decoder Error
-errorDecoder =
-    Decode.field "reason" Decode.string
-        |> Decode.andThen
-            (\reason ->
-                case reason of
-                    "js_exception" ->
-                        Decode.field "message" (Decode.map JsException Decode.string)
-
-                    "missing_function" ->
-                        Decode.field "message" (Decode.map MissingFunction Decode.string)
-
-                    _ ->
-                        Decode.succeed (InternalError ("Unknown error reason: " ++ reason))
-            )
 
 
 
@@ -387,15 +353,15 @@ type alias Attempt msg x a =
 
 type alias OnProgress msg x a =
     { send : Encode.Value -> Cmd msg
-    , receive : (Results -> msg) -> Sub msg
+    , receive : (TaskResult -> msg) -> Sub msg
     , onComplete : Id -> Result x a -> msg
     , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
 
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
-attempt attempt_ (State run) =
-    case run Id.init of
+attempt attempt_ task =
+    case runTask ( Id.init, task ) of
         ( _, Done res ) ->
             ( attempt_.pool
             , sendResult attempt_.onComplete attempt_.id res
@@ -403,17 +369,12 @@ attempt attempt_ (State run) =
 
         ( _, Pending defs _ ) ->
             ( startAttempt attempt_.id
-                { task = ( Id.init, State run )
+                { task = ( Id.init, task )
                 , sent = recordSent defs Set.empty
                 }
                 attempt_.pool
-            , attempt_.send (Encode.list (encodeDefinition attempt_.id) defs)
+            , attempt_.send (encodeDefinitions attempt_.id defs)
             )
-
-
-runTask : ( Ids, Task x a ) -> ( Ids, Task_ x a )
-runTask ( ids, State run ) =
-    run ids
 
 
 onProgress : OnProgress msg x a -> Pool x a -> Sub msg
@@ -457,13 +418,18 @@ onProgress options pool_ =
                                             pool_
                                         , defs
                                             |> List.filter (notStarted progress)
-                                            |> Encode.list (encodeDefinition result.attemptId)
+                                            |> encodeDefinitions result.attemptId
                                             |> options.send
                                         )
 
                         ( _, _ ) ->
                             options.onProgress ( pool_, Cmd.none )
         )
+
+
+runTask : ( Ids, Task x a ) -> ( Ids, Task_ x a )
+runTask ( ids, State run ) =
+    run ids
 
 
 recordSent : List Definition_ -> Set Id -> Set Id
@@ -484,6 +450,49 @@ sendResult onComplete id res =
 notStarted : Progress x a -> Definition_ -> Bool
 notStarted model def =
     not (Set.member def.taskId model.sent)
+
+
+
+-- Encode / Decode
+
+
+decodeResponse : Expect value -> Decoder (Result Error value)
+decodeResponse (ExpectJson expect) =
+    Decode.field "status" Decode.string
+        |> Decode.andThen
+            (\status ->
+                case status of
+                    "success" ->
+                        Decode.field "value" (Decode.map Ok expect)
+
+                    "error" ->
+                        Decode.field "error" (Decode.map Err decodeError)
+
+                    _ ->
+                        Decode.succeed (Err (InternalError ("Unknown response status: " ++ status)))
+            )
+
+
+decodeError : Decoder Error
+decodeError =
+    Decode.field "reason" Decode.string
+        |> Decode.andThen
+            (\reason ->
+                case reason of
+                    "js_exception" ->
+                        Decode.field "message" (Decode.map JsException Decode.string)
+
+                    "missing_function" ->
+                        Decode.field "message" (Decode.map MissingFunction Decode.string)
+
+                    _ ->
+                        Decode.succeed (InternalError ("Unknown error reason: " ++ reason))
+            )
+
+
+encodeDefinitions : Id -> List Definition_ -> Encode.Value
+encodeDefinitions attemptId =
+    Encode.list (encodeDefinition attemptId)
 
 
 encodeDefinition : Id -> Definition_ -> Encode.Value
@@ -544,15 +553,11 @@ type alias TestEval a =
 
 testEval : TestEval a -> ( Ids, Result Error a )
 testEval options =
-    let
-        (State run) =
-            options.task
-    in
-    case run options.ids of
-        ( n_, Done a ) ->
-            ( n_, a )
+    case runTask ( options.ids, options.task ) of
+        ( ids, Done a ) ->
+            ( ids, a )
 
-        ( n_, Pending _ next ) ->
+        ( ids, Pending _ next ) ->
             if options.maxDepth > 0 then
                 testEval
                     { options
@@ -570,8 +575,8 @@ testEval options =
                                         }
                                    )
                                 |> next
-                        , ids = n_
+                        , ids = ids
                     }
 
             else
-                ( n_, Err (InternalError "timeout") )
+                ( ids, Err (InternalError "timeout") )

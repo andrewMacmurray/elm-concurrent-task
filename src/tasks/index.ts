@@ -4,7 +4,7 @@ export interface ElmPorts {
   send: {
     subscribe: (callback: (defs: TaskDefinition[]) => Promise<void>) => void;
   };
-  receive: { send: (results: Results) => void };
+  receive: { send: (result: TaskResult) => void };
 }
 
 export interface Builtins {
@@ -23,7 +23,7 @@ export interface TaskDefinition {
   args: any;
 }
 
-export interface Results {
+export interface TaskResult {
   attemptId: string;
   taskId: string;
   result: Success | Error;

@@ -487,7 +487,7 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (Task.Results -> msg) -> Sub msg
+port receive : (Task.TaskResult -> msg) -> Sub msg
 
 
 port manualEnter : (String -> msg) -> Sub msg
