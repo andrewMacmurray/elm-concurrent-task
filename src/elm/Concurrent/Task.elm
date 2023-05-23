@@ -19,6 +19,8 @@ module Concurrent.Task exposing
     , map
     , map2
     , map3
+    , map4
+    , map5
     , mapError
     , onError
     , onProgress
@@ -163,8 +165,8 @@ mapTask f task =
             Done (Result.map f a)
 
 
-map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2 f (State run1) (State run2) =
+map2Internal_ : (a -> b -> c) -> Task x a -> Task x b -> Task x c
+map2Internal_ f (State run1) (State run2) =
     State
         (\ids ->
             let
@@ -184,13 +186,13 @@ mapTask2 : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
 mapTask2 f task1 task2 =
     case ( task1, task2 ) of
         ( Pending defs1 next1, Pending defs2 next2 ) ->
-            Pending (defs1 ++ defs2) (\res -> map2 f (next1 res) (next2 res))
+            Pending (defs1 ++ defs2) (\res -> map2Internal_ f (next1 res) (next2 res))
 
         ( Pending defs next1, Done b ) ->
-            Pending defs (\res -> map2 f (next1 res) (fromResult b))
+            Pending defs (\res -> map2Internal_ f (next1 res) (fromResult b))
 
         ( Done a, Pending defs next2 ) ->
-            Pending defs (\res -> map2 f (fromResult a) (next2 res))
+            Pending defs (\res -> map2Internal_ f (fromResult a) (next2 res))
 
         ( Done a, Done b ) ->
             Done (Result.map2 f a b)
@@ -198,7 +200,14 @@ mapTask2 f task1 task2 =
 
 andMap : Task x a -> Task x (a -> b) -> Task x b
 andMap =
-    map2 (|>)
+    map2Internal_ (|>)
+
+
+map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
+map2 f t1 t2 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
 
 
 map3 : (a -> b -> c -> d) -> Task x a -> Task x b -> Task x c -> Task x d
@@ -207,6 +216,25 @@ map3 f t1 t2 t3 =
         |> andMap t1
         |> andMap t2
         |> andMap t3
+
+
+map4 : (a -> b -> c -> d -> e) -> Task x a -> Task x b -> Task x c -> Task x d -> Task x e
+map4 f t1 t2 t3 t4 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+        |> andMap t3
+        |> andMap t4
+
+
+map5 : (a -> b -> c -> d -> e -> f) -> Task x a -> Task x b -> Task x c -> Task x d -> Task x e -> Task x f
+map5 f t1 t2 t3 t4 t5 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+        |> andMap t3
+        |> andMap t4
+        |> andMap t5
 
 
 

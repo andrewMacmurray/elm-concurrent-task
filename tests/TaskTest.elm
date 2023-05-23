@@ -37,27 +37,37 @@ responses =
                 Task.map2 (++)
                     createTask
                     createTask
-                    |> Task.andThen (\ab -> Task.map (join2 ab) createTask)
+                    |> Task.andThen
+                        (\ab ->
+                            Task.map2 (join3 ab)
+                                createTask
+                                createTask
+                        )
                     |> runTask
-                        [ ( 0, Encode.string b )
-                        , ( 1, Encode.string a )
+                        [ ( 0, Encode.string a )
+                        , ( 1, Encode.string b )
                         , ( 2, Encode.string c )
-                        ]
-                    |> Expect.equal (Ok (a ++ b ++ c))
-        , fuzz3 string string string "responses can arrive out of order" <|
-            \a b c ->
-                Task.map3 join3
-                    createTask
-                    createTask
-                    createTask
-                    |> Task.andThen (\ab -> Task.map (join2 ab) createTask)
-                    |> runTask
-                        [ ( 1, Encode.string b )
-                        , ( 2, Encode.string c )
-                        , ( 0, Encode.string a )
                         , ( 3, Encode.string c )
                         ]
                     |> Expect.equal (Ok (a ++ b ++ c ++ c))
+        , test "responses can arrive out of order" <|
+            \_ ->
+                Task.map2 join2
+                    createTask
+                    createTask
+                    |> Task.andThen
+                        (\ab ->
+                            Task.map2 (join3 ab)
+                                createTask
+                                createTask
+                        )
+                    |> runTask
+                        [ ( 1, Encode.string "b" )
+                        , ( 0, Encode.string "a" )
+                        , ( 2, Encode.string "c" )
+                        , ( 3, Encode.string "d" )
+                        ]
+                    |> Expect.equal (Ok "abcd")
         , test "can handle nested chains" <|
             \_ ->
                 Task.map3 join3
@@ -101,15 +111,15 @@ responses =
                         , ( 5, Encode.string "5" )
                         , ( 6, Encode.string "6" )
                         ]
-                    |> Expect.equal (Ok "1345026")
+                    |> Expect.equal (Ok "0245136")
         , fuzz2 int string "can handle mixed response types" <|
             \a b ->
                 Task.map2 Tuple.pair
                     (create Decode.int)
                     (create Decode.string)
                     |> runTask
-                        [ ( 0, Encode.string b )
-                        , ( 1, Encode.int a )
+                        [ ( 0, Encode.int a )
+                        , ( 1, Encode.string b )
                         ]
                     |> Expect.equal (Ok ( a, b ))
         ]

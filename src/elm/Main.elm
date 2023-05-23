@@ -174,6 +174,40 @@ badChain2 =
         )
 
 
+doFour : Task Http.Error String
+doFour =
+    Task.map4 join4
+        (longRequest_ 100)
+        (longRequest_ 100)
+        (longRequest_ 100)
+        (longRequest_ 100)
+        |> andThenJoinWith
+            (Task.map2 join2
+                (longRequest_ 100)
+                (longRequest_ 100)
+            )
+
+
+doFive : Task Http.Error String
+doFive =
+    Task.map5 join5
+        (longRequest_ 100)
+        (longRequest_ 80)
+        (longRequest_ 20)
+        (longRequest_ 30)
+        (longRequest_ 42)
+        |> andThenJoinWith
+            (Task.map2 join2
+                (longRequest_ 100)
+                (longRequest_ 110)
+            )
+
+
+andThenJoinWith : Task x String -> Task x String -> Task x String
+andThenJoinWith t2 t1 =
+    t1 |> Task.andThen (\a -> Task.map (join2 a) t2)
+
+
 badChain3 : Task Error String
 badChain3 =
     Task.mapError HttpError
@@ -191,12 +225,13 @@ badChain3 =
         )
 
 
+doThree2 : Task Error String
 doThree2 =
     Task.mapError HttpError
         (Task.map3 join3
-            (longRequest_ 100 |> Task.andThenDo (longRequest_ 100))
-            (longRequest_ 100 |> Task.andThenDo (longRequest_ 100))
-            (longRequest_ 100 |> Task.andThenDo (longRequest_ 100))
+            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
+            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
+            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
         )
 
 
@@ -235,7 +270,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        badChain3
+                        (Task.mapError HttpError doFive)
             in
             ( { tasks = tasks }, cmd )
 
@@ -294,33 +329,33 @@ myHttpTask =
 manyEnvs : Task Error String
 manyEnvs =
     Task.map3 join3
-        (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
+        (getEnv "ONE" |> andThenJoinWith (getEnv "TWO"))
         (getEnv "THREE")
         getHome
-        |> Task.andThenDo getUser
+        |> andThenJoinWith getUser
 
 
 slowSequence : Int -> Task Error String
 slowSequence i =
     longRequest 1000
-        |> Task.andThenDo (longRequest 1000)
-        |> Task.andThenDo (longRequest 1000)
-        |> Task.andThenDo (longRequest 1000)
-        |> Task.andThenDo (longRequest i)
+        |> andThenJoinWith (longRequest 1000)
+        |> andThenJoinWith (longRequest 1000)
+        |> andThenJoinWith (longRequest 1000)
+        |> andThenJoinWith (longRequest i)
 
 
 httpCombo : Task Error String
 httpCombo =
     Task.map3 join3
         (longRequest 500
-            |> Task.andThenDo (longRequest 500)
-            |> Task.andThenDo (longRequest 50)
-            |> Task.andThenDo (longRequest 50)
-            |> Task.andThenDo (longRequest 20)
+            |> andThenJoinWith (longRequest 500)
+            |> andThenJoinWith (longRequest 50)
+            |> andThenJoinWith (longRequest 50)
+            |> andThenJoinWith (longRequest 20)
         )
         (longRequest 100
-            |> Task.andThenDo (longRequest 100)
-            |> Task.andThenDo (longRequest 500)
+            |> andThenJoinWith (longRequest 100)
+            |> andThenJoinWith (longRequest 500)
         )
         (Task.map2 join2
             (longRequest 70)
@@ -451,14 +486,29 @@ retry_ task =
 -- Helpers
 
 
+join5 : String -> String -> String -> String -> String -> String
+join5 a b c d e =
+    join [ a, b, c, d, e ]
+
+
+join4 : String -> String -> String -> String -> String
+join4 a b c d =
+    join [ a, b, c, d ]
+
+
 join3 : String -> String -> String -> String
 join3 a b c =
-    a ++ ", " ++ b ++ ", " ++ c
+    join [ a, b, c ]
 
 
 join2 : String -> String -> String
 join2 a b =
-    a ++ ", " ++ b
+    join [ a, b ]
+
+
+join : List String -> String
+join =
+    String.join ", "
 
 
 
