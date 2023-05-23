@@ -14,6 +14,7 @@ suite =
     describe "Tasks"
         [ hardcoded
         , responses
+        , errors
         ]
 
 
@@ -104,7 +105,10 @@ responses =
                         |> Task.andThen
                             (\x ->
                                 withAnother x
-                                    |> Task.andThen (\y -> withAnother y)
+                                    |> Task.andThen
+                                        (\y ->
+                                            withAnother y
+                                        )
                             )
                     )
                     |> Task.andThen withAnother
@@ -119,36 +123,57 @@ responses =
                         , ( 7, Encode.string "7" )
                         ]
                     |> Expect.equal (Ok "01234567")
-        , fuzz2 int string "can handle mixed response types" <|
-            \a b ->
-                Task.map2 Tuple.pair
+        , fuzz3 int string int "can handle mixed response types" <|
+            \a b c ->
+                Task.map3 (\x y z -> ( x, y, z ))
                     (create Decode.int)
                     (create Decode.string)
+                    (create Decode.int)
                     |> runTask
                         [ ( 0, Encode.int a )
                         , ( 1, Encode.string b )
+                        , ( 2, Encode.int c )
                         ]
-                    |> Expect.equal (Ok ( a, b ))
+                    |> Expect.equal (Ok ( a, b, c ))
         ]
 
 
-withAnother : String -> Task Task.Error String
-withAnother x =
-    Task.map (join2 x) createTask
-
-
-createTask : Task Task.Error String
-createTask =
-    create Decode.string
-
-
-create : Decode.Decoder a -> Task Task.Error a
-create decoder =
-    Task.define
-        { function = "aTask"
-        , args = Encode.null
-        , expect = Task.expectJson decoder
-        }
+errors : Test
+errors =
+    describe "Tasks With Errors"
+        [ test "tasks with JS Exceptions" <|
+            \_ ->
+                Task.map2 join2
+                    createTask
+                    createTask
+                    |> runTaskWith
+                        [ ( 0, success (Encode.string "a") )
+                        , ( 1, error "js_exception" "f threw an exception" )
+                        ]
+                    |> Expect.equal (Err (Task.JsException "f threw an exception"))
+        , test "tasks with missing functions" <|
+            \_ ->
+                Task.map3 join3
+                    createTask
+                    createTask
+                    createTask
+                    |> runTaskWith
+                        [ ( 0, success (Encode.string "a") )
+                        , ( 1, error "missing_function" "f is missing" )
+                        , ( 2, success (Encode.string "c") )
+                        ]
+                    |> Expect.equal (Err (Task.MissingFunction "f is missing"))
+        , test "task with an unknown error reason" <|
+            \_ ->
+                Task.map2 join2
+                    createTask
+                    createTask
+                    |> runTaskWith
+                        [ ( 0, success (Encode.string "a") )
+                        , ( 1, error "other_error" "..." )
+                        ]
+                    |> Expect.equal (Err (Task.InternalError "Unknown error reason: other_error"))
+        ]
 
 
 hardcoded : Test
@@ -189,6 +214,66 @@ hardcoded =
         ]
 
 
+
+-- Helpers
+
+
+runTask : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
+runTask results =
+    runTaskWith (List.map (Tuple.mapSecond success) results)
+
+
+runTaskWith : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
+runTaskWith results task =
+    Task.testEval
+        { maxDepth = 100
+        , results = results
+        , task = task
+        , ids = Id.init
+        }
+        |> Tuple.second
+
+
+success : Encode.Value -> Encode.Value
+success v =
+    Encode.object
+        [ ( "status", Encode.string "success" )
+        , ( "value", v )
+        ]
+
+
+error : String -> String -> Encode.Value
+error reason message =
+    Encode.object
+        [ ( "status", Encode.string "error" )
+        , ( "error"
+          , Encode.object
+                [ ( "reason", Encode.string reason )
+                , ( "message", Encode.string message )
+                ]
+          )
+        ]
+
+
+withAnother : String -> Task Task.Error String
+withAnother x =
+    Task.map (join2 x) createTask
+
+
+createTask : Task Task.Error String
+createTask =
+    create Decode.string
+
+
+create : Decode.Decoder a -> Task Task.Error a
+create decoder =
+    Task.define
+        { function = "aTask"
+        , args = Encode.null
+        , expect = Task.expectJson decoder
+        }
+
+
 join3 : String -> String -> String -> String
 join3 a b c =
     a ++ b ++ c
@@ -197,22 +282,3 @@ join3 a b c =
 join2 : String -> String -> String
 join2 a b =
     a ++ b
-
-
-runTask : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
-runTask results task =
-    Task.testEval
-        { maxDepth = 100
-        , results = List.map (Tuple.mapSecond toResponse) results
-        , task = task
-        , ids = Id.init
-        }
-        |> Tuple.second
-
-
-toResponse : Encode.Value -> Encode.Value
-toResponse v =
-    Encode.object
-        [ ( "status", Encode.string "success" )
-        , ( "value", v )
-        ]
