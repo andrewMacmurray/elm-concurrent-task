@@ -6,7 +6,7 @@ import Json.Encode as Encode
 
 sleep : Int -> Task x ()
 sleep ms =
-    Task.task
+    Task.define
         { function = "builtin:sleep"
         , args = Encode.int ms
         , expect = Task.expectWhatever

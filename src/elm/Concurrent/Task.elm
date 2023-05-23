@@ -1,13 +1,16 @@
 module Concurrent.Task exposing
-    ( Definition
+    ( Attempt
+    , Definition
     , Error(..)
-    , Progress
-    , RawResults
+    , OnProgress
+    , Pool
     , Task
+    , TaskResult
     , andMap
     , andThen
     , andThenDo
     , attempt
+    , define
     , errorToString
     , expectJson
     , expectWhatever
@@ -16,11 +19,14 @@ module Concurrent.Task exposing
     , map
     , map2
     , map3
+    , map4
+    , map5
     , mapError
     , onError
     , onProgress
+    , pool
     , succeed
-    , task
+    , testEval
     )
 
 import Concurrent.Internal.Id as Id exposing (Id)
@@ -36,33 +42,29 @@ import Task as CoreTask
 
 
 type Task x a
-    = Task (Model -> Progress x a)
-
-
-type alias Progress x a =
-    ( Task_ x a, Model )
-
-
-type alias Model =
-    { sequence : Id.Sequence
-    , started : Set Id
-    , hasErrors : Bool
-    }
-
-
-type alias Results =
-    Dict Id Decode.Value
+    = State (Ids -> ( Ids, Task_ x a ))
 
 
 type Task_ x a
-    = Pending (List Definition_) (Results -> Task_ x a)
+    = Pending (List Definition_) (TaskResult -> Task x a)
     | Done (Result x a)
 
 
+type alias Ids =
+    Id.Sequence
+
+
 type alias Definition_ =
-    { id : Id
+    { taskId : Id
     , function : String
     , args : Encode.Value
+    }
+
+
+type alias TaskResult =
+    { attemptId : Id
+    , taskId : Id
+    , result : Decode.Value
     }
 
 
@@ -70,58 +72,11 @@ type Expect a
     = ExpectJson (Decoder a)
 
 
-type alias RawResults =
-    List RawResult
-
-
-type alias RawResult =
-    { id : Id
-    , result : Decode.Value
-    }
-
-
 type Error
     = DecodeResponseError Decode.Error
     | JsException String
     | MissingFunction String
     | InternalError String
-
-
-
--- Model
-
-
-init : Model
-init =
-    { sequence = Id.init
-    , started = Set.empty
-    , hasErrors = False
-    }
-
-
-nextId : Model -> Model
-nextId model =
-    { model | sequence = Id.next model.sequence }
-
-
-combineSequences : Id.Sequence -> Model -> Model
-combineSequences sequence model =
-    { model | sequence = Id.combine sequence model.sequence }
-
-
-recordSent : List Definition_ -> Model -> Model
-recordSent defs model =
-    { model | started = Set.union model.started (toSentIds defs) }
-
-
-haltProgress : Model -> Model
-haltProgress model =
-    { model | hasErrors = True }
-
-
-toSentIds : List Definition_ -> Set Id
-toSentIds defs =
-    Set.fromList (List.map .id defs)
 
 
 
@@ -139,7 +94,7 @@ expectWhatever =
 
 
 
--- Create
+-- Define a Task
 
 
 type alias Definition a =
@@ -149,36 +104,384 @@ type alias Definition a =
     }
 
 
-task : Definition a -> Task Error a
-task options =
-    Task
-        (\model ->
+define : Definition a -> Task Error a
+define a =
+    State
+        (\ids ->
             let
-                id : Id
-                id =
-                    Id.get model.sequence
+                taskId =
+                    Id.get ids
             in
-            ( Pending
-                [ { id = id
-                  , function = options.function
-                  , args = options.args
+            ( Id.next ids
+            , Pending
+                [ { taskId = taskId
+                  , function = a.function
+                  , args = a.args
                   }
                 ]
-                (\results ->
-                    case Dict.get id results of
-                        Just res ->
-                            res
-                                |> Decode.decodeValue (decodeResponse options.expect)
-                                |> Result.mapError DecodeResponseError
-                                |> Result.andThen identity
-                                |> fromResult_
+                (\result ->
+                    if result.taskId == taskId then
+                        result.result
+                            |> Decode.decodeValue (decodeResponse a.expect)
+                            |> Result.mapError DecodeResponseError
+                            |> Result.andThen identity
+                            |> fromResult
 
-                        Nothing ->
-                            unwrap (task options) model
+                    else
+                        runWith ids (define a)
                 )
-            , nextId model
             )
         )
+
+
+runWith : Ids -> Task x a -> Task x a
+runWith s (State run) =
+    State (\_ -> run s)
+
+
+
+-- Maps
+
+
+map : (a -> b) -> Task x a -> Task x b
+map f (State run) =
+    State
+        (\ids ->
+            let
+                ( ids_, a ) =
+                    run ids
+            in
+            ( ids_, mapTask f a )
+        )
+
+
+mapTask : (a -> b) -> Task_ x a -> Task_ x b
+mapTask f task =
+    case task of
+        Pending defs next ->
+            Pending defs (next >> map f)
+
+        Done a ->
+            Done (Result.map f a)
+
+
+map2Internal_ : (a -> b -> c) -> Task x a -> Task x b -> Task x c
+map2Internal_ f (State run1) (State run2) =
+    State
+        (\ids ->
+            let
+                ( ids_, b ) =
+                    run2 ids
+
+                ( ids__, a ) =
+                    run1 ids_
+            in
+            ( Id.combine ids_ ids__
+            , mapTask2 f a b
+            )
+        )
+
+
+mapTask2 : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
+mapTask2 f task1 task2 =
+    case ( task1, task2 ) of
+        ( Pending defs1 next1, Pending defs2 next2 ) ->
+            Pending (defs1 ++ defs2) (\res -> map2Internal_ f (next1 res) (next2 res))
+
+        ( Pending defs next1, Done b ) ->
+            Pending defs (\res -> map2Internal_ f (next1 res) (fromResult b))
+
+        ( Done a, Pending defs next2 ) ->
+            Pending defs (\res -> map2Internal_ f (fromResult a) (next2 res))
+
+        ( Done a, Done b ) ->
+            Done (Result.map2 f a b)
+
+
+andMap : Task x a -> Task x (a -> b) -> Task x b
+andMap =
+    map2Internal_ (|>)
+
+
+map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
+map2 f t1 t2 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+
+
+map3 : (a -> b -> c -> d) -> Task x a -> Task x b -> Task x c -> Task x d
+map3 f t1 t2 t3 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+        |> andMap t3
+
+
+map4 : (a -> b -> c -> d -> e) -> Task x a -> Task x b -> Task x c -> Task x d -> Task x e
+map4 f t1 t2 t3 t4 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+        |> andMap t3
+        |> andMap t4
+
+
+map5 : (a -> b -> c -> d -> e -> f) -> Task x a -> Task x b -> Task x c -> Task x d -> Task x e -> Task x f
+map5 f t1 t2 t3 t4 t5 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
+        |> andMap t3
+        |> andMap t4
+        |> andMap t5
+
+
+
+-- Chain Tasks
+
+
+succeed : a -> Task x a
+succeed a =
+    fromResult (Ok a)
+
+
+fail : x -> Task x a
+fail x =
+    fromResult (Err x)
+
+
+fromResult : Result x a -> Task x a
+fromResult res =
+    State (\ids -> ( ids, Done res ))
+
+
+andThen : (a -> Task x b) -> Task x a -> Task x b
+andThen f (State run) =
+    State
+        (\ids ->
+            let
+                ( ids_, a ) =
+                    run ids
+
+                (State run_) =
+                    case a of
+                        Done a_ ->
+                            case a_ of
+                                Ok a__ ->
+                                    f a__
+
+                                Err e ->
+                                    fail e
+
+                        Pending defs next ->
+                            State (\ids__ -> ( ids__, Pending defs (next >> andThen f) ))
+            in
+            run_ ids_
+        )
+
+
+andThenDo : Task x b -> Task x a -> Task x b
+andThenDo s2 s1 =
+    s1 |> andThen (\_ -> s2)
+
+
+
+-- Task Errors
+
+
+onError : (x -> Task y a) -> Task x a -> Task y a
+onError f (State run) =
+    State
+        (\ids ->
+            let
+                ( ids_, a ) =
+                    run ids
+
+                (State run_) =
+                    case a of
+                        Done a_ ->
+                            case a_ of
+                                Ok a__ ->
+                                    succeed a__
+
+                                Err e ->
+                                    f e
+
+                        Pending defs next ->
+                            State (\ids__ -> ( ids__, Pending defs (next >> onError f) ))
+            in
+            run_ ids_
+        )
+
+
+mapError : (x -> y) -> Task x a -> Task y a
+mapError f (State run) =
+    State
+        (\ids ->
+            let
+                ( ids_, a ) =
+                    run ids
+            in
+            ( ids_, mapTaskError f a )
+        )
+
+
+mapTaskError : (x -> y) -> Task_ x a -> Task_ y a
+mapTaskError f task =
+    case task of
+        Pending defs next ->
+            Pending defs (next >> mapError f)
+
+        Done a ->
+            Done (Result.mapError f a)
+
+
+errorToString : Error -> String
+errorToString err =
+    case err of
+        DecodeResponseError e ->
+            "DecodeResponseError: " ++ Decode.errorToString e
+
+        JsException string ->
+            "JsException: " ++ string
+
+        MissingFunction string ->
+            "MissingFunction: " ++ string
+
+        InternalError string ->
+            "InternalError: " ++ string
+
+
+
+-- Execute a Task
+
+
+type Pool x a
+    = Pool (Pool_ x a)
+
+
+type alias Pool_ x a =
+    Dict Id (Progress x a)
+
+
+type alias Progress x a =
+    { sent : Set Id
+    , task : ( Ids, Task x a )
+    }
+
+
+type alias Attempt msg x a =
+    { id : Id
+    , pool : Pool x a
+    , send : Encode.Value -> Cmd msg
+    , onComplete : Id -> Result x a -> msg
+    }
+
+
+type alias OnProgress msg x a =
+    { send : Encode.Value -> Cmd msg
+    , receive : (TaskResult -> msg) -> Sub msg
+    , onComplete : Id -> Result x a -> msg
+    , onProgress : ( Pool x a, Cmd msg ) -> msg
+    }
+
+
+attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
+attempt attempt_ task =
+    case runTask ( Id.init, task ) of
+        ( _, Done res ) ->
+            ( attempt_.pool
+            , sendResult attempt_.onComplete attempt_.id res
+            )
+
+        ( _, Pending defs _ ) ->
+            ( startAttempt attempt_.id
+                { task = ( Id.init, task )
+                , sent = recordSent defs Set.empty
+                }
+                attempt_.pool
+            , attempt_.send (encodeDefinitions attempt_.id defs)
+            )
+
+
+onProgress : OnProgress msg x a -> Pool x a -> Sub msg
+onProgress options pool_ =
+    options.receive
+        (\result ->
+            case findAttempt result.attemptId pool_ of
+                Nothing ->
+                    options.onProgress ( pool_, Cmd.none )
+
+                Just progress ->
+                    case runTask progress.task of
+                        ( ids_, Pending _ next_ ) ->
+                            let
+                                nextProgress =
+                                    ( ids_
+                                    , next_ result
+                                    )
+                            in
+                            case runTask nextProgress of
+                                ( _, Done res ) ->
+                                    case res of
+                                        Ok a ->
+                                            options.onProgress
+                                                ( removeFromPool result.attemptId pool_
+                                                , sendResult options.onComplete result.attemptId (Ok a)
+                                                )
+
+                                        Err e ->
+                                            options.onProgress
+                                                ( removeFromPool result.attemptId pool_
+                                                , sendResult options.onComplete result.attemptId (Err e)
+                                                )
+
+                                ( _, Pending defs _ ) ->
+                                    options.onProgress
+                                        ( updateProgressFor result.attemptId
+                                            { task = nextProgress
+                                            , sent = recordSent defs progress.sent
+                                            }
+                                            pool_
+                                        , defs
+                                            |> List.filter (notStarted progress)
+                                            |> encodeDefinitions result.attemptId
+                                            |> options.send
+                                        )
+
+                        ( _, _ ) ->
+                            options.onProgress ( pool_, Cmd.none )
+        )
+
+
+runTask : ( Ids, Task x a ) -> ( Ids, Task_ x a )
+runTask ( ids, State run ) =
+    run ids
+
+
+recordSent : List Definition_ -> Set Id -> Set Id
+recordSent defs sent =
+    Set.union sent (toSentIds defs)
+
+
+toSentIds : List Definition_ -> Set Id
+toSentIds defs =
+    Set.fromList (List.map .taskId defs)
+
+
+sendResult : (Id -> Result x a -> msg) -> Id -> Result x a -> Cmd msg
+sendResult onComplete id res =
+    CoreTask.succeed res |> CoreTask.perform (onComplete id)
+
+
+notStarted : Progress x a -> Definition_ -> Bool
+notStarted model def =
+    not (Set.member def.taskId model.sent)
+
+
+
+-- Encode / Decode
 
 
 decodeResponse : Expect value -> Decoder (Result Error value)
@@ -191,15 +494,15 @@ decodeResponse (ExpectJson expect) =
                         Decode.field "value" (Decode.map Ok expect)
 
                     "error" ->
-                        Decode.field "error" (Decode.map Err errorDecoder)
+                        Decode.field "error" (Decode.map Err decodeError)
 
                     _ ->
                         Decode.succeed (Err (InternalError ("Unknown response status: " ++ status)))
             )
 
 
-errorDecoder : Decoder Error
-errorDecoder =
+decodeError : Decoder Error
+decodeError =
     Decode.field "reason" Decode.string
         |> Decode.andThen
             (\reason ->
@@ -215,349 +518,93 @@ errorDecoder =
             )
 
 
-encodeDefinition : Definition_ -> Encode.Value
-encodeDefinition def =
+encodeDefinitions : Id -> List Definition_ -> Encode.Value
+encodeDefinitions attemptId =
+    Encode.list (encodeDefinition attemptId)
+
+
+encodeDefinition : Id -> Definition_ -> Encode.Value
+encodeDefinition attemptId def =
     Encode.object
-        [ ( "id", Encode.string def.id )
+        [ ( "attemptId", Encode.string attemptId )
+        , ( "taskId", Encode.string def.taskId )
         , ( "function", Encode.string def.function )
         , ( "args", def.args )
         ]
 
 
-fromResult : Result x a -> Task x a
-fromResult res =
-    Task (\_ -> ( Done res, init ))
 
+-- Pool
 
-fromResult_ : Result x a -> Task_ x a
-fromResult_ =
-    Done
 
+pool : Pool x a
+pool =
+    Pool Dict.empty
 
 
--- Maps
+startAttempt : Id -> Progress x a -> Pool x a -> Pool x a
+startAttempt attemptId progress =
+    mapPool (Dict.insert attemptId progress)
 
 
-map : (a -> b) -> Task x a -> Task x b
-map f (Task toTask) =
-    Task
-        (\model ->
-            let
-                ( task_, model1 ) =
-                    toTask model
-            in
-            ( map_ f task_, model1 )
-        )
+updateProgressFor : Id -> Progress x a -> Pool x a -> Pool x a
+updateProgressFor attemptId progress_ =
+    mapPool (Dict.update attemptId (Maybe.map (always progress_)))
 
 
-map_ : (a -> b) -> Task_ x a -> Task_ x b
-map_ f task_ =
-    case task_ of
-        Done res ->
-            Done (Result.map f res)
+removeFromPool : Id -> Pool x a -> Pool x a
+removeFromPool attemptId =
+    mapPool (Dict.remove attemptId)
 
-        Pending defs next ->
-            Pending defs (next >> map_ f)
 
+findAttempt : Id -> Pool x a -> Maybe (Progress x a)
+findAttempt attemptId (Pool p) =
+    Dict.get attemptId p
 
-map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2 f (Task toTask1) (Task toTask2) =
-    Task
-        (\model ->
-            let
-                ( task1_, model1 ) =
-                    toTask1 model
 
-                ( task2_, model2 ) =
-                    toTask2 model1
-            in
-            ( map2_ f task1_ task2_
-            , combineSequences model1.sequence model2
-            )
-        )
+mapPool : (Pool_ x a -> Pool_ x a) -> Pool x a -> Pool x a
+mapPool f (Pool p) =
+    Pool (f p)
 
 
-map2_ : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
-map2_ f task1 task2 =
-    case ( task1, task2 ) of
-        ( Done res1, Done res2 ) ->
-            Done (Result.map2 f res1 res2)
 
-        ( Done res1, Pending defs next ) ->
-            haltOnError res1 (Pending defs (\res -> map2_ f (Done res1) (next res)))
+-- Test Eval
 
-        ( Pending defs next, Done res2 ) ->
-            haltOnError res2 (Pending defs (\res -> map2_ f (next res) (Done res2)))
 
-        ( Pending defs1 next1, Pending defs2 next2 ) ->
-            Pending (defs1 ++ defs2) (\res -> map2_ f (next1 res) (next2 res))
-
-
-haltOnError : Result x a -> Task_ x b -> Task_ x b
-haltOnError res task_ =
-    case res of
-        Ok _ ->
-            task_
-
-        Err e ->
-            fail_ e
-
-
-andMap : Task x a -> Task x (a -> b) -> Task x b
-andMap =
-    map2 (|>)
-
-
-map3 : (a -> b -> c -> d) -> Task x a -> Task x b -> Task x c -> Task x d
-map3 f task1 task2 task3 =
-    succeed f
-        |> andMap task1
-        |> andMap task2
-        |> andMap task3
-
-
-
--- Chains
-
-
-andThen : (a -> Task x b) -> Task x a -> Task x b
-andThen f (Task toTask) =
-    Task
-        (\model ->
-            let
-                ( task_, model1 ) =
-                    toTask model
-
-                next a =
-                    unwrap (f a) model1
-            in
-            ( andThen_ next task_
-            , nextId model1
-            )
-        )
-
-
-andThen_ : (a -> Task_ x b) -> Task_ x a -> Task_ x b
-andThen_ f task_ =
-    case task_ of
-        Done res ->
-            case res of
-                Ok a ->
-                    f a
-
-                Err e ->
-                    fail_ e
-
-        Pending defs next ->
-            Pending defs (next >> andThen_ f)
-
-
-andThenDo : Task x b -> Task x a -> Task x b
-andThenDo task2 task1 =
-    task1 |> andThen (\_ -> task2)
-
-
-fail : a -> Task a b
-fail e =
-    Task (\_ -> ( fail_ e, init ))
-
-
-fail_ : x -> Task_ x a
-fail_ e =
-    Done (Err e)
-
-
-succeed : a -> Task x a
-succeed a =
-    Task (\_ -> ( succeed_ a, init ))
-
-
-succeed_ : a -> Task_ x a
-succeed_ a =
-    Done (Ok a)
-
-
-
--- Errors
-
-
-onError : (x -> Task y a) -> Task x a -> Task y a
-onError f (Task toTask) =
-    Task
-        (\model ->
-            let
-                ( task_, model1 ) =
-                    toTask model
-
-                next x =
-                    unwrap (f x) model1
-            in
-            ( onError_ next task_
-            , model1
-            )
-        )
-
-
-onError_ : (x -> Task_ y a) -> Task_ x a -> Task_ y a
-onError_ f task_ =
-    case task_ of
-        Done res ->
-            case res of
-                Ok a ->
-                    Done (Ok a)
-
-                Err e ->
-                    f e
-
-        Pending defs next ->
-            Pending defs (next >> onError_ f)
-
-
-mapError : (x -> y) -> Task x a -> Task y a
-mapError f (Task toTask) =
-    Task
-        (\model ->
-            let
-                ( task_, model1 ) =
-                    toTask model
-            in
-            ( mapError_ f task_
-            , model1
-            )
-        )
-
-
-mapError_ : (x -> y) -> Task_ x a -> Task_ y a
-mapError_ f task_ =
-    case task_ of
-        Done res ->
-            Done (Result.mapError f res)
-
-        Pending defs next ->
-            Pending defs (next >> mapError_ f)
-
-
-unwrap : Task x a -> Model -> Task_ x a
-unwrap (Task toTask) model =
-    Tuple.first (toTask model)
-
-
-errorToString : Error -> String
-errorToString err =
-    case err of
-        DecodeResponseError error ->
-            "DecodeResponseError: " ++ Decode.errorToString error
-
-        JsException string ->
-            "JsException: " ++ string
-
-        MissingFunction string ->
-            "MissingFunction: " ++ string
-
-        InternalError string ->
-            "InternalError: " ++ string
-
-
-
--- Attempt
-
-
-type alias Attempt msg x a =
-    { send : Encode.Value -> Cmd msg
-    , onComplete : Result x a -> msg
+type alias TestEval a =
+    { maxDepth : Int
+    , results : List ( Int, Encode.Value )
+    , task : Task Error a
+    , ids : Ids
     }
 
 
-type alias OnProgress msg x a =
-    { send : Encode.Value -> Cmd msg
-    , receive : (RawResults -> msg) -> Sub msg
-    , onComplete : Result x a -> msg
-    , onProgress : ( Progress x a, Cmd msg ) -> msg
-    }
+testEval : TestEval a -> ( Ids, Result Error a )
+testEval options =
+    case runTask ( options.ids, options.task ) of
+        ( ids, Done a ) ->
+            ( ids, a )
 
+        ( ids, Pending _ next ) ->
+            if options.maxDepth > 0 then
+                testEval
+                    { options
+                        | maxDepth = options.maxDepth - 1
+                        , results = List.drop 1 options.results
+                        , task =
+                            options.results
+                                |> List.head
+                                |> Maybe.withDefault ( 100, Encode.null )
+                                |> Tuple.mapFirst String.fromInt
+                                |> (\( id, result ) ->
+                                        { attemptId = "attempt"
+                                        , taskId = id
+                                        , result = result
+                                        }
+                                   )
+                                |> next
+                        , ids = ids
+                    }
 
-attempt : Attempt msg x a -> Task x a -> ( Progress x a, Cmd msg )
-attempt options (Task toTask) =
-    case toTask init of
-        ( Done res, model ) ->
-            ( ( Done res, model )
-            , sendResult options.onComplete res
-            )
-
-        ( Pending defs next, model ) ->
-            ( ( Pending defs next
-              , recordSent defs model
-              )
-            , options.send (Encode.list encodeDefinition defs)
-            )
-
-
-onProgress : OnProgress msg x a -> Progress x a -> Sub msg
-onProgress options ( task_, model ) =
-    case task_ of
-        Done _ ->
-            Sub.none
-
-        Pending _ next ->
-            options.receive
-                (\results ->
-                    let
-                        results_ =
-                            List.foldl addResponse Dict.empty results
-                    in
-                    case next results_ of
-                        Done res ->
-                            case res of
-                                Ok a ->
-                                    options.onComplete (Ok a)
-
-                                Err e ->
-                                    if not model.hasErrors then
-                                        options.onProgress
-                                            ( ( Done res, haltProgress model )
-                                            , sendResult options.onComplete (Err e)
-                                            )
-
-                                    else
-                                        options.onProgress
-                                            ( ( Done res, model )
-                                            , Cmd.none
-                                            )
-
-                        Pending defs next_ ->
-                            if not model.hasErrors then
-                                options.onProgress
-                                    ( ( Pending defs next_
-                                      , model
-                                            |> recordSent defs
-                                            |> nextId
-                                      )
-                                    , defs
-                                        |> List.filter (notStarted model)
-                                        |> Encode.list encodeDefinition
-                                        |> options.send
-                                    )
-
-                            else
-                                options.onProgress
-                                    ( ( Pending defs next_
-                                      , model
-                                      )
-                                    , Cmd.none
-                                    )
-                )
-
-
-sendResult : (Result x a -> msg) -> Result x a -> Cmd msg
-sendResult onComplete res =
-    CoreTask.succeed res |> CoreTask.perform onComplete
-
-
-notStarted : Model -> Definition_ -> Bool
-notStarted model def =
-    not (Set.member def.id model.started)
-
-
-addResponse : RawResult -> Results -> Results
-addResponse r =
-    Dict.insert r.id r.result
+            else
+                ( ids, Err (InternalError "timeout") )

@@ -5,7 +5,6 @@ import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
-import Dict exposing (Dict)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -34,13 +33,15 @@ type alias Flags =
 
 
 type alias Model =
-    { task : Task.Progress Error String
+    { tasks : Task.Pool Error String
     }
 
 
 type Msg
-    = OnComplete (Result Error String)
-    | OnProgress ( Task.Progress Error String, Cmd Msg )
+    = OnFireMany Int
+    | OnManualEnter String
+    | OnComplete String (Result Error String)
+    | OnProgress ( Task.Pool Error String, Cmd Msg )
 
 
 type Error
@@ -54,16 +55,8 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    let
-        ( progress, cmd ) =
-            Task.attempt
-                { send = send
-                , onComplete = OnComplete
-                }
-                httpCombo
-    in
-    ( { task = progress }
-    , cmd
+    ( { tasks = Task.pool }
+    , Cmd.none
     )
 
 
@@ -71,18 +64,236 @@ init _ =
 -- Update
 
 
+longChain : Task Error String
+longChain =
+    Task.mapError HttpError
+        (Task.map3 join3
+            (longRequest_ 100)
+            (longRequest_ 100)
+            (httpError
+                |> Task.onError (\_ -> longRequest_ 100)
+                |> Task.andThen (\_ -> longRequest_ 100)
+            )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 1000)
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> longRequest_ 500)
+                    |> Task.andThenDo (longRequest_ 500)
+                )
+            |> Task.andThenDo (longRequest_ 300)
+        )
+
+
+someChain : Task Error String
+someChain =
+    Task.mapError HttpError
+        (Task.map2 join2
+            (Task.map3 join3
+                (httpError
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                )
+                (httpError |> Task.onError (\_ -> longRequest_ 100))
+                (longRequest_ 100)
+            )
+            (Task.map3 join3
+                (longRequest_ 100)
+                (longRequest_ 100)
+                (longRequest_ 100)
+            )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
+badChain : Task Error String
+badChain =
+    Task.mapError HttpError
+        (Task.map2 join2
+            (longRequest_ 100)
+            (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                )
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError (\_ -> httpError)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                    |> Task.onError (\_ -> longRequest_ 100)
+                    |> Task.andThenDo (longRequest_ 100)
+                )
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
+badChain2 : Task Error String
+badChain2 =
+    Task.mapError HttpError
+        (longRequest_ 100
+            |> Task.andThenDo
+                (httpError
+                    |> Task.onError
+                        (\_ ->
+                            httpError
+                                |> Task.onError
+                                    (\_ ->
+                                        httpError
+                                            |> Task.onError
+                                                (\_ ->
+                                                    longRequest_ 100
+                                                )
+                                    )
+                        )
+                )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
+doFour : Task Http.Error String
+doFour =
+    Task.map4 join4
+        (longRequest_ 100)
+        (longRequest_ 100)
+        (longRequest_ 100)
+        (longRequest_ 100)
+        |> andThenJoinWith
+            (Task.map2 join2
+                (longRequest_ 100)
+                (longRequest_ 100)
+            )
+
+
+doFive : Task Http.Error String
+doFive =
+    Task.map5 join5
+        (longRequest_ 100)
+        (longRequest_ 80)
+        (longRequest_ 20)
+        (longRequest_ 30)
+        (longRequest_ 42)
+        |> andThenJoinWith
+            (Task.map2 join2
+                (longRequest_ 100)
+                (longRequest_ 110)
+            )
+
+
+andThenJoinWith : Task x String -> Task x String -> Task x String
+andThenJoinWith t2 t1 =
+    t1 |> Task.andThen (\a -> Task.map (join2 a) t2)
+
+
+badChain3 : Task Error String
+badChain3 =
+    Task.mapError HttpError
+        (Task.map3 join3
+            doThree
+            doThree
+            doThree
+            |> Task.andThenDo
+                (retry 100 httpError
+                    |> Task.onError (\_ -> longRequest_ 100)
+                )
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+            |> Task.andThenDo (longRequest_ 100)
+        )
+
+
+doThree2 : Task Error String
+doThree2 =
+    Task.mapError HttpError
+        (Task.map3 join3
+            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
+            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
+            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
+        )
+
+
+doThree : Task Http.Error String
+doThree =
+    Task.map3 join3
+        (httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 50)
+        )
+        (httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 100)
+        )
+        (httpError
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> httpError)
+            |> Task.onError (\_ -> longRequest_ 150)
+        )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnComplete result ->
+        OnManualEnter id ->
             let
-                _ =
-                    Debug.log "result" result
+                ( tasks, cmd ) =
+                    Task.attempt
+                        { send = send
+                        , onComplete = OnComplete
+                        , id = id
+                        , pool = model.tasks
+                        }
+                        (Task.mapError HttpError doFive)
             in
-            ( model, Cmd.none )
+            ( { tasks = tasks }, cmd )
+
+        OnFireMany id ->
+            let
+                ( tasks, cmd ) =
+                    Task.attempt
+                        { send = send
+                        , onComplete = OnComplete
+                        , id = String.fromInt id
+                        , pool = model.tasks
+                        }
+                        (slowSequence id)
+            in
+            ( { tasks = tasks }, cmd )
+
+        OnComplete id result ->
+            ( model
+            , sendResult ("result for " ++ id ++ ": " ++ Debug.toString result)
+            )
 
         OnProgress ( task, cmd ) ->
-            ( { model | task = task }, cmd )
+            ( { model | tasks = task }, cmd )
 
 
 
@@ -117,47 +328,57 @@ myHttpTask =
 
 manyEnvs : Task Error String
 manyEnvs =
-    Task.mapError TaskError
-        (Task.map3 join3
-            (getEnv "ONE" |> Task.andThenDo (getEnv "TWO"))
-            (getEnv "THREE")
-            getHome
-            |> Task.andThenDo (getEnv "USER")
-        )
+    Task.map3 join3
+        (getEnv "ONE" |> andThenJoinWith (getEnv "TWO"))
+        (getEnv "THREE")
+        getHome
+        |> andThenJoinWith getUser
+
+
+slowSequence : Int -> Task Error String
+slowSequence i =
+    longRequest 1000
+        |> andThenJoinWith (longRequest 1000)
+        |> andThenJoinWith (longRequest 1000)
+        |> andThenJoinWith (longRequest 1000)
+        |> andThenJoinWith (longRequest i)
 
 
 httpCombo : Task Error String
 httpCombo =
-    Task.mapError HttpError
-        (Task.map3 join3
-            (longRequest 500
-                |> Task.andThenDo (sleep 500)
-                |> Task.andThenDo (longRequest 200)
-                |> Task.andThenDo (longRequest 200)
-                |> Task.andThenDo (longRequest 20)
-            )
-            (longRequest 1000
-                |> Task.andThenDo (longRequest 750)
-                |> Task.andThenDo (longRequest 500)
-            )
-            (Task.map2 join2
-                (longRequest 70)
-                (longRequest 80)
-            )
-            |> Task.andThen
-                (\res ->
-                    Task.map (join2 res)
-                        (Task.map3 join3
-                            (retry 10 httpError)
-                            (longRequest 100)
-                            (longRequest 200)
-                        )
-                )
+    Task.map3 join3
+        (longRequest 500
+            |> andThenJoinWith (longRequest 500)
+            |> andThenJoinWith (longRequest 50)
+            |> andThenJoinWith (longRequest 50)
+            |> andThenJoinWith (longRequest 20)
         )
+        (longRequest 100
+            |> andThenJoinWith (longRequest 100)
+            |> andThenJoinWith (longRequest 500)
+        )
+        (Task.map2 join2
+            (longRequest 70)
+            (longRequest 80)
+        )
+        |> Task.andThen
+            (\res ->
+                Task.map (join2 res)
+                    (Task.map3 join3
+                        (longRequest 50)
+                        (longRequest 100)
+                        (longRequest 200)
+                    )
+            )
 
 
-longRequest : Int -> Task Http.Error String
-longRequest ms =
+longRequest : Int -> Task Error String
+longRequest =
+    longRequest_ >> Task.mapError HttpError
+
+
+longRequest_ : Int -> Task Http.Error String
+longRequest_ ms =
     Http.request
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
         , method = "GET"
@@ -189,44 +410,51 @@ httpError =
         }
 
 
-getHome : Task Task.Error String
+getHome : Task Error String
 getHome =
     getEnv "HOME"
 
 
-getEnv : String -> Task Task.Error String
+getUser : Task Error String
+getUser =
+    getEnv "USER"
+
+
+getEnv : String -> Task Error String
 getEnv var =
-    Task.task
-        { function = "getEnv"
-        , args = Encode.string var
-        , expect = Task.expectJson Decode.string
-        }
+    Task.mapError TaskError
+        (Task.define
+            { function = "getEnv"
+            , args = Encode.string var
+            , expect = Task.expectJson Decode.string
+            }
+        )
 
 
 slowInts : Task Error String
 slowInts =
-    Task.mapError TaskError
-        (Task.map3 join3
-            (doubleSlowInt 1)
-            (doubleSlowInt 3)
-            (doubleSlowInt 5)
-        )
+    Task.map3 join3
+        (doubleSlowInt 1)
+        (doubleSlowInt 3)
+        (doubleSlowInt 5)
 
 
-doubleSlowInt : Int -> Task Task.Error String
+doubleSlowInt : Int -> Task Error String
 doubleSlowInt i =
     Task.map2 join2
         (slowInt i)
         (slowInt (i + 1))
 
 
-slowInt : Int -> Task Task.Error String
+slowInt : Int -> Task Error String
 slowInt id =
-    Task.task
-        { function = "slowInt"
-        , args = Encode.int id
-        , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
-        }
+    Task.mapError TaskError
+        (Task.define
+            { function = "slowInt"
+            , args = Encode.int id
+            , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
+            }
+        )
 
 
 
@@ -258,14 +486,29 @@ retry_ task =
 -- Helpers
 
 
+join5 : String -> String -> String -> String -> String -> String
+join5 a b c d e =
+    join [ a, b, c, d, e ]
+
+
+join4 : String -> String -> String -> String -> String
+join4 a b c d =
+    join [ a, b, c, d ]
+
+
 join3 : String -> String -> String -> String
 join3 a b c =
-    a ++ ", " ++ b ++ ", " ++ c
+    join [ a, b, c ]
 
 
 join2 : String -> String -> String
 join2 a b =
-    a ++ ", " ++ b
+    join [ a, b ]
+
+
+join : List String -> String
+join =
+    String.join ", "
 
 
 
@@ -274,13 +517,17 @@ join2 a b =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Task.onProgress
-        { send = send
-        , receive = receive
-        , onComplete = OnComplete
-        , onProgress = OnProgress
-        }
-        model.task
+    Sub.batch
+        [ manualEnter OnManualEnter
+        , fireMany OnFireMany
+        , Task.onProgress
+            { send = send
+            , receive = receive
+            , onComplete = OnComplete
+            , onProgress = OnProgress
+            }
+            model.tasks
+        ]
 
 
 
@@ -290,4 +537,13 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (Task.RawResults -> msg) -> Sub msg
+port receive : (Task.TaskResult -> msg) -> Sub msg
+
+
+port manualEnter : (String -> msg) -> Sub msg
+
+
+port fireMany : (Int -> msg) -> Sub msg
+
+
+port sendResult : String -> Cmd msg
