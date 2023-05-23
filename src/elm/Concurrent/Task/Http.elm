@@ -200,7 +200,4 @@ encodeBody : Body -> Encode.Value
 encodeBody body =
     case body of
         Json value ->
-            Encode.object
-                [ ( "type", Encode.string "json" )
-                , ( "value", value )
-                ]
+            value
