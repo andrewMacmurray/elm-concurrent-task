@@ -148,21 +148,18 @@ map f (State run) =
     State
         (\ids ->
             let
-                ( ids_, a ) =
+                ( ids_, task ) =
                     run ids
             in
-            ( ids_, mapTask f a )
+            ( ids_
+            , case task of
+                Pending defs next ->
+                    Pending defs (next >> map f)
+
+                Done a ->
+                    Done (Result.map f a)
+            )
         )
-
-
-mapTask : (a -> b) -> Task_ x a -> Task_ x b
-mapTask f task =
-    case task of
-        Pending defs next ->
-            Pending defs (next >> map f)
-
-        Done a ->
-            Done (Result.map f a)
 
 
 map2Internal_ : (a -> b -> c) -> Task x a -> Task x b -> Task x c
@@ -170,32 +167,27 @@ map2Internal_ f (State run1) (State run2) =
     State
         (\ids ->
             let
-                ( ids_, b ) =
+                ( ids_, task2 ) =
                     run2 ids
 
-                ( ids__, a ) =
+                ( ids__, task1 ) =
                     run1 ids_
             in
             ( Id.combine ids_ ids__
-            , mapTask2 f a b
+            , case ( task1, task2 ) of
+                ( Pending defs1 next1, Pending defs2 next2 ) ->
+                    Pending (defs1 ++ defs2) (\res -> map2Internal_ f (next1 res) (next2 res))
+
+                ( Pending defs next1, Done b ) ->
+                    Pending defs (\res -> map2Internal_ f (next1 res) (fromResult b))
+
+                ( Done a, Pending defs next2 ) ->
+                    Pending defs (\res -> map2Internal_ f (fromResult a) (next2 res))
+
+                ( Done a, Done b ) ->
+                    Done (Result.map2 f a b)
             )
         )
-
-
-mapTask2 : (a -> b -> c) -> Task_ x a -> Task_ x b -> Task_ x c
-mapTask2 f task1 task2 =
-    case ( task1, task2 ) of
-        ( Pending defs1 next1, Pending defs2 next2 ) ->
-            Pending (defs1 ++ defs2) (\res -> map2Internal_ f (next1 res) (next2 res))
-
-        ( Pending defs next1, Done b ) ->
-            Pending defs (\res -> map2Internal_ f (next1 res) (fromResult b))
-
-        ( Done a, Pending defs next2 ) ->
-            Pending defs (\res -> map2Internal_ f (fromResult a) (next2 res))
-
-        ( Done a, Done b ) ->
-            Done (Result.map2 f a b)
 
 
 andMap : Task x a -> Task x (a -> b) -> Task x b
@@ -320,21 +312,18 @@ mapError f (State run) =
     State
         (\ids ->
             let
-                ( ids_, a ) =
+                ( ids_, task ) =
                     run ids
             in
-            ( ids_, mapTaskError f a )
+            ( ids_
+            , case task of
+                Pending defs next ->
+                    Pending defs (next >> mapError f)
+
+                Done a ->
+                    Done (Result.mapError f a)
+            )
         )
-
-
-mapTaskError : (x -> y) -> Task_ x a -> Task_ y a
-mapTaskError f task =
-    case task of
-        Pending defs next ->
-            Pending defs (next >> mapError f)
-
-        Done a ->
-            Done (Result.mapError f a)
 
 
 errorToString : Error -> String

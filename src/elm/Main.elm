@@ -208,6 +208,12 @@ andThenJoinWith t2 t1 =
     t1 |> Task.andThen (\a -> Task.map (join2 a) t2)
 
 
+doALot : Task Http.Error String
+doALot =
+    List.range 0 3590
+        |> List.foldl (\_ t -> t |> Task.andThenDo (longRequest_ 0)) (longRequest_ 0)
+
+
 badChain3 : Task Error String
 badChain3 =
     Task.mapError HttpError
@@ -270,7 +276,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        badChain3
+                        (Task.mapError HttpError doALot)
             in
             ( { tasks = tasks }, cmd )
 
