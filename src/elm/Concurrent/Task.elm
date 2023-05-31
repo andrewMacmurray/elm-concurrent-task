@@ -42,11 +42,11 @@ import Task as CoreTask
 
 
 type Task x a
-    = State (Ids -> ( Ids, Task_ x a ))
+    = State (TaskResult -> Ids -> ( Ids, Task_ x a ))
 
 
 type Task_ x a
-    = Pending (List Definition_) (TaskResult -> Task x a)
+    = Pending (List Definition_) (Task x a)
     | Done (Result x a)
 
 
@@ -107,7 +107,7 @@ type alias Definition a =
 define : Definition a -> Task Error a
 define a =
     State
-        (\ids ->
+        (\result ids ->
             let
                 taskId =
                     Id.get ids
@@ -119,16 +119,15 @@ define a =
                   , args = a.args
                   }
                 ]
-                (\result ->
-                    if result.taskId == taskId then
-                        result.result
-                            |> Decode.decodeValue (decodeResponse a.expect)
-                            |> Result.mapError DecodeResponseError
-                            |> Result.andThen identity
-                            |> fromResult
+                (if result.taskId == taskId then
+                    result.result
+                        |> Decode.decodeValue (decodeResponse a.expect)
+                        |> Result.mapError DecodeResponseError
+                        |> Result.andThen identity
+                        |> fromResult
 
-                    else
-                        runWith ids (define a)
+                 else
+                    runWith ids (define a)
                 )
             )
         )
@@ -136,7 +135,7 @@ define a =
 
 runWith : Ids -> Task x a -> Task x a
 runWith s (State run) =
-    State (\_ -> run s)
+    State (\res _ -> run res s)
 
 
 
@@ -146,15 +145,15 @@ runWith s (State run) =
 map : (a -> b) -> Task x a -> Task x b
 map f (State run) =
     State
-        (\ids ->
+        (\result ids ->
             let
                 ( ids_, task ) =
-                    run ids
+                    run result ids
             in
             ( ids_
             , case task of
                 Pending defs next ->
-                    Pending defs (next >> map f)
+                    Pending defs (map f next)
 
                 Done a ->
                     Done (Result.map f a)
@@ -162,27 +161,27 @@ map f (State run) =
         )
 
 
-map2Internal_ : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2Internal_ f (State run1) (State run2) =
+map2Internal : (a -> b -> c) -> Task x a -> Task x b -> Task x c
+map2Internal f (State run1) (State run2) =
     State
-        (\ids ->
+        (\res ids ->
             let
                 ( ids_, task2 ) =
-                    run2 ids
+                    run2 res ids
 
                 ( ids__, task1 ) =
-                    run1 ids_
+                    run1 res ids_
             in
             ( Id.combine ids_ ids__
             , case ( task1, task2 ) of
                 ( Pending defs1 next1, Pending defs2 next2 ) ->
-                    Pending (defs1 ++ defs2) (\res -> map2Internal_ f (next1 res) (next2 res))
+                    Pending (defs1 ++ defs2) (map2Internal f next1 next2)
 
                 ( Pending defs next1, Done b ) ->
-                    Pending defs (\res -> map2Internal_ f (next1 res) (fromResult b))
+                    Pending defs (map2Internal f next1 (fromResult b))
 
                 ( Done a, Pending defs next2 ) ->
-                    Pending defs (\res -> map2Internal_ f (fromResult a) (next2 res))
+                    Pending defs (map2Internal f (fromResult a) next2)
 
                 ( Done a, Done b ) ->
                     Done (Result.map2 f a b)
@@ -192,7 +191,7 @@ map2Internal_ f (State run1) (State run2) =
 
 andMap : Task x a -> Task x (a -> b) -> Task x b
 andMap =
-    map2Internal_ (|>)
+    map2Internal (|>)
 
 
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
@@ -245,16 +244,16 @@ fail x =
 
 fromResult : Result x a -> Task x a
 fromResult res =
-    State (\ids -> ( ids, Done res ))
+    State (\_ ids -> ( ids, Done res ))
 
 
 andThen : (a -> Task x b) -> Task x a -> Task x b
 andThen f (State run) =
     State
-        (\ids ->
+        (\res ids ->
             let
                 ( ids_, a ) =
-                    run ids
+                    run res ids
 
                 (State run_) =
                     case a of
@@ -267,9 +266,9 @@ andThen f (State run) =
                                     fail e
 
                         Pending defs next ->
-                            State (\ids__ -> ( ids__, Pending defs (next >> andThen f) ))
+                            State (\_ ids__ -> ( ids__, Pending defs (andThen f next) ))
             in
-            run_ ids_
+            run_ res ids_
         )
 
 
@@ -285,10 +284,10 @@ andThenDo s2 s1 =
 onError : (x -> Task y a) -> Task x a -> Task y a
 onError f (State run) =
     State
-        (\ids ->
+        (\res ids ->
             let
                 ( ids_, a ) =
-                    run ids
+                    run res ids
 
                 (State run_) =
                     case a of
@@ -301,24 +300,24 @@ onError f (State run) =
                                     f e
 
                         Pending defs next ->
-                            State (\ids__ -> ( ids__, Pending defs (next >> onError f) ))
+                            State (\_ ids__ -> ( ids__, Pending defs (onError f next) ))
             in
-            run_ ids_
+            run_ res ids_
         )
 
 
 mapError : (x -> y) -> Task x a -> Task y a
 mapError f (State run) =
     State
-        (\ids ->
+        (\res ids ->
             let
                 ( ids_, task ) =
-                    run ids
+                    run res ids
             in
             ( ids_
             , case task of
                 Pending defs next ->
-                    Pending defs (next >> mapError f)
+                    Pending defs (mapError f next)
 
                 Done a ->
                     Done (Result.mapError f a)
@@ -378,7 +377,14 @@ type alias OnProgress msg x a =
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
 attempt attempt_ task =
-    case runTask ( Id.init, task ) of
+    case
+        runTask
+            { attemptId = attempt_.id
+            , taskId = Id.get Id.init
+            , result = Encode.null
+            }
+            ( Id.init, task )
+    of
         ( _, Done res ) ->
             ( attempt_.pool
             , sendResult attempt_.onComplete attempt_.id res
@@ -403,15 +409,13 @@ onProgress options pool_ =
                     options.onProgress ( pool_, Cmd.none )
 
                 Just progress ->
-                    case runTask progress.task of
+                    case runTask result progress.task of
                         ( ids_, Pending _ next_ ) ->
                             let
                                 nextProgress =
-                                    ( ids_
-                                    , next_ result
-                                    )
+                                    ( ids_, next_ )
                             in
-                            case runTask nextProgress of
+                            case runTask result nextProgress of
                                 ( _, Done res ) ->
                                     case res of
                                         Ok a ->
@@ -444,9 +448,9 @@ onProgress options pool_ =
         )
 
 
-runTask : ( Ids, Task x a ) -> ( Ids, Task_ x a )
-runTask ( ids, State run ) =
-    run ids
+runTask : TaskResult -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
+runTask res ( ids, State run ) =
+    run res ids
 
 
 recordSent : List Definition_ -> Set Id -> Set Id
@@ -570,7 +574,20 @@ type alias TestEval a =
 
 testEval : TestEval a -> ( Ids, Result Error a )
 testEval options =
-    case runTask ( options.ids, options.task ) of
+    let
+        results =
+            options.results
+                |> List.head
+                |> Maybe.withDefault ( 100, Encode.null )
+                |> Tuple.mapFirst String.fromInt
+                |> (\( id, result ) ->
+                        { attemptId = "attempt"
+                        , taskId = id
+                        , result = result
+                        }
+                   )
+    in
+    case runTask results ( options.ids, options.task ) of
         ( ids, Done a ) ->
             ( ids, a )
 
@@ -580,18 +597,7 @@ testEval options =
                     { options
                         | maxDepth = options.maxDepth - 1
                         , results = List.drop 1 options.results
-                        , task =
-                            options.results
-                                |> List.head
-                                |> Maybe.withDefault ( 100, Encode.null )
-                                |> Tuple.mapFirst String.fromInt
-                                |> (\( id, result ) ->
-                                        { attemptId = "attempt"
-                                        , taskId = id
-                                        , result = result
-                                        }
-                                   )
-                                |> next
+                        , task = next
                         , ids = ids
                     }
 
