@@ -9,7 +9,8 @@
     "watch": "parcel watch",
     "start": "nodemon dist/index.js",
     "build": "parcel build",
-    "test": "elm-test"
+    "test": "elm-test",
+    "review": "elm-review"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
@@ -20,6 +21,7 @@
     "@parcel/transformer-elm": "^2.8.3",
     "elm": "^0.19.1-5",
     "elm-format": "^0.8.5",
+    "elm-review": "^2.10.2",
     "elm-test": "^0.19.1-revision12",
     "express": "^4.18.2",
     "morgan": "^1.10.0",
