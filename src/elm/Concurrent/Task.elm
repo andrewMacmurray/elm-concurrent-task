@@ -10,6 +10,7 @@ module Concurrent.Task exposing
     , andThen
     , andThenDo
     , attempt
+    , batch
     , define
     , errorToString
     , expectJson
@@ -25,6 +26,7 @@ module Concurrent.Task exposing
     , onError
     , onProgress
     , pool
+    , sequence
     , succeed
     , testEval
     )
@@ -226,6 +228,44 @@ map5 f t1 t2 t3 t4 t5 =
         |> andMap t3
         |> andMap t4
         |> andMap t5
+
+
+
+-- Sequence
+
+
+sequence : List (Task x a) -> Task x (List a)
+sequence tasks =
+    sequenceHelp tasks (succeed [])
+
+
+sequenceHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
+sequenceHelp tasks task =
+    case tasks of
+        todo :: rest ->
+            task |> andThen (\xs -> sequenceHelp rest (map (\x -> x :: xs) todo))
+
+        [] ->
+            task
+
+
+
+-- Batch
+
+
+batch : List (Task x a) -> Task x (List a)
+batch tasks =
+    batchHelp tasks (succeed [])
+
+
+batchHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
+batchHelp tasks task =
+    case tasks of
+        todo :: rest ->
+            batchHelp rest (map2 (::) todo task)
+
+        [] ->
+            task
 
 
 

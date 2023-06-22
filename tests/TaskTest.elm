@@ -140,7 +140,8 @@ responses =
                     |> Expect.equal (Ok ( a, b, c ))
         , fuzz (intRange 1 1000) "the id always increments in step with the number of tasks" <|
             \n ->
-                repeatTask n
+                List.repeat n createTask
+                    |> Task.sequence
                     |> evalTask
                         (List.range 0 n
                             |> List.map
@@ -152,13 +153,46 @@ responses =
                         )
                     |> Tuple.first
                     |> Id.get
-                    |> Expect.equal (String.fromInt (n + 1))
+                    |> Expect.equal (String.fromInt n)
+        , test "handles large sequence sizes" <|
+            \_ ->
+                let
+                    n =
+                        100000
+                in
+                List.repeat n (create Decode.int)
+                    |> Task.sequence
+                    |> Task.map List.sum
+                    |> runTask
+                        (List.range 0 n
+                            |> List.map
+                                (\i ->
+                                    ( i
+                                    , Encode.int 1
+                                    )
+                                )
+                        )
+                    |> Expect.equal (Ok n)
+        , test "handles large batch sizes" <|
+            \_ ->
+                let
+                    n =
+                        10000
+                in
+                List.repeat n (create Decode.int)
+                    |> Task.batch
+                    |> Task.map List.sum
+                    |> runTask
+                        (List.range 0 n
+                            |> List.map
+                                (\i ->
+                                    ( i
+                                    , Encode.int 1
+                                    )
+                                )
+                        )
+                    |> Expect.equal (Ok n)
         ]
-
-
-repeatTask : Int -> Task Task.Error String
-repeatTask n =
-    List.range 0 n |> List.foldl (\_ t -> t |> Task.andThenDo createTask) (Task.succeed "start")
 
 
 errors : Test
@@ -254,7 +288,7 @@ runTaskWith results task =
 evalTask : List ( Int, Encode.Value ) -> Task Task.Error a -> ( Id.Sequence, Result Task.Error a )
 evalTask results task =
     Task.testEval
-        { maxDepth = 10000
+        { maxDepth = 100000000
         , results = results
         , task = task
         , ids = Id.init
