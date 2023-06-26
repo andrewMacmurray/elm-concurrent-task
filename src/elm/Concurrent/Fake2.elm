@@ -1,7 +1,5 @@
 module Concurrent.Fake2 exposing (..)
 
-import Recursion
-
 
 type Task a
     = Pending (Int -> ( Int, Task a ))
@@ -17,20 +15,11 @@ map f task =
         Pending next ->
             Pending
                 (\s ->
-                    Recursion.runRecursion
-                        (\next_ ->
-                            let
-                                ( s_, task_ ) =
-                                    next_ s
-                            in
-                            case task_ of
-                                Done a ->
-                                    Recursion.base ( s_, Done (f a) )
-
-                                Pending next__ ->
-                                    Recursion.recurse next__
-                        )
-                        next
+                    let
+                        ( s_, a ) =
+                            next s
+                    in
+                    ( s_, map f a )
                 )
 
 
@@ -43,21 +32,27 @@ andThen f task =
         Pending next ->
             Pending
                 (\s ->
-                    Recursion.runRecursion
-                        (\next_ ->
-                            let
-                                ( s_, task_ ) =
-                                    next_ s
-                            in
-                            case task_ of
-                                Done a ->
-                                    Recursion.base ( s_, f a )
+                    let
+                        ( s_, task_ ) =
+                            next s
+                    in
+                    case task_ of
+                        Done a ->
+                            ( s_, f a )
 
-                                Pending next__ ->
-                                    Recursion.recurse next__
-                        )
-                        next
+                        Pending _ ->
+                            ( s_, andThen f task_ )
                 )
+
+
+succeed : a -> Task a
+succeed a =
+    Pending
+        (\n ->
+            ( n
+            , Done a
+            )
+        )
 
 
 create : Task String
@@ -65,7 +60,7 @@ create =
     Pending
         (\n ->
             ( n + 1
-            , Done ("some value " ++ String.fromInt n)
+            , Done (String.fromInt n)
             )
         )
 

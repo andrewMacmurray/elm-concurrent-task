@@ -1,5 +1,6 @@
 port module Main exposing (main)
 
+import Concurrent.Fake2 as Fake2
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
@@ -55,9 +56,45 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
+    let
+        _ =
+            Debug.log "Fake2"
+                (List.repeat 1000000 ()
+                    |> mapALot Fake2.create
+                    |> Fake2.run 0
+                )
+    in
     ( { tasks = Task.pool }
     , Cmd.none
     )
+
+
+andThenALot : Fake2.Task String -> List a -> Fake2.Task String
+andThenALot task xs =
+    case xs of
+        _ :: rest ->
+            task |> Fake2.andThen (\_ -> andThenALot Fake2.create rest)
+
+        [] ->
+            task
+
+
+mapALot : Fake2.Task String -> List a -> Fake2.Task String
+mapALot task xs =
+    case xs of
+        _ :: rest ->
+            task
+                |> Fake2.andThen
+                    (\x ->
+                        Fake2.create
+                            |> Fake2.andThen
+                                (\y ->
+                                    mapALot (Fake2.succeed (x ++ y)) rest
+                                )
+                    )
+
+        [] ->
+            task
 
 
 
@@ -208,10 +245,18 @@ andThenJoinWith t2 t1 =
     t1 |> Task.andThen (\a -> Task.map (join2 a) t2)
 
 
-doALot : Task Http.Error String
-doALot =
-    List.range 0 3590
-        |> List.foldl (\_ t -> t |> Task.andThenDo (longRequest_ 0)) (longRequest_ 0)
+batchAndSequence : Task Http.Error String
+batchAndSequence =
+    List.repeat 50 (List.repeat 20 (longRequest_ 100) |> Task.batch)
+        |> Task.sequence
+        |> Task.map (List.concat >> String.concat)
+
+
+bigSequence : Task Http.Error String
+bigSequence =
+    List.repeat 1000 (longRequest_ 0)
+        |> Task.batch
+        |> Task.map String.concat
 
 
 badChain3 : Task Error String
@@ -276,7 +321,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError doALot)
+                        (Task.mapError HttpError bigSequence)
             in
             ( { tasks = tasks }, cmd )
 
@@ -289,7 +334,7 @@ update msg model =
                         , id = String.fromInt id
                         , pool = model.tasks
                         }
-                        (slowSequence id)
+                        (Task.mapError HttpError bigSequence)
             in
             ( { tasks = tasks }, cmd )
 
