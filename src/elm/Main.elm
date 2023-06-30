@@ -59,24 +59,14 @@ init _ =
     let
         _ =
             Debug.log "Fake2"
-                (List.repeat 1000000 ()
-                    |> mapALot Fake2.create
+                (List.repeat 1000000 Fake2.create
+                    |> Fake2.sequence
                     |> Fake2.run 0
                 )
     in
     ( { tasks = Task.pool }
     , Cmd.none
     )
-
-
-andThenALot : Fake2.Task String -> List a -> Fake2.Task String
-andThenALot task xs =
-    case xs of
-        _ :: rest ->
-            task |> Fake2.andThen (\_ -> andThenALot Fake2.create rest)
-
-        [] ->
-            task
 
 
 mapALot : Fake2.Task String -> List a -> Fake2.Task String

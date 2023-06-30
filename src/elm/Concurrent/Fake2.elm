@@ -65,6 +65,25 @@ create =
         )
 
 
+
+-- Sequence and Batch
+
+
+sequence : List (Task a) -> Task (List a)
+sequence tasks =
+    sequenceHelp tasks (succeed [])
+
+
+sequenceHelp : List (Task a) -> Task (List a) -> Task (List a)
+sequenceHelp tasks task =
+    case tasks of
+        todo :: rest ->
+            task |> andThen (\xs -> sequenceHelp rest (map (\a -> a :: xs) todo))
+
+        [] ->
+            task
+
+
 run : Int -> Task a -> a
 run n task =
     case task of
