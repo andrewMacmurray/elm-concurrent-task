@@ -210,7 +210,7 @@ andThenJoinWith t2 t1 =
 
 batchAndSequence : Task Http.Error String
 batchAndSequence =
-    List.repeat 50 (List.repeat 20 (longRequest_ 100) |> Task.batch)
+    List.repeat 10 (List.repeat 100 (longRequest_ 100) |> Task.batch)
         |> Task.sequence
         |> Task.map (List.concat >> String.concat)
 

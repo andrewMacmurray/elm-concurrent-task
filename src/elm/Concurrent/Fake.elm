@@ -1,78 +1,100 @@
 module Concurrent.Fake exposing (..)
 
--- State
-
-
-type State a
-    = State (Int -> ( Int, Task a ))
+-- Module to test out optimizations
 
 
 type Task a
-    = Pending (State a)
+    = Pending (Int -> ( Int, Task a ))
     | Done a
 
 
-map : (a -> b) -> State a -> State b
-map f (State run) =
-    State
-        (\state1 ->
-            let
-                ( state2, task ) =
-                    run state1
-            in
-            case task of
-                Pending (State r) ->
-                    mapHelp f r Pending state2
+map : (a -> b) -> Task a -> Task b
+map f task =
+    case task of
+        Done a ->
+            Done (f a)
 
-                Done a ->
-                    ( state2, Done (f a) )
-        )
-
-
-type alias Unwrapped a =
-    Int -> ( Int, Task a )
+        Pending next ->
+            Pending
+                (\s ->
+                    let
+                        ( s_, a ) =
+                            next s
+                    in
+                    ( s_, map f a )
+                )
 
 
-mapHelp : (a -> b) -> Unwrapped a -> (State b -> Task b) -> Unwrapped b
-mapHelp f run build state =
-    case run state of
-        ( state_, Pending (State run_) ) ->
-            mapHelp f run_ (\st -> build (wrap (Pending st))) state_
+andThen : (a -> Task b) -> Task a -> Task b
+andThen f task =
+    case task of
+        Done a ->
+            f a
 
-        ( state_, Done a ) ->
-            ( state_, build (wrap (Done (f a))) )
+        Pending next ->
+            Pending
+                (\s ->
+                    let
+                        ( s_, task_ ) =
+                            next s
+                    in
+                    case task_ of
+                        Done a ->
+                            ( s_, f a )
+
+                        Pending _ ->
+                            ( s_, andThen f task_ )
+                )
 
 
-wrap : Task a -> State a
-wrap t =
-    State (\s -> ( s, t ))
-
-
-createTask : State String
-createTask =
-    State
+succeed : a -> Task a
+succeed a =
+    Pending
         (\n ->
-            ( n + 1
-            , Pending (State (\n_ -> ( n_, Done "some value" )))
+            ( n
+            , Done a
             )
         )
 
 
-andThen : (a -> State b) -> State a -> State b
-andThen f (State next) =
-    State
-        (\state1 ->
-            let
-                ( state2, task ) =
-                    next state1
-
-                (State next_) =
-                    case task of
-                        Pending s ->
-                            State (\state_ -> ( state_, Pending (andThen f s) ))
-
-                        Done a ->
-                            f a
-            in
-            next_ state2
+create : Task String
+create =
+    Pending
+        (\n ->
+            ( n + 1
+            , Done (String.fromInt n)
+            )
         )
+
+
+
+-- Sequence and Batch
+
+
+sequence : List (Task a) -> Task (List a)
+sequence tasks =
+    sequenceHelp tasks (succeed [])
+
+
+sequenceHelp : List (Task a) -> Task (List a) -> Task (List a)
+sequenceHelp tasks task =
+    case tasks of
+        todo :: rest ->
+            task |> andThen (\xs -> sequenceHelp rest (map (\a -> a :: xs) todo))
+
+        [] ->
+            task
+
+
+run : Int -> Task a -> a
+run n task =
+    case task of
+        Done a ->
+            a
+
+        Pending next ->
+            let
+                ( n_, tsk ) =
+                    next n
+            in
+            run n_ tsk

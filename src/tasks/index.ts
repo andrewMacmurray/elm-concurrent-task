@@ -66,7 +66,6 @@ export function register(options: Options): void {
   const tasks = createTasks(options);
   const subscribe = options.ports.send.subscribe;
   const send = options.ports.receive.send;
-  const debouncedSend = debounce(send, 50);
 
   subscribe(async (defs) => {
     for (let i = 0; i < defs.length; i++) {
@@ -87,6 +86,8 @@ export function register(options: Options): void {
         ]);
       }
     }
+
+    const debouncedSend = debounce(send, debounceInterval(defs));
 
     defs.map(async (def) => {
       try {
@@ -118,31 +119,33 @@ export function register(options: Options): void {
   });
 }
 
+function debounceInterval(defs: TaskDefinition[]): number {
+  return defs.length > 10 ? 20 : 0;
+}
+
 function debounce(send: (res: TaskResult[]) => void, wait: number) {
   let timeout;
   let results: TaskResult[] = [];
 
-  // This gets called e
-  // We spread (...args) to capture any number of parameters we want to pass
-  return function executedFunction(taskResult: TaskResult) {
+  return function enqueueResult(taskResult: TaskResult) {
+    // queue up each task result
     results.push(taskResult);
+
     const later = () => {
-      // clear the timeout to indicate the debounce ended
-      // and make sure it is all cleaned up
+      // clean up timeout after debounce has ended
       clearTimeout(timeout);
 
-      // Execute the callback
+      // send batch results to elm
       send(results);
+      // clear the queue after results sent
       results = [];
     };
 
-    // This will reset the waiting every function execution.
-    // This is the step that prevents the function from
-    // being executed because it will never reach the
-    // inside of the previous setTimeout
+    // Reset the waiting every function execution.
+    // Prevents send being called if another task result arrives quickly
     clearTimeout(timeout);
 
-    // Restart the debounce waiting period.
+    // Restart the waiting period.
     // setTimeout returns a truthy value
     timeout = setTimeout(later, wait);
   };
