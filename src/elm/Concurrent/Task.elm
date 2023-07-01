@@ -500,7 +500,10 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                 ( _, Pending defs _ ) ->
                     ( updateProgressFor attemptId
                         { task = nextProgress
-                        , sent = recordSent defs progress.sent
+                        , sent =
+                            progress.sent
+                                |> recordSent defs
+                                |> removeCompleted results
                         }
                         pool_
                     , defs
@@ -521,6 +524,11 @@ runTask res ( ids, State run ) =
 recordSent : List Definition_ -> Set Id -> Set Id
 recordSent defs sent =
     Set.union sent (toSentIds defs)
+
+
+removeCompleted : TaskResults -> Set Id -> Set Id
+removeCompleted res sent =
+    Set.diff sent (Set.fromList (Dict.keys res))
 
 
 toSentIds : List Definition_ -> Set Id

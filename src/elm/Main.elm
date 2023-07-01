@@ -217,8 +217,8 @@ batchAndSequence =
 
 bigBatch : Task Http.Error String
 bigBatch =
-    List.repeat 800 (longRequest_ 0)
-        |> Task.batch
+    List.repeat 100000 (longRequest_ 0)
+        |> Task.sequence
         |> Task.map String.concat
 
 
