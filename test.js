@@ -4,19 +4,23 @@ doBatch();
 // doSequence();
 
 function doBatch() {
-  Promise.all(Array.from({ length: 800 }).map((_, i) => doRequest(i)))
+  console.time("batch");
+  Promise.all(Array.from({ length: 1000 }).map((_, i) => doRequest(i)))
     .then((xs) => xs.join(","))
-    .then(console.log);
+    .then(console.log)
+    .then(() => console.timeEnd("batch"));
 }
 
 function doSequence() {
-  Array.from({ length: 800 })
+  console.time("sequence");
+  Array.from({ length: 10000 })
     .reduce(
       (acc, _, i) =>
         acc.then((res) => doRequest(i).then((res2) => `${res},${res2}`)),
       Promise.resolve("start")
     )
-    .then(console.log);
+    .then(console.log)
+    .then(() => console.timeEnd("sequence"));
 }
 
 function doRequest(i) {

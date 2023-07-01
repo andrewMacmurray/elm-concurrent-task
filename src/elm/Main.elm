@@ -217,9 +217,11 @@ batchAndSequence =
 
 bigBatch : Task Http.Error String
 bigBatch =
-    List.repeat 100000 (longRequest_ 0)
-        |> Task.sequence
-        |> Task.map String.concat
+    timeExecution "bigBatch"
+        (List.repeat 1000 (longRequest_ 0)
+            |> Task.batch
+            |> Task.map String.concat
+        )
 
 
 badChain3 : Task Error String
@@ -473,6 +475,43 @@ slowInt id =
             , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
             }
         )
+
+
+
+-- Time Execution
+
+
+timeExecution : String -> Task x a -> Task x a
+timeExecution label task =
+    consoleTime label
+        |> Task.andThenDo
+            (task
+                |> Task.andThen
+                    (\res ->
+                        consoleTimeEnd label
+                            |> Task.map (always res)
+                    )
+            )
+
+
+consoleTime : String -> Task x ()
+consoleTime label =
+    Task.define
+        { function = "consoleTime"
+        , args = Encode.string label
+        , expect = Task.expectWhatever
+        }
+        |> Task.onError (always (Task.succeed ()))
+
+
+consoleTimeEnd : String -> Task x ()
+consoleTimeEnd label =
+    Task.define
+        { function = "consoleTimeEnd"
+        , args = Encode.string label
+        , expect = Task.expectWhatever
+        }
+        |> Task.onError (always (Task.succeed ()))
 
 
 
