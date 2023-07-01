@@ -254,7 +254,7 @@ map5 f t1 t2 t3 t4 t5 =
 
 sequence : List (Task x a) -> Task x (List a)
 sequence tasks =
-    sequenceHelp tasks (succeed [])
+    sequenceHelp tasks (succeed []) |> map List.reverse
 
 
 sequenceHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
@@ -273,7 +273,7 @@ sequenceHelp tasks task =
 
 batch : List (Task x a) -> Task x (List a)
 batch tasks =
-    batchHelp tasks (succeed [])
+    batchHelp tasks (succeed []) |> map List.reverse
 
 
 batchHelp : List (Task x a) -> Task x (List a) -> Task x (List a)

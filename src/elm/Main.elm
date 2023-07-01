@@ -61,7 +61,7 @@ init _ =
 
 
 
--- Update
+-- Example Tasks
 
 
 longChain : Task Error String
@@ -270,6 +270,10 @@ doThree =
             |> Task.onError (\_ -> httpError)
             |> Task.onError (\_ -> longRequest_ 150)
         )
+
+
+
+-- Update
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )

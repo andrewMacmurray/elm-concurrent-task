@@ -34,6 +34,8 @@ function toHttpError(err: AxiosError): HttpError {
       return "NETWORK_ERROR";
     case "ECONNREFUSED":
       return "NETWORK_ERROR";
+    case "ECONNRESET":
+      return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
     default:
