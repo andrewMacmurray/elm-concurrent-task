@@ -64,114 +64,106 @@ init _ =
 -- Example Tasks
 
 
-longChain : Task Error String
+longChain : Task Http.Error String
 longChain =
-    Task.mapError HttpError
+    Task.map3 join3
+        (longRequest_ 100)
+        (longRequest_ 100)
+        (httpError
+            |> Task.onError (\_ -> longRequest_ 100)
+            |> Task.andThen (\_ -> longRequest_ 100)
+        )
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo httpError
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> longRequest_ 1000)
+        |> Task.andThenDo
+            (httpError
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> longRequest_ 500)
+                |> Task.andThenDo (longRequest_ 500)
+            )
+        |> Task.andThenDo (longRequest_ 300)
+
+
+someChain : Task Http.Error String
+someChain =
+    Task.map2 join2
+        (Task.map3 join3
+            (httpError
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> longRequest_ 100)
+                |> Task.onError (\_ -> longRequest_ 100)
+            )
+            (httpError |> Task.onError (\_ -> longRequest_ 100))
+            (longRequest_ 100)
+        )
         (Task.map3 join3
             (longRequest_ 100)
             (longRequest_ 100)
-            (httpError
-                |> Task.onError (\_ -> longRequest_ 100)
-                |> Task.andThen (\_ -> longRequest_ 100)
-            )
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo httpError
-            |> Task.onError (\_ -> httpError)
-            |> Task.onError (\_ -> httpError)
-            |> Task.onError (\_ -> httpError)
-            |> Task.onError (\_ -> httpError)
-            |> Task.onError (\_ -> httpError)
-            |> Task.onError (\_ -> longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.onError (\_ -> httpError)
-            |> Task.onError (\_ -> httpError)
-            |> Task.onError (\_ -> longRequest_ 1000)
-            |> Task.andThenDo
-                (httpError
-                    |> Task.onError (\_ -> httpError)
-                    |> Task.onError (\_ -> httpError)
-                    |> Task.onError (\_ -> longRequest_ 500)
-                    |> Task.andThenDo (longRequest_ 500)
-                )
-            |> Task.andThenDo (longRequest_ 300)
+            (longRequest_ 100)
         )
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
 
 
-someChain : Task Error String
-someChain =
-    Task.mapError HttpError
-        (Task.map2 join2
-            (Task.map3 join3
-                (httpError
-                    |> Task.onError (\_ -> httpError)
-                    |> Task.onError (\_ -> httpError)
-                    |> Task.onError (\_ -> longRequest_ 100)
-                    |> Task.onError (\_ -> longRequest_ 100)
-                )
-                (httpError |> Task.onError (\_ -> longRequest_ 100))
-                (longRequest_ 100)
-            )
-            (Task.map3 join3
-                (longRequest_ 100)
-                (longRequest_ 100)
-                (longRequest_ 100)
-            )
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-        )
-
-
-badChain : Task Error String
+badChain : Task Http.Error String
 badChain =
-    Task.mapError HttpError
-        (Task.map2 join2
-            (longRequest_ 100)
-            (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo
-                (httpError
-                    |> Task.onError (\_ -> httpError)
-                    |> Task.onError (\_ -> longRequest_ 100)
-                )
-            |> Task.andThenDo
-                (httpError
-                    |> Task.onError (\_ -> httpError)
-                    |> Task.onError (\_ -> longRequest_ 100)
-                    |> Task.onError (\_ -> longRequest_ 100)
-                    |> Task.andThenDo (longRequest_ 100)
-                )
-            |> Task.andThenDo (longRequest_ 100)
-        )
+    Task.map2 join2
+        (longRequest_ 100)
+        (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo
+            (httpError
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> longRequest_ 100)
+            )
+        |> Task.andThenDo
+            (httpError
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> longRequest_ 100)
+                |> Task.onError (\_ -> longRequest_ 100)
+                |> Task.andThenDo (longRequest_ 100)
+            )
+        |> Task.andThenDo (longRequest_ 100)
 
 
-badChain2 : Task Error String
+badChain2 : Task Http.Error String
 badChain2 =
-    Task.mapError HttpError
-        (longRequest_ 100
-            |> Task.andThenDo
-                (httpError
-                    |> Task.onError
-                        (\_ ->
-                            httpError
-                                |> Task.onError
-                                    (\_ ->
-                                        httpError
-                                            |> Task.onError
-                                                (\_ ->
-                                                    longRequest_ 100
-                                                )
-                                    )
-                        )
-                )
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-        )
+    longRequest_ 100
+        |> Task.andThenDo
+            (httpError
+                |> Task.onError
+                    (\_ ->
+                        httpError
+                            |> Task.onError
+                                (\_ ->
+                                    httpError
+                                        |> Task.onError
+                                            (\_ ->
+                                                longRequest_ 100
+                                            )
+                                )
+                    )
+            )
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
 
 
 doFour : Task Http.Error String
@@ -241,14 +233,12 @@ badChain3 =
         )
 
 
-doThree2 : Task Error String
+doThree2 : Task Http.Error String
 doThree2 =
-    Task.mapError HttpError
-        (Task.map3 join3
-            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
-            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
-            (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
-        )
+    Task.map3 join3
+        (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
+        (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
+        (longRequest_ 100 |> andThenJoinWith (longRequest_ 100))
 
 
 doThree : Task Http.Error String
@@ -290,7 +280,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError bigBatch)
+                        (Task.mapError HttpError longChain)
             in
             ( { tasks = tasks }, cmd )
 
