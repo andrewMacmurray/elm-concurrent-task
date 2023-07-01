@@ -71,6 +71,7 @@ export function register(options: Options): void {
   const tasks = createTasks(options);
   const subscribe = options.ports.send.subscribe;
   const send = options.ports.receive.send;
+  const debouncedSend = debounce(send, 50);
 
   subscribe(async (defs) => {
     for (let i = 0; i < defs.length; i++) {
@@ -97,42 +98,68 @@ export function register(options: Options): void {
 
     defs.map(async (def) => {
       try {
-        console.log(
-          "--STARTING--",
-          def.function,
-          `${def.attemptId} - ${def.taskId}`
-        );
+        // console.log(
+        //   "--STARTING--",
+        //   def.function,
+        //   `${def.attemptId} - ${def.taskId}`
+        // );
         const result = await tasks[def.function](def.args);
-        send({
+        debouncedSend({
           attemptId: def.attemptId,
-          results: [
-            {
-              attemptId: def.attemptId,
-              taskId: def.taskId,
-              result: { status: "success", value: result },
-            },
-          ],
+          taskId: def.taskId,
+          result: { status: "success", value: result },
         });
       } catch (e) {
-        send({
+        debouncedSend({
           attemptId: def.attemptId,
-          results: [
-            {
-              attemptId: def.attemptId,
-              taskId: def.taskId,
-              result: {
-                status: "error",
-                error: {
-                  reason: "js_exception",
-                  message: `${def.function} threw an execption: ${e.message}`,
-                },
-              },
+          taskId: def.taskId,
+          result: {
+            status: "error",
+            error: {
+              reason: "js_exception",
+              message: `${def.function} threw an execption: ${e.message}`,
             },
-          ],
+          },
         });
       }
     });
   });
+}
+
+function debounce(send: (TaskResults) => void, wait: number) {
+  let timeout;
+  let results: TaskResults = { attemptId: "", results: [] };
+
+  // This is the function that is returned and will be executed many times
+  // We spread (...args) to capture any number of parameters we want to pass
+  return function executedFunction(taskResult: TaskResult) {
+    results.attemptId = taskResult.attemptId;
+    results.results.push(taskResult);
+    // console.log("adding to queue");
+    // The callback function to be executed after
+    // the debounce time has elapsed
+    const later = () => {
+      // clear the timeout to indicate the debounce ended
+      // and make sure it is all cleaned up
+      clearTimeout(timeout);
+
+      // Execute the callback
+      console.log("sending", results);
+      send(results);
+      console.log("clearing");
+      results = { attemptId: "", results: [] };
+    };
+
+    // This will reset the waiting every function execution.
+    // This is the step that prevents the function from
+    // being executed because it will never reach the
+    // inside of the previous setTimeout
+    clearTimeout(timeout);
+
+    // Restart the debounce waiting period.
+    // setTimeout returns a truthy value
+    timeout = setTimeout(later, wait);
+  };
 }
 
 function createTasks(options: Options): Tasks {
