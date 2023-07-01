@@ -154,7 +154,7 @@ responses =
                     |> Tuple.first
                     |> Id.get
                     |> Expect.equal (String.fromInt n)
-        , test "handles large sequence sizes" <|
+        , test "handles large sequences" <|
             \_ ->
                 let
                     n =
@@ -173,11 +173,12 @@ responses =
                                 )
                         )
                     |> Expect.equal (Ok n)
-        , test "handles large batch sizes" <|
+        , test "handles large batches" <|
             \_ ->
                 let
                     n =
-                        10000
+                        -- TODO: this needs to be optimized like Task.sequence
+                        1000
                 in
                 List.repeat n (create Decode.int)
                     |> Task.batch

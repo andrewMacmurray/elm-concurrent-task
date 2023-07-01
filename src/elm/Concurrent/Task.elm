@@ -657,33 +657,27 @@ type alias TestEval a =
 
 testEval : TestEval a -> ( Ids, Result Error a )
 testEval options =
-    --let
-    --    results =
-    --        options.results
-    --            |> List.head
-    --            |> Maybe.withDefault ( 100, Encode.null )
-    --            |> Tuple.mapFirst String.fromInt
-    --            |> (\( id, result ) ->
-    --                    { attemptId = "attempt"
-    --                    , taskId = id
-    --                    , result = result
-    --                    }
-    --               )
-    --in
-    --case runTask results ( options.ids, options.task ) of
-    --    ( ids, Done a ) ->
-    --        ( ids, a )
-    --
-    --    ( ids, Pending _ next ) ->
-    --        if options.maxDepth > 0 then
-    --            testEval
-    --                { options
-    --                    | maxDepth = options.maxDepth - 1
-    --                    , results = List.drop 1 options.results
-    --                    , task = next
-    --                    , ids = ids
-    --                }
-    --
-    --        else
-    --            ( ids, Err (InternalError "timeout") )
-    Debug.todo ""
+    let
+        results =
+            options.results
+                |> List.head
+                |> Maybe.withDefault ( 100, Encode.null )
+                |> Tuple.mapFirst String.fromInt
+                |> (\( id, result ) -> Dict.singleton id result)
+    in
+    case runTask results ( options.ids, options.task ) of
+        ( ids, Done a ) ->
+            ( ids, a )
+
+        ( ids, Pending _ next ) ->
+            if options.maxDepth > 0 then
+                testEval
+                    { options
+                        | maxDepth = options.maxDepth - 1
+                        , results = List.drop 1 options.results
+                        , task = next
+                        , ids = ids
+                    }
+
+            else
+                ( ids, Err (InternalError "timeout") )
