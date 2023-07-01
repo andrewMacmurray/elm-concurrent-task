@@ -297,7 +297,7 @@ update msg model =
                         , id = String.fromInt id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError bigBatch)
+                        (slowSequence id)
             in
             ( { tasks = tasks }, cmd )
 

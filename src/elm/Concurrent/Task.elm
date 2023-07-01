@@ -57,26 +57,32 @@ type alias Ids =
     Id.Sequence
 
 
+type alias TaskId =
+    Id
+
+
 type alias Definition_ =
-    { taskId : Id
+    { taskId : TaskId
     , function : String
     , args : Encode.Value
     }
 
 
+type alias BatchResults =
+    Dict AttemptId TaskResults
+
+
 type alias TaskResults =
-    Dict Id Decode.Value
+    Dict TaskId Decode.Value
 
 
 type alias RawResults =
-    { attemptId : Id
-    , results : List RawResult
-    }
+    List RawResult
 
 
 type alias RawResult =
-    { attemptId : Id
-    , taskId : Id
+    { attemptId : AttemptId
+    , taskId : TaskId
     , result : Decode.Value
     }
 
@@ -402,27 +408,31 @@ type Pool x a
 
 
 type alias Pool_ x a =
-    Dict Id (Progress x a)
+    Dict AttemptId (Progress x a)
 
 
 type alias Progress x a =
-    { sent : Set Id
+    { sent : Set TaskId
     , task : ( Ids, Task x a )
     }
 
 
+type alias AttemptId =
+    String
+
+
 type alias Attempt msg x a =
-    { id : Id
+    { id : AttemptId
     , pool : Pool x a
     , send : Encode.Value -> Cmd msg
-    , onComplete : Id -> Result x a -> msg
+    , onComplete : AttemptId -> Result x a -> msg
     }
 
 
 type alias OnProgress msg x a =
     { send : Encode.Value -> Cmd msg
     , receive : (RawResults -> msg) -> Sub msg
-    , onComplete : Id -> Result x a -> msg
+    , onComplete : AttemptId -> Result x a -> msg
     , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
 
@@ -448,64 +458,64 @@ attempt attempt_ task =
 onProgress : OnProgress msg x a -> Pool x a -> Sub msg
 onProgress options pool_ =
     options.receive
-        (\result ->
-            case findAttempt result.attemptId pool_ of
-                Nothing ->
-                    options.onProgress ( pool_, Cmd.none )
+        (\rawResults ->
+            toBatchResults rawResults
+                |> Dict.toList
+                |> List.foldl
+                    (\( attempt_, results ) ( p, cmd ) ->
+                        case findAttempt attempt_ p of
+                            Nothing ->
+                                ( p, cmd )
 
-                Just progress ->
-                    let
-                        results : TaskResults
-                        results =
-                            toResults result.results
-                    in
-                    case runTask results progress.task of
-                        ( ids_, Pending _ next_ ) ->
-                            let
-                                nextProgress =
-                                    ( ids_, next_ )
-                            in
-                            case runTask results nextProgress of
-                                ( _, Done res ) ->
-                                    case res of
-                                        Ok a ->
-                                            options.onProgress
-                                                ( removeFromPool result.attemptId pool_
-                                                , sendResult options.onComplete result.attemptId (Ok a)
-                                                )
-
-                                        Err e ->
-                                            options.onProgress
-                                                ( removeFromPool result.attemptId pool_
-                                                , sendResult options.onComplete result.attemptId (Err e)
-                                                )
-
-                                ( _, Pending defs _ ) ->
-                                    options.onProgress
-                                        ( updateProgressFor result.attemptId
-                                            { task = nextProgress
-                                            , sent = recordSent defs progress.sent
-                                            }
-                                            pool_
-                                        , defs
-                                            |> List.filter (notStarted progress)
-                                            |> encodeDefinitions result.attemptId
-                                            |> options.send
-                                        )
-
-                        ( _, _ ) ->
-                            options.onProgress ( pool_, Cmd.none )
+                            Just progress ->
+                                updateAttempt options p ( attempt_, results ) progress
+                                    |> Tuple.mapSecond (\c -> Cmd.batch [ c, cmd ])
+                    )
+                    ( pool_, Cmd.none )
+                |> options.onProgress
         )
+
+
+updateAttempt : OnProgress msg x a -> Pool x a -> ( AttemptId, TaskResults ) -> Progress x a -> ( Pool x a, Cmd msg )
+updateAttempt options pool_ ( attemptId, results ) progress =
+    case runTask results progress.task of
+        ( ids_, Pending _ next_ ) ->
+            let
+                nextProgress =
+                    ( ids_, next_ )
+            in
+            case runTask results nextProgress of
+                ( _, Done res ) ->
+                    case res of
+                        Ok a ->
+                            ( removeFromPool attemptId pool_
+                            , sendResult options.onComplete attemptId (Ok a)
+                            )
+
+                        Err e ->
+                            ( removeFromPool attemptId pool_
+                            , sendResult options.onComplete attemptId (Err e)
+                            )
+
+                ( _, Pending defs _ ) ->
+                    ( updateProgressFor attemptId
+                        { task = nextProgress
+                        , sent = recordSent defs progress.sent
+                        }
+                        pool_
+                    , defs
+                        |> List.filter (notStarted progress)
+                        |> encodeDefinitions attemptId
+                        |> options.send
+                    )
+
+        ( _, _ ) ->
+            ( pool_, Cmd.none )
 
 
 runTask : TaskResults -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
 runTask res ( ids, State run ) =
     run res ids
-
-
-toResults : List RawResult -> TaskResults
-toResults =
-    List.map (\r -> ( r.taskId, r.result )) >> Dict.fromList
 
 
 recordSent : List Definition_ -> Set Id -> Set Id
@@ -526,6 +536,24 @@ sendResult onComplete id res =
 notStarted : Progress x a -> Definition_ -> Bool
 notStarted model def =
     not (Set.member def.taskId model.sent)
+
+
+toBatchResults : RawResults -> BatchResults
+toBatchResults =
+    List.foldl
+        (\result batch_ ->
+            Dict.update result.attemptId
+                (\attempt_ ->
+                    case attempt_ of
+                        Nothing ->
+                            Just (Dict.singleton result.taskId result.result)
+
+                        Just attempt__ ->
+                            Just (Dict.insert result.taskId result.result attempt__)
+                )
+                batch_
+        )
+        Dict.empty
 
 
 
