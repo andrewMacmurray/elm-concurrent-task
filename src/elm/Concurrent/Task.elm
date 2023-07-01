@@ -4,8 +4,9 @@ module Concurrent.Task exposing
     , Error(..)
     , OnProgress
     , Pool
+    , RawResult
+    , RawResults
     , Task
-    , TaskResult
     , andMap
     , andThen
     , andThenDo
@@ -44,7 +45,7 @@ import Task as CoreTask
 
 
 type Task x a
-    = State (TaskResult -> Ids -> ( Ids, Task_ x a ))
+    = State (TaskResults -> Ids -> ( Ids, Task_ x a ))
 
 
 type Task_ x a
@@ -63,7 +64,17 @@ type alias Definition_ =
     }
 
 
-type alias TaskResult =
+type alias TaskResults =
+    Dict Id Decode.Value
+
+
+type alias RawResults =
+    { attemptId : Id
+    , results : List RawResult
+    }
+
+
+type alias RawResult =
     { attemptId : Id
     , taskId : Id
     , result : Decode.Value
@@ -109,7 +120,7 @@ type alias Definition a =
 define : Definition a -> Task Error a
 define a =
     State
-        (\result ids ->
+        (\results ids ->
             let
                 taskId =
                     Id.get ids
@@ -121,15 +132,16 @@ define a =
                   , args = a.args
                   }
                 ]
-                (if result.taskId == taskId then
-                    result.result
-                        |> Decode.decodeValue (decodeResponse a.expect)
-                        |> Result.mapError DecodeResponseError
-                        |> Result.andThen identity
-                        |> fromResult
+                (case Dict.get taskId results of
+                    Just result ->
+                        result
+                            |> Decode.decodeValue (decodeResponse a.expect)
+                            |> Result.mapError DecodeResponseError
+                            |> Result.andThen identity
+                            |> fromResult
 
-                 else
-                    runWith ids (define a)
+                    Nothing ->
+                        runWith ids (define a)
                 )
             )
         )
@@ -409,7 +421,7 @@ type alias Attempt msg x a =
 
 type alias OnProgress msg x a =
     { send : Encode.Value -> Cmd msg
-    , receive : (TaskResult -> msg) -> Sub msg
+    , receive : (RawResults -> msg) -> Sub msg
     , onComplete : Id -> Result x a -> msg
     , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
@@ -417,14 +429,7 @@ type alias OnProgress msg x a =
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
 attempt attempt_ task =
-    case
-        runTask
-            { attemptId = attempt_.id
-            , taskId = Id.get Id.init
-            , result = Encode.null
-            }
-            ( Id.init, task )
-    of
+    case runTask Dict.empty ( Id.init, task ) of
         ( _, Done res ) ->
             ( attempt_.pool
             , sendResult attempt_.onComplete attempt_.id res
@@ -449,13 +454,18 @@ onProgress options pool_ =
                     options.onProgress ( pool_, Cmd.none )
 
                 Just progress ->
-                    case runTask result progress.task of
+                    let
+                        results : TaskResults
+                        results =
+                            toResults result.results
+                    in
+                    case runTask results progress.task of
                         ( ids_, Pending _ next_ ) ->
                             let
                                 nextProgress =
                                     ( ids_, next_ )
                             in
-                            case runTask result nextProgress of
+                            case runTask results nextProgress of
                                 ( _, Done res ) ->
                                     case res of
                                         Ok a ->
@@ -488,9 +498,14 @@ onProgress options pool_ =
         )
 
 
-runTask : TaskResult -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
+runTask : TaskResults -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
 runTask res ( ids, State run ) =
     run res ids
+
+
+toResults : List RawResult -> TaskResults
+toResults =
+    List.map (\r -> ( r.taskId, r.result )) >> Dict.fromList
 
 
 recordSent : List Definition_ -> Set Id -> Set Id
@@ -614,32 +629,33 @@ type alias TestEval a =
 
 testEval : TestEval a -> ( Ids, Result Error a )
 testEval options =
-    let
-        results =
-            options.results
-                |> List.head
-                |> Maybe.withDefault ( 100, Encode.null )
-                |> Tuple.mapFirst String.fromInt
-                |> (\( id, result ) ->
-                        { attemptId = "attempt"
-                        , taskId = id
-                        , result = result
-                        }
-                   )
-    in
-    case runTask results ( options.ids, options.task ) of
-        ( ids, Done a ) ->
-            ( ids, a )
-
-        ( ids, Pending _ next ) ->
-            if options.maxDepth > 0 then
-                testEval
-                    { options
-                        | maxDepth = options.maxDepth - 1
-                        , results = List.drop 1 options.results
-                        , task = next
-                        , ids = ids
-                    }
-
-            else
-                ( ids, Err (InternalError "timeout") )
+    --let
+    --    results =
+    --        options.results
+    --            |> List.head
+    --            |> Maybe.withDefault ( 100, Encode.null )
+    --            |> Tuple.mapFirst String.fromInt
+    --            |> (\( id, result ) ->
+    --                    { attemptId = "attempt"
+    --                    , taskId = id
+    --                    , result = result
+    --                    }
+    --               )
+    --in
+    --case runTask results ( options.ids, options.task ) of
+    --    ( ids, Done a ) ->
+    --        ( ids, a )
+    --
+    --    ( ids, Pending _ next ) ->
+    --        if options.maxDepth > 0 then
+    --            testEval
+    --                { options
+    --                    | maxDepth = options.maxDepth - 1
+    --                    , results = List.drop 1 options.results
+    --                    , task = next
+    --                    , ids = ids
+    --                }
+    --
+    --        else
+    --            ( ids, Err (InternalError "timeout") )
+    Debug.todo ""

@@ -1,6 +1,5 @@
 port module Main exposing (main)
 
-import Concurrent.Fake2 as Fake2
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
@@ -56,35 +55,9 @@ type Error
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    let
-        _ =
-            Debug.log "Fake2"
-                (List.repeat 1000000 Fake2.create
-                    |> Fake2.sequence
-                    |> Fake2.run 0
-                )
-    in
     ( { tasks = Task.pool }
     , Cmd.none
     )
-
-
-mapALot : Fake2.Task String -> List a -> Fake2.Task String
-mapALot task xs =
-    case xs of
-        _ :: rest ->
-            task
-                |> Fake2.andThen
-                    (\x ->
-                        Fake2.create
-                            |> Fake2.andThen
-                                (\y ->
-                                    mapALot (Fake2.succeed (x ++ y)) rest
-                                )
-                    )
-
-        [] ->
-            task
 
 
 
@@ -242,9 +215,9 @@ batchAndSequence =
         |> Task.map (List.concat >> String.concat)
 
 
-bigSequence : Task Http.Error String
-bigSequence =
-    List.repeat 1000 (longRequest_ 0)
+bigBatch : Task Http.Error String
+bigBatch =
+    List.repeat 800 (longRequest_ 0)
         |> Task.batch
         |> Task.map String.concat
 
@@ -311,7 +284,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError bigSequence)
+                        (Task.mapError HttpError bigBatch)
             in
             ( { tasks = tasks }, cmd )
 
@@ -324,7 +297,7 @@ update msg model =
                         , id = String.fromInt id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError bigSequence)
+                        (Task.mapError HttpError bigBatch)
             in
             ( { tasks = tasks }, cmd )
 
@@ -578,7 +551,7 @@ subscriptions model =
 port send : Decode.Value -> Cmd msg
 
 
-port receive : (Task.TaskResult -> msg) -> Sub msg
+port receive : (Task.RawResults -> msg) -> Sub msg
 
 
 port manualEnter : (String -> msg) -> Sub msg

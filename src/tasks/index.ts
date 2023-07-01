@@ -4,7 +4,7 @@ export interface ElmPorts {
   send: {
     subscribe: (callback: (defs: TaskDefinition[]) => Promise<void>) => void;
   };
-  receive: { send: (result: TaskResult) => void };
+  receive: { send: (result: TaskResults) => void };
 }
 
 export interface Builtins {
@@ -21,6 +21,11 @@ export interface TaskDefinition {
   taskId: string;
   function: string;
   args: any;
+}
+
+export interface TaskResults {
+  attemptId: string;
+  results: TaskResult[];
 }
 
 export interface TaskResult {
@@ -73,14 +78,19 @@ export function register(options: Options): void {
       if (!tasks[def.function]) {
         return send({
           attemptId: def.attemptId,
-          taskId: def.taskId,
-          result: {
-            status: "error",
-            error: {
-              reason: "missing_function",
-              message: `${def.function} is not registered`,
+          results: [
+            {
+              attemptId: def.attemptId,
+              taskId: def.taskId,
+              result: {
+                status: "error",
+                error: {
+                  reason: "missing_function",
+                  message: `${def.function} is not registered`,
+                },
+              },
             },
-          },
+          ],
         });
       }
     }
@@ -95,20 +105,30 @@ export function register(options: Options): void {
         const result = await tasks[def.function](def.args);
         send({
           attemptId: def.attemptId,
-          taskId: def.taskId,
-          result: { status: "success", value: result },
+          results: [
+            {
+              attemptId: def.attemptId,
+              taskId: def.taskId,
+              result: { status: "success", value: result },
+            },
+          ],
         });
       } catch (e) {
         send({
           attemptId: def.attemptId,
-          taskId: def.taskId,
-          result: {
-            status: "error",
-            error: {
-              reason: "js_exception",
-              message: `${def.function} threw an execption: ${e.message}`,
+          results: [
+            {
+              attemptId: def.attemptId,
+              taskId: def.taskId,
+              result: {
+                status: "error",
+                error: {
+                  reason: "js_exception",
+                  message: `${def.function} threw an execption: ${e.message}`,
+                },
+              },
             },
-          },
+          ],
         });
       }
     });
