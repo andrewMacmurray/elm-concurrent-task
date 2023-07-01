@@ -37,6 +37,7 @@ const rl = readline.createInterface({
 });
 
 ask();
+// fireMany();
 
 ports.sendResult.subscribe((result) => {
   console.log(result);
