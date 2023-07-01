@@ -102,7 +102,7 @@ jsonBody =
 request : Request a -> Task Error a
 request r =
     Task.define
-        { function = "builtin:httpRequest"
+        { function = "builtin:http"
         , args = encode r
         , expect = Task.expectJson (decodeResponse r)
         }
@@ -142,6 +142,10 @@ decodeError r =
 
                     "BAD_URL" ->
                         Decode.succeed (Err (BadUrl r.url))
+
+                    "BAD_BODY" ->
+                        Decode.field "body" Decode.string
+                            |> Decode.map (Err << BadBody)
 
                     _ ->
                         Decode.succeed (Err (TaskError (Task.InternalError ("Unknown error code: " ++ code))))

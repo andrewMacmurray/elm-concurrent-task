@@ -1,4 +1,5 @@
 import * as http from "./http";
+import * as fetchAdapter from "./http/fetch";
 
 export interface ElmPorts {
   send: {
@@ -48,6 +49,7 @@ const BuiltInTasks = {
   "builtin:timeNow": () => Date.now(),
   "builtin:sleep": (ms: number) => sleep(ms),
   "builtin:randomSeed": () => Date.now(),
+  "builtin:http": (req) => fetchAdapter.http(req),
 };
 
 function sleep(ms) {
@@ -154,13 +156,16 @@ function debounce(send: (res: TaskResult[]) => void, wait: number) {
 function createTasks(options: Options): Tasks {
   const tasks = { ...BuiltInTasks, ...options.tasks };
   if (options.builtins?.http) {
-    tasks["builtin:httpRequest"] = options.builtins.http;
+    tasks["builtin:http"] = options.builtins.http;
   }
   if (options.builtins?.timeNow) {
     tasks["builtin:timeNow"] = options.builtins.timeNow;
   }
   if (options.builtins?.randomSeed) {
     tasks["builtin:randomSeed"] = options.builtins.randomSeed;
+  }
+  if (options.builtins?.sleep) {
+    tasks["builtin:sleep"] = options.builtins.sleep;
   }
   return tasks;
 }

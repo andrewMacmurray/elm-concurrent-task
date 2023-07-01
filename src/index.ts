@@ -1,7 +1,6 @@
 import { Elm } from "./elm/Main.elm";
 import crypto from "node:crypto";
 import * as TaskRunner from "./tasks";
-import { http } from "./tasks/http/axios";
 import readline from "node:readline/promises";
 
 // Task
@@ -27,8 +26,7 @@ const { ports } = Elm.Main.init({ flags: null });
 
 TaskRunner.register({
   tasks: Tasks,
-  ports: { send: ports.send, receive: ports.receive },
-  builtins: { http },
+  ports: ports,
 });
 
 const rl = readline.createInterface({

@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import { Request, Response, HttpError } from "./index";
+import { Request, Response, HttpError, toHeaders } from "./index";
 
 export function http(request: Request): Promise<Response> {
   return axios
@@ -7,9 +7,7 @@ export function http(request: Request): Promise<Response> {
       method: request.method,
       url: request.url,
       data: request.body,
-      headers: Object.fromEntries(
-        request.headers.map((header) => [header.name, header.value])
-      ),
+      headers: toHeaders(request),
     })
     .then((response) => {
       return {

@@ -15,11 +15,22 @@ export interface ResponseSuccess {
   statusText: string;
 }
 
-export type HttpError = "BAD_URL" | "NETWORK_ERROR" | "TIMEOUT" | string;
+export type HttpError =
+  | "BAD_URL"
+  | "NETWORK_ERROR"
+  | "TIMEOUT"
+  | "BAD_BODY"
+  | string;
 
 export interface ResponseError {
   error: HttpError;
-  body: any;
-  status: number;
-  statusText: string;
+  body?: any;
+  status?: number;
+  statusText?: string;
+}
+
+export function toHeaders(request: Request): { [header: string]: string } {
+  return Object.fromEntries(
+    request.headers.map((header) => [header.name, header.value])
+  );
 }

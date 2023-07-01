@@ -329,8 +329,8 @@ sleep =
     Concurrent.Task.Process.sleep
 
 
-myHttpTask : Task Http.Error String
-myHttpTask =
+getExternalTodo : Task Http.Error String
+getExternalTodo =
     Http.request
         { url = "https://jsonplaceholder.typicode.com/todos/1"
         , method = "GET"

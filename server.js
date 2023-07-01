@@ -22,6 +22,10 @@ app.get("/boom", (req, res) => {
   res.send({ message: "error" });
 });
 
+app.get("/malformed", (req, res) => {
+  res.send("{ 'invalid': 'json");
+});
+
 app.listen(PORT, () => {
   console.log(`Listening on port ${PORT}`);
 });
