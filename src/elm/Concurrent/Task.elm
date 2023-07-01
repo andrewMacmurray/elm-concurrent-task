@@ -68,23 +68,8 @@ type alias Definition_ =
     }
 
 
-type alias BatchResults =
-    Dict AttemptId TaskResults
-
-
 type alias TaskResults =
     Dict TaskId Decode.Value
-
-
-type alias RawResults =
-    List RawResult
-
-
-type alias RawResult =
-    { attemptId : AttemptId
-    , taskId : TaskId
-    , result : Decode.Value
-    }
 
 
 type Expect a
@@ -414,6 +399,21 @@ type alias Pool_ x a =
 type alias Progress x a =
     { sent : Set TaskId
     , task : ( Ids, Task x a )
+    }
+
+
+type alias BatchResults =
+    Dict AttemptId TaskResults
+
+
+type alias RawResults =
+    List RawResult
+
+
+type alias RawResult =
+    { attemptId : AttemptId
+    , taskId : TaskId
+    , result : Decode.Value
     }
 
 
