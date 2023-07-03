@@ -397,7 +397,7 @@ type alias Pool_ x a =
 
 
 type alias Progress x a =
-    { sent : Set TaskId
+    { inFlight : Set TaskId
     , task : ( Ids, Task x a )
     }
 
@@ -448,7 +448,7 @@ attempt attempt_ task =
         ( _, Pending defs _ ) ->
             ( startAttempt attempt_.id
                 { task = ( Id.init, task )
-                , sent = recordSent defs Set.empty
+                , inFlight = recordSent defs Set.empty
                 }
                 attempt_.pool
             , attempt_.send (encodeDefinitions attempt_.id defs)
@@ -500,8 +500,8 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                 ( _, Pending defs _ ) ->
                     ( updateProgressFor attemptId
                         { task = nextProgress
-                        , sent =
-                            progress.sent
+                        , inFlight =
+                            progress.inFlight
                                 |> recordSent defs
                                 |> removeCompleted results
                         }
@@ -522,13 +522,13 @@ runTask res ( ids, State run ) =
 
 
 recordSent : List Definition_ -> Set Id -> Set Id
-recordSent defs sent =
-    Set.union sent (toSentIds defs)
+recordSent defs inFlight =
+    Set.union inFlight (toSentIds defs)
 
 
 removeCompleted : TaskResults -> Set Id -> Set Id
-removeCompleted res sent =
-    Set.diff sent (Set.fromList (Dict.keys res))
+removeCompleted res inFlight =
+    Set.diff inFlight (Set.fromList (Dict.keys res))
 
 
 toSentIds : List Definition_ -> Set Id
@@ -543,7 +543,7 @@ sendResult onComplete id res =
 
 notStarted : Progress x a -> Definition_ -> Bool
 notStarted model def =
-    not (Set.member def.taskId model.sent)
+    not (Set.member def.taskId model.inFlight)
 
 
 toBatchResults : RawResults -> BatchResults
@@ -666,12 +666,14 @@ type alias TestEval a =
 testEval : TestEval a -> ( Ids, Result Error a )
 testEval options =
     let
+        results : TaskResults
         results =
             options.results
                 |> List.head
                 |> Maybe.withDefault ( 100, Encode.null )
                 |> Tuple.mapFirst String.fromInt
-                |> (\( id, result ) -> Dict.singleton id result)
+                |> List.singleton
+                |> Dict.fromList
     in
     case runTask results ( options.ids, options.task ) of
         ( ids, Done a ) ->
