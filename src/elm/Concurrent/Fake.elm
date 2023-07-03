@@ -25,6 +25,46 @@ map f task =
                 )
 
 
+map2 : (a -> b -> c) -> Task a -> Task b -> Task c
+map2 f taskA taskB =
+    case ( taskA, taskB ) of
+        ( Done a, Done b ) ->
+            Done (f a b)
+
+        ( Done _, Pending next ) ->
+            Pending
+                (\s ->
+                    let
+                        ( s_, taskB_ ) =
+                            next s
+                    in
+                    ( s_, map2 f taskA taskB_ )
+                )
+
+        ( Pending next, Done _ ) ->
+            Pending
+                (\s ->
+                    let
+                        ( s_, taskA_ ) =
+                            next s
+                    in
+                    ( s_, map2 f taskA_ taskB )
+                )
+
+        ( Pending nextA, Pending nextB ) ->
+            Pending
+                (\s ->
+                    let
+                        ( s_, taskA_ ) =
+                            nextA s
+
+                        ( s__, taskB_ ) =
+                            nextB s_
+                    in
+                    ( s__, map2 f taskA_ taskB_ )
+                )
+
+
 andThen : (a -> Task b) -> Task a -> Task b
 andThen f task =
     case task of
@@ -68,7 +108,7 @@ create =
 
 
 
--- Sequence and Batch
+-- Sequence
 
 
 sequence : List (Task a) -> Task (List a)
@@ -77,10 +117,39 @@ sequence tasks =
 
 
 sequenceHelp : List (Task a) -> Task (List a) -> Task (List a)
-sequenceHelp tasks task =
+sequenceHelp tasks combined =
     case tasks of
-        todo :: rest ->
-            task |> andThen (\xs -> sequenceHelp rest (map (\a -> a :: xs) todo))
+        task :: rest ->
+            combined |> andThen (\xs -> sequenceHelp rest (map (\a -> a :: xs) task))
+
+        [] ->
+            combined
+
+
+
+-- Batch
+
+
+batch : List (Task a) -> Task (List a)
+batch tasks =
+    batchHelp tasks (succeed [])
+
+
+batchHelp : List (Task a) -> Task (List a) -> Task (List a)
+batchHelp tasks combined =
+    case tasks of
+        task :: rest ->
+            map2 (::) task (batchHelp rest combined)
+
+        [] ->
+            combined
+
+
+addMany : Task Int -> List Int -> Task Int
+addMany task xs =
+    case xs of
+        n :: rest ->
+            addMany (map ((+) n) task) rest
 
         [] ->
             task
