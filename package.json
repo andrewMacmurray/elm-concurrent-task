@@ -9,7 +9,9 @@
     "watch": "parcel watch",
     "start": "nodemon dist/index.js",
     "build": "parcel build",
-    "test": "elm-test"
+    "test": "elm-test",
+    "server": "node scripts/test-server.js",
+    "raw-comparison": "node scripts/raw-comparison.js"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
