@@ -5,7 +5,7 @@ module Concurrent.Task exposing
     , sequence, batch
     , map, andMap, map2, map3, map4, map5
     , Error, mapError, onError, errorToString
-    , Attempt, Pool, AttemptId, attempt, pool, OnProgress, onProgress
+    , Attempt, Pool, AttemptId, attempt, pool, OnProgress, RawResults, onProgress
     )
 
 {-| A near drop in replacement for `elm/core`'s `Task`
@@ -43,7 +43,7 @@ module Concurrent.Task exposing
 
 # Run a Task
 
-@docs Attempt, Pool, AttemptId, attempt, pool, OnProgress, onProgress
+@docs Attempt, Pool, AttemptId, attempt, pool, OnProgress, RawResults, onProgress
 
 -}
 

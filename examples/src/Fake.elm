@@ -1,4 +1,4 @@
-module Concurrent.Fake exposing (..)
+module Fake exposing (..)
 
 -- Module to test out optimizations
 
