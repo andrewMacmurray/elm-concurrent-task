@@ -10,6 +10,7 @@
     "start": "nodemon dist/index.js",
     "build": "parcel build",
     "test": "elm-test",
+    "docs": "elm-doc-preview",
     "server": "node scripts/test-server.js",
     "raw-comparison": "node scripts/raw-comparison.js"
   },

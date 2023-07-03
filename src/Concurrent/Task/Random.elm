@@ -1,15 +1,18 @@
 module Concurrent.Task.Random exposing (generate)
 
+{-| A drop in replacement for `elm/random`'s `Random.generate`
+
+@docs generate
+
+-}
+
 import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
 
 
-
--- Random
-
-
+{-| -}
 generate : Random.Generator a -> Task x a
 generate generator =
     Task.map

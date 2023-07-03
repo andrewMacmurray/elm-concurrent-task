@@ -1,9 +1,9 @@
 module TaskTest exposing (suite)
 
-import Concurrent.Internal.Id as Id
-import Concurrent.Task as Task exposing (Task)
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, intRange, string)
+import Internal.Id as Id
+import Internal.Task as Task exposing (Task)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Test exposing (..)

@@ -1,18 +1,42 @@
 module Concurrent.Task.Http exposing
-    ( Body
-    , Error(..)
-    , Expect
-    , Header
-    , Request
-    , emptyBody
-    , expectJson
-    , expectString
-    , header
-    , jsonBody
-    , request
+    ( Request, request
+    , Expect, expectJson, expectString, expectWhatever
+    , Error(..), StatusDetails
+    , Header, header
+    , Body, emptyBody, jsonBody
     )
 
+{-| Make concurrent http requests
+
+
+# Request
+
+@docs Request, request
+
+
+# Expect
+
+@docs Expect, expectJson, expectString, expectWhatever
+
+
+# Error
+
+@docs Error, StatusDetails
+
+
+# Header
+
+@docs Header, header
+
+
+# Body
+
+@docs Body, emptyBody, jsonBody
+
+-}
+
 import Concurrent.Task as Task exposing (Task)
+import Internal.Task as Internal
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
@@ -21,6 +45,7 @@ import Json.Encode as Encode
 -- Http Task
 
 
+{-| -}
 type alias Request a =
     { url : String
     , method : String
@@ -30,19 +55,23 @@ type alias Request a =
     }
 
 
+{-| -}
 type Body
     = Json Encode.Value
 
 
+{-| -}
 type Expect a
     = ExpectJson (Decoder a)
     | ExpectString (Decoder a)
 
 
+{-| -}
 type alias Header =
     ( String, String )
 
 
+{-| -}
 type Error
     = BadUrl String
     | Timeout
@@ -52,6 +81,7 @@ type Error
     | TaskError Task.Error
 
 
+{-| -}
 type alias StatusDetails =
     { code : Int
     , text : String
@@ -63,6 +93,7 @@ type alias StatusDetails =
 -- Header
 
 
+{-| -}
 header : String -> String -> Header
 header =
     Tuple.pair
@@ -72,25 +103,35 @@ header =
 -- Expect
 
 
+{-| -}
 expectJson : Decoder a -> Expect a
 expectJson =
     ExpectJson
 
 
+{-| -}
 expectString : Expect String
 expectString =
     ExpectString Decode.string
+
+
+{-| -}
+expectWhatever : Expect ()
+expectWhatever =
+    ExpectJson (Decode.succeed ())
 
 
 
 -- Body
 
 
+{-| -}
 emptyBody : Body
 emptyBody =
     Json Encode.null
 
 
+{-| -}
 jsonBody : Encode.Value -> Body
 jsonBody =
     Json
@@ -100,6 +141,7 @@ jsonBody =
 -- Send Request
 
 
+{-| -}
 request : Request a -> Task Error a
 request r =
     Task.define
@@ -114,7 +156,7 @@ request r =
 wrapError : Task.Error -> Error
 wrapError err =
     case err of
-        Task.DecodeResponseError e ->
+        Internal.DecodeResponseError e ->
             BadBody (Decode.errorToString e)
 
         _ ->
@@ -149,7 +191,7 @@ decodeError r =
                             |> Decode.map (Err << BadBody)
 
                     _ ->
-                        Decode.succeed (Err (TaskError (Task.InternalError ("Unknown error code: " ++ code))))
+                        Decode.succeed (Err (TaskError (Internal.InternalError ("Unknown error code: " ++ code))))
             )
 
 

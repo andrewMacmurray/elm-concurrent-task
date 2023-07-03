@@ -1,6 +1,6 @@
 import { Elm } from "./elm/Main.elm";
 import crypto from "node:crypto";
-import * as TaskRunner from "./tasks";
+import * as TaskRunner from "./ts";
 import readline from "node:readline/promises";
 
 // Task

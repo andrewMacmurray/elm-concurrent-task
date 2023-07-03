@@ -1,7 +1,8 @@
-module Concurrent.Task exposing
+module Internal.Task exposing
     ( Attempt
     , Definition
     , Error(..)
+    , Expect
     , OnProgress
     , Pool
     , RawResult
@@ -33,8 +34,8 @@ module Concurrent.Task exposing
     , testEval
     )
 
-import Concurrent.Internal.Id as Id exposing (Id)
 import Dict exposing (Dict)
+import Internal.Id as Id
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -46,7 +47,7 @@ import Task as CoreTask
 
 
 type Task x a
-    = State (TaskResults -> Ids -> ( Ids, Task_ x a ))
+    = Task (TaskResults -> Ids -> ( Ids, Task_ x a ))
 
 
 type Task_ x a
@@ -59,7 +60,7 @@ type alias Ids =
 
 
 type alias TaskId =
-    Id
+    Id.Id
 
 
 type alias Definition_ =
@@ -116,7 +117,7 @@ type alias Definition a =
 
 define : Definition a -> Task Error a
 define a =
-    State
+    Task
         (\results ids ->
             let
                 taskId =
@@ -145,8 +146,8 @@ define a =
 
 
 runWith : Ids -> Task x a -> Task x a
-runWith s (State run) =
-    State (\res _ -> run res s)
+runWith s (Task run) =
+    Task (\res _ -> run res s)
 
 
 
@@ -154,8 +155,8 @@ runWith s (State run) =
 
 
 map : (a -> b) -> Task x a -> Task x b
-map f (State run) =
-    State
+map f (Task run) =
+    Task
         (\result ids ->
             let
                 ( ids_, task ) =
@@ -173,8 +174,8 @@ map f (State run) =
 
 
 map2Internal : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2Internal f (State run1) (State run2) =
-    State
+map2Internal f (Task run1) (Task run2) =
+    Task
         (\res ids ->
             let
                 ( ids_, task2 ) =
@@ -303,18 +304,18 @@ fail x =
 
 fromResult : Result x a -> Task x a
 fromResult res =
-    State (\_ ids -> ( ids, Done res ))
+    Task (\_ ids -> ( ids, Done res ))
 
 
 andThen : (a -> Task x b) -> Task x a -> Task x b
-andThen f (State run) =
-    State
+andThen f (Task run) =
+    Task
         (\res ids ->
             let
                 ( ids_, a ) =
                     run res ids
 
-                (State run_) =
+                (Task run_) =
                     case a of
                         Done a_ ->
                             case a_ of
@@ -325,15 +326,15 @@ andThen f (State run) =
                                     fail e
 
                         Pending defs next ->
-                            State (\_ ids__ -> ( ids__, Pending defs (andThen f next) ))
+                            Task (\_ ids__ -> ( ids__, Pending defs (andThen f next) ))
             in
             run_ res ids_
         )
 
 
 andThenDo : Task x b -> Task x a -> Task x b
-andThenDo s2 s1 =
-    s1 |> andThen (\_ -> s2)
+andThenDo t2 t1 =
+    t1 |> andThen (\_ -> t2)
 
 
 
@@ -341,14 +342,14 @@ andThenDo s2 s1 =
 
 
 onError : (x -> Task y a) -> Task x a -> Task y a
-onError f (State run) =
-    State
+onError f (Task run) =
+    Task
         (\res ids ->
             let
                 ( ids_, a ) =
                     run res ids
 
-                (State run_) =
+                (Task run_) =
                     case a of
                         Done a_ ->
                             case a_ of
@@ -359,15 +360,15 @@ onError f (State run) =
                                     f e
 
                         Pending defs next ->
-                            State (\_ ids__ -> ( ids__, Pending defs (onError f next) ))
+                            Task (\_ ids__ -> ( ids__, Pending defs (onError f next) ))
             in
             run_ res ids_
         )
 
 
 mapError : (x -> y) -> Task x a -> Task y a
-mapError f (State run) =
-    State
+mapError f (Task run) =
+    Task
         (\res ids ->
             let
                 ( ids_, task ) =
@@ -533,28 +534,28 @@ updateAttempt options pool_ ( attemptId, results ) progress =
 
 
 runTask : TaskResults -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
-runTask res ( ids, State run ) =
+runTask res ( ids, Task run ) =
     run res ids
 
 
-recordSent : List Definition_ -> Set Id -> Set Id
+recordSent : List Definition_ -> Set TaskId -> Set TaskId
 recordSent defs inFlight =
     Set.union inFlight (toSentIds defs)
 
 
-removeCompleted : TaskResults -> Set Id -> Set Id
+removeCompleted : TaskResults -> Set TaskId -> Set TaskId
 removeCompleted res inFlight =
     Set.diff inFlight (Set.fromList (Dict.keys res))
 
 
-toSentIds : List Definition_ -> Set Id
+toSentIds : List Definition_ -> Set TaskId
 toSentIds defs =
     Set.fromList (List.map .taskId defs)
 
 
-sendResult : (Id -> Result x a -> msg) -> Id -> Result x a -> Cmd msg
-sendResult onComplete id res =
-    CoreTask.succeed res |> CoreTask.perform (onComplete id)
+sendResult : (AttemptId -> Result x a -> msg) -> AttemptId -> Result x a -> Cmd msg
+sendResult onComplete attemptId res =
+    CoreTask.succeed res |> CoreTask.perform (onComplete attemptId)
 
 
 notStarted : Progress x a -> Definition_ -> Bool
@@ -618,12 +619,12 @@ decodeError =
             )
 
 
-encodeDefinitions : Id -> List Definition_ -> Encode.Value
+encodeDefinitions : AttemptId -> List Definition_ -> Encode.Value
 encodeDefinitions attemptId =
     Encode.list (encodeDefinition attemptId)
 
 
-encodeDefinition : Id -> Definition_ -> Encode.Value
+encodeDefinition : AttemptId -> Definition_ -> Encode.Value
 encodeDefinition attemptId def =
     Encode.object
         [ ( "attemptId", Encode.string attemptId )
@@ -642,22 +643,22 @@ pool =
     Pool Dict.empty
 
 
-startAttempt : Id -> Progress x a -> Pool x a -> Pool x a
+startAttempt : AttemptId -> Progress x a -> Pool x a -> Pool x a
 startAttempt attemptId progress =
     mapPool (Dict.insert attemptId progress)
 
 
-updateProgressFor : Id -> Progress x a -> Pool x a -> Pool x a
+updateProgressFor : AttemptId -> Progress x a -> Pool x a -> Pool x a
 updateProgressFor attemptId progress_ =
     mapPool (Dict.update attemptId (Maybe.map (always progress_)))
 
 
-removeFromPool : Id -> Pool x a -> Pool x a
+removeFromPool : AttemptId -> Pool x a -> Pool x a
 removeFromPool attemptId =
     mapPool (Dict.remove attemptId)
 
 
-findAttempt : Id -> Pool x a -> Maybe (Progress x a)
+findAttempt : AttemptId -> Pool x a -> Maybe (Progress x a)
 findAttempt attemptId (Pool p) =
     Dict.get attemptId p
 

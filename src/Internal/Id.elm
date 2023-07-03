@@ -1,4 +1,4 @@
-module Concurrent.Internal.Id exposing
+module Internal.Id exposing
     ( Id
     , Sequence
     , combine

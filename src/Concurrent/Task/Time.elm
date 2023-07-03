@@ -1,15 +1,18 @@
 module Concurrent.Task.Time exposing (now)
 
+{-| A drop in replacement for `elm/time`'s `Time.now`
+
+@docs now
+
+-}
+
 import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Time
 
 
-
--- Time Now
-
-
+{-| -}
 now : Task x Time.Posix
 now =
     Task.define

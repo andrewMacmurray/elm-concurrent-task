@@ -1,26 +1,24 @@
 {
-    "type": "application",
-    "source-directories": [
-        "src/elm"
+    "type": "package",
+    "name": "andrewMacmurray/elm-concurrent-task",
+    "summary": "Run a tree of tasks with structured concurrency",
+    "license": "MIT",
+    "version": "1.0.0",
+    "exposed-modules": [
+        "Concurrent.Task",
+        "Concurrent.Task.Http",
+        "Concurrent.Task.Process",
+        "Concurrent.Task.Random",
+        "Concurrent.Task.Time"
     ],
-    "elm-version": "0.19.1",
+    "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {
-        "direct": {
-            "elm/core": "1.0.5",
-            "elm/json": "1.1.3",
-            "elm/random": "1.0.0",
-            "elm/time": "1.0.0"
-        },
-        "indirect": {}
+        "elm/core": "1.0.5 <= v < 2.0.0",
+        "elm/json": "1.1.3 <= v < 2.0.0",
+        "elm/random": "1.0.0 <= v < 2.0.0",
+        "elm/time": "1.0.0 <= v < 2.0.0"
     },
     "test-dependencies": {
-        "direct": {
-            "elm-explorations/test": "2.1.1"
-        },
-        "indirect": {
-            "elm/bytes": "1.0.8",
-            "elm/html": "1.0.0",
-            "elm/virtual-dom": "1.0.3"
-        }
+        "elm-explorations/test": "2.1.1 <= v < 3.0.0"
     }
 }
