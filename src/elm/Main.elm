@@ -202,7 +202,11 @@ andThenJoinWith t2 t1 =
 
 batchAndSequence : Task Http.Error String
 batchAndSequence =
-    List.repeat 10 (List.repeat 100 (longRequest_ 100) |> Task.batch)
+    List.repeat 10
+        (longRequest_ 100
+            |> List.repeat 100
+            |> Task.batch
+        )
         |> Task.sequence
         |> Task.map (List.concat >> String.concat)
 
@@ -280,7 +284,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError longChain)
+                        (Task.mapError HttpError batchAndSequence)
             in
             ( { tasks = tasks }, cmd )
 

@@ -183,15 +183,25 @@ map2Internal f (State run1) (State run2) =
                     Pending (defs1 ++ defs2) (map2Internal f next1 next2)
 
                 ( Pending defs next1, Done b ) ->
-                    Pending defs (map2Internal f next1 (fromResult b))
+                    haltOnError b (Pending defs (map2Internal f next1 (fromResult b)))
 
                 ( Done a, Pending defs next2 ) ->
-                    Pending defs (map2Internal f (fromResult a) next2)
+                    haltOnError a (Pending defs (map2Internal f (fromResult a) next2))
 
                 ( Done a, Done b ) ->
                     Done (Result.map2 f a b)
             )
         )
+
+
+haltOnError : Result x a -> Task_ x b -> Task_ x b
+haltOnError res task =
+    case res of
+        Err e ->
+            Done (Err e)
+
+        Ok _ ->
+            task
 
 
 andMap : Task x a -> Task x (a -> b) -> Task x b
@@ -243,13 +253,13 @@ sequence tasks =
 
 
 sequenceHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
-sequenceHelp tasks task =
+sequenceHelp tasks combined =
     case tasks of
-        todo :: rest ->
-            task |> andThen (\xs -> sequenceHelp rest (map (\x -> x :: xs) todo))
+        task :: rest ->
+            combined |> andThen (\xs -> sequenceHelp rest (map (\x -> x :: xs) task))
 
         [] ->
-            task
+            combined
 
 
 
@@ -262,13 +272,13 @@ batch tasks =
 
 
 batchHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
-batchHelp tasks task =
+batchHelp tasks combined =
     case tasks of
-        todo :: rest ->
-            batchHelp rest (map2 (::) todo task)
+        task :: rest ->
+            batchHelp rest (map2 (::) task combined)
 
         [] ->
-            task
+            combined
 
 
 
