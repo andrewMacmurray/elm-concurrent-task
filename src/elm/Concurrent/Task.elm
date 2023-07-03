@@ -15,6 +15,7 @@ module Concurrent.Task exposing
     , define
     , errorToString
     , expectJson
+    , expectString
     , expectWhatever
     , fail
     , fromResult
@@ -90,6 +91,11 @@ type Error
 expectJson : Decoder a -> Expect a
 expectJson =
     ExpectJson
+
+
+expectString : Expect String
+expectString =
+    ExpectJson Decode.string
 
 
 expectWhatever : Expect ()

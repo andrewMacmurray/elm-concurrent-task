@@ -36,10 +36,11 @@ type Body
 
 type Expect a
     = ExpectJson (Decoder a)
+    | ExpectString (Decoder a)
 
 
-type Header
-    = Header String String
+type alias Header =
+    ( String, String )
 
 
 type Error
@@ -64,7 +65,7 @@ type alias StatusDetails =
 
 header : String -> String -> Header
 header =
-    Header
+    Tuple.pair
 
 
 
@@ -78,7 +79,7 @@ expectJson =
 
 expectString : Expect String
 expectString =
-    ExpectJson Decode.string
+    ExpectString Decode.string
 
 
 
@@ -162,6 +163,9 @@ decodeExpect expect =
                         ExpectJson decoder ->
                             Decode.field "body" (Decode.map Ok decoder)
 
+                        ExpectString decoder ->
+                            Decode.field "body" (Decode.map Ok decoder)
+
                 else
                     Decode.map2
                         (\text body ->
@@ -188,12 +192,23 @@ encode r =
         [ ( "url", Encode.string r.url )
         , ( "method", Encode.string r.method )
         , ( "headers", Encode.list encodeHeader r.headers )
+        , ( "expect", encodeExpect r.expect )
         , ( "body", encodeBody r.body )
         ]
 
 
+encodeExpect : Expect a -> Encode.Value
+encodeExpect expect =
+    case expect of
+        ExpectString _ ->
+            Encode.string "STRING"
+
+        ExpectJson _ ->
+            Encode.string "JSON"
+
+
 encodeHeader : Header -> Encode.Value
-encodeHeader (Header name value) =
+encodeHeader ( name, value ) =
     Encode.object
         [ ( "name", Encode.string name )
         , ( "value", Encode.string value )

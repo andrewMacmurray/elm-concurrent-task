@@ -340,6 +340,17 @@ getExternalTodo =
         }
 
 
+malformed : Task Http.Error String
+malformed =
+    Http.request
+        { url = "http://localhost:4000/malformed"
+        , method = "GET"
+        , headers = []
+        , body = Http.emptyBody
+        , expect = Http.expectString
+        }
+
+
 manyEnvs : Task Error String
 manyEnvs =
     Task.map3 join3

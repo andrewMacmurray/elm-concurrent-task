@@ -9,11 +9,20 @@ export function http(request: Request): Promise<Response> {
     .then((res) =>
       res.text().then((body) => {
         try {
-          return {
-            status: res.status,
-            statusText: res.statusText,
-            body: JSON.parse(body),
-          };
+          switch (request.expect) {
+            case "JSON":
+              return {
+                status: res.status,
+                statusText: res.statusText,
+                body: JSON.parse(body),
+              };
+            case "STRING":
+              return {
+                status: res.status,
+                statusText: res.statusText,
+                body: body,
+              };
+          }
         } catch (e) {
           return {
             error: "BAD_BODY",

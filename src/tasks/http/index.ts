@@ -4,10 +4,12 @@ export interface Request {
   url: string;
   method: string;
   headers: { name: string; value: string }[];
+  expect: Expect;
   body: any;
 }
 
 export type Response = ResponseSuccess | ResponseError;
+export type Expect = "STRING" | "JSON";
 
 export interface ResponseSuccess {
   body: any;
