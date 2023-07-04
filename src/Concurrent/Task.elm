@@ -5,7 +5,7 @@ module Concurrent.Task exposing
     , sequence, batch
     , map, andMap, map2, map3, map4, map5
     , Error, mapError, onError, errorToString
-    , Attempt, Pool, AttemptId, attempt, pool, OnProgress, RawResults, onProgress
+    , attempt, pool, onProgress, Pool, AttemptId, RawResults
     )
 
 {-| A near drop in replacement for `elm/core`'s `Task`
@@ -43,7 +43,7 @@ module Concurrent.Task exposing
 
 # Run a Task
 
-@docs Attempt, Pool, AttemptId, attempt, pool, OnProgress, RawResults, onProgress
+@docs attempt, pool, onProgress, Pool, AttemptId, RawResults
 
 -}
 
@@ -243,24 +243,6 @@ errorToString =
 
 
 {-| -}
-type alias Attempt msg x a =
-    { id : AttemptId
-    , pool : Pool x a
-    , send : Encode.Value -> Cmd msg
-    , onComplete : AttemptId -> Result x a -> msg
-    }
-
-
-{-| -}
-type alias OnProgress msg x a =
-    { send : Encode.Value -> Cmd msg
-    , receive : (RawResults -> msg) -> Sub msg
-    , onComplete : AttemptId -> Result x a -> msg
-    , onProgress : ( Pool x a, Cmd msg ) -> msg
-    }
-
-
-{-| -}
 type alias AttemptId =
     String
 
@@ -276,7 +258,14 @@ type alias RawResults =
 
 
 {-| -}
-attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
+attempt :
+    { id : AttemptId
+    , pool : Pool x a
+    , send : Encode.Value -> Cmd msg
+    , onComplete : AttemptId -> Result x a -> msg
+    }
+    -> Task x a
+    -> ( Pool x a, Cmd msg )
 attempt =
     Internal.attempt
 
@@ -288,6 +277,13 @@ pool =
 
 
 {-| -}
-onProgress : OnProgress msg x a -> Pool x a -> Sub msg
+onProgress :
+    { send : Encode.Value -> Cmd msg
+    , receive : (RawResults -> msg) -> Sub msg
+    , onComplete : AttemptId -> Result x a -> msg
+    , onProgress : ( Pool x a, Cmd msg ) -> msg
+    }
+    -> Pool x a
+    -> Sub msg
 onProgress =
     Internal.onProgress

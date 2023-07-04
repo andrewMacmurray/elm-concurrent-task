@@ -312,24 +312,26 @@ andThen f (Task run) =
     Task
         (\res ids ->
             let
-                ( ids_, a ) =
+                ( ids_, task ) =
                     run res ids
-
-                (Task run_) =
-                    case a of
-                        Done a_ ->
-                            case a_ of
-                                Ok a__ ->
-                                    f a__
-
-                                Err e ->
-                                    fail e
-
-                        Pending defs next ->
-                            Task (\_ ids__ -> ( ids__, Pending defs (andThen f next) ))
             in
-            run_ res ids_
+            case task of
+                Done a ->
+                    case a of
+                        Err e ->
+                            ( ids_, Done (Err e) )
+
+                        Ok a_ ->
+                            unwrap res ids_ (f a_)
+
+                Pending defs next ->
+                    ( ids_, Pending defs (andThen f next) )
         )
+
+
+unwrap : TaskResults -> Ids -> Task x a -> ( Ids, Task_ x a )
+unwrap res ids (Task run) =
+    run res ids
 
 
 andThenDo : Task x b -> Task x a -> Task x b
@@ -346,23 +348,20 @@ onError f (Task run) =
     Task
         (\res ids ->
             let
-                ( ids_, a ) =
+                ( ids_, task ) =
                     run res ids
-
-                (Task run_) =
-                    case a of
-                        Done a_ ->
-                            case a_ of
-                                Ok a__ ->
-                                    succeed a__
-
-                                Err e ->
-                                    f e
-
-                        Pending defs next ->
-                            Task (\_ ids__ -> ( ids__, Pending defs (onError f next) ))
             in
-            run_ res ids_
+            case task of
+                Done a ->
+                    case a of
+                        Err e ->
+                            unwrap res ids_ (f e)
+
+                        Ok a_ ->
+                            ( ids_, Done (Ok a_) )
+
+                Pending defs next ->
+                    ( ids_, Pending defs (onError f next) )
         )
 
 
@@ -456,7 +455,7 @@ type alias OnProgress msg x a =
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
 attempt attempt_ task =
-    case runTask Dict.empty ( Id.init, task ) of
+    case stepTask Dict.empty ( Id.init, task ) of
         ( _, Done res ) ->
             ( attempt_.pool
             , sendResult attempt_.onComplete attempt_.id res
@@ -485,7 +484,8 @@ onProgress options pool_ =
                                 ( p, cmd )
 
                             Just progress ->
-                                updateAttempt options p ( attempt_, results ) progress
+                                progress
+                                    |> updateAttempt options p ( attempt_, results )
                                     |> Tuple.mapSecond (\c -> Cmd.batch [ c, cmd ])
                     )
                     ( pool_, Cmd.none )
@@ -495,13 +495,13 @@ onProgress options pool_ =
 
 updateAttempt : OnProgress msg x a -> Pool x a -> ( AttemptId, TaskResults ) -> Progress x a -> ( Pool x a, Cmd msg )
 updateAttempt options pool_ ( attemptId, results ) progress =
-    case runTask results progress.task of
+    case stepTask results progress.task of
         ( ids_, Pending _ next_ ) ->
             let
                 nextProgress =
                     ( ids_, next_ )
             in
-            case runTask results nextProgress of
+            case stepTask results nextProgress of
                 ( _, Done res ) ->
                     case res of
                         Ok a ->
@@ -533,8 +533,8 @@ updateAttempt options pool_ ( attemptId, results ) progress =
             ( pool_, Cmd.none )
 
 
-runTask : TaskResults -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
-runTask res ( ids, Task run ) =
+stepTask : TaskResults -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
+stepTask res ( ids, Task run ) =
     run res ids
 
 
@@ -692,7 +692,7 @@ testEval options =
                 |> List.singleton
                 |> Dict.fromList
     in
-    case runTask results ( options.ids, options.task ) of
+    case stepTask results ( options.ids, options.task ) of
         ( ids, Done a ) ->
             ( ids, a )
 
