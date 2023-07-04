@@ -2,8 +2,15 @@
   "name": "elm-concurrent-task",
   "version": "1.0.0",
   "description": "Run a tree of tasks with structured concurrency",
+  "main": "./examples/dist/index.js",
+  "source": "./examples/src/index.ts",
   "type": "module",
   "scripts": {
+    "watch": "parcel watch",
+    "start": "nodemon ./examples/dist/index.js",
+    "build": "parcel build",
+    "server": "node ./scripts/test-server.js",
+    "raw-comparison": "node ./scripts/raw-comparison.js",
     "test": "elm-test",
     "docs": "elm-doc-preview"
   },
@@ -11,6 +18,11 @@
   "license": "MIT",
   "devDependencies": {
     "elm-format": "^0.8.5",
-    "elm-test": "^0.19.1-revision12"
+    "elm-test": "^0.19.1-revision12",
+    "@parcel/transformer-elm": "^2.8.3",
+    "express": "^4.18.2",
+    "morgan": "^1.10.0",
+    "nodemon": "^2.0.19",
+    "parcel": "^2.8.3"
   }
 }
