@@ -40,7 +40,7 @@ type alias Model =
 type Msg
     = OnFireMany Int
     | OnManualEnter String
-    | OnComplete String (Result Error String)
+    | OnComplete Task.AttemptId (Result Error String)
     | OnProgress ( Task.Pool Error String, Cmd Msg )
 
 
@@ -200,23 +200,17 @@ andThenJoinWith t2 t1 =
     t1 |> Task.andThen (\a -> Task.map (join2 a) t2)
 
 
-batchAndSequence : Task Http.Error String
-batchAndSequence =
-    List.repeat 10
-        (longRequest_ 100
-            |> List.repeat 100
-            |> Task.batch
-        )
-        |> Task.sequence
-        |> Task.map (List.concat >> String.concat)
-
-
 bigBatch : Task Http.Error String
 bigBatch =
     timeExecution "bigBatch"
-        (List.repeat 1000 (longRequest_ 0)
+        (List.range 0 100000
+            |> List.map
+                (\i ->
+                    sleep 100
+                        |> Task.map (always (String.fromInt i))
+                )
             |> Task.batch
-            |> Task.map String.concat
+            |> Task.map (List.length >> String.fromInt)
         )
 
 
@@ -284,7 +278,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError batchAndSequence)
+                        (Task.mapError HttpError bigBatch)
             in
             ( { tasks = tasks }, cmd )
 
@@ -306,8 +300,8 @@ update msg model =
             , sendResult ("result for " ++ id ++ ": " ++ Debug.toString result)
             )
 
-        OnProgress ( task, cmd ) ->
-            ( { model | tasks = task }, cmd )
+        OnProgress ( tasks, cmd ) ->
+            ( { model | tasks = tasks }, cmd )
 
 
 

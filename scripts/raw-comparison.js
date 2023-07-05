@@ -5,7 +5,9 @@ doBatch();
 
 function doBatch() {
   console.time("batch");
-  Promise.all(Array.from({ length: 1000 }).map((_, i) => doRequest(i)))
+  Promise.all(
+    Array.from({ length: 100000 }).map((_, i) => sleep(100).then(() => `${i}`))
+  )
     .then((xs) => xs.join(","))
     .then(console.log)
     .then(() => console.timeEnd("batch"));
@@ -21,6 +23,10 @@ function doSequence() {
     )
     .then(console.log)
     .then(() => console.timeEnd("sequence"));
+}
+
+function sleep(n) {
+  return new Promise((resolve) => setTimeout(resolve, n));
 }
 
 function doRequest(i) {
