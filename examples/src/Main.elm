@@ -203,18 +203,18 @@ andThenJoinWith t2 t1 =
 batchAndSequence : Task Http.Error String
 batchAndSequence =
     List.repeat 10
-        (longRequest_ 100
-            |> List.repeat 100
+        (List.range 0 1000
+            |> List.map (\i -> sleep 100 |> Task.map (always (String.fromInt i)))
             |> Task.batch
         )
         |> Task.sequence
-        |> Task.map (List.concat >> String.concat)
+        |> Task.map (List.concat >> String.join ",")
 
 
 bigBatch : Task Http.Error String
 bigBatch =
     timeExecution "bigBatch"
-        (List.repeat 1000 (longRequest_ 0)
+        (List.repeat 10000 (longRequest_ 0)
             |> Task.batch
             |> Task.map String.concat
         )
@@ -284,7 +284,7 @@ update msg model =
                         , id = id
                         , pool = model.tasks
                         }
-                        (Task.mapError HttpError batchAndSequence)
+                        (Task.mapError HttpError bigBatch)
             in
             ( { tasks = tasks }, cmd )
 

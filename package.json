@@ -18,6 +18,7 @@
   "license": "MIT",
   "devDependencies": {
     "@parcel/transformer-elm": "^2.8.3",
+    "axios": "^1.4.0",
     "elm-doc-preview": "^5.0.5",
     "elm-format": "^0.8.5",
     "elm-test": "^0.19.1-revision12",

@@ -177,8 +177,7 @@ responses =
             \_ ->
                 let
                     n =
-                        -- TODO: this needs to be optimized like Task.sequence
-                        1000
+                        5000
                 in
                 List.repeat n (create Decode.int)
                     |> Task.batch
