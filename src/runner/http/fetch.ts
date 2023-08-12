@@ -46,6 +46,8 @@ function toHttpError(err): HttpError {
       return "NETWORK_ERROR";
     case "ECONNRESET":
       return "NETWORK_ERROR";
+    case "EAGAIN":
+      return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
     default:

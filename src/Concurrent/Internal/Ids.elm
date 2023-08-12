@@ -1,6 +1,6 @@
-module Internal.Id exposing
+module Concurrent.Internal.Ids exposing
     ( Id
-    , Sequence
+    , Ids
     , combine
     , get
     , init
@@ -10,7 +10,7 @@ module Internal.Id exposing
 -- Opaque Sequence of Ids
 
 
-type Sequence
+type Ids
     = Sequence Int
 
 
@@ -18,21 +18,21 @@ type alias Id =
     String
 
 
-init : Sequence
+init : Ids
 init =
     Sequence 0
 
 
-next : Sequence -> Sequence
+next : Ids -> Ids
 next (Sequence id) =
     Sequence (id + 1)
 
 
-get : Sequence -> Id
+get : Ids -> Id
 get (Sequence id) =
     String.fromInt id
 
 
-combine : Sequence -> Sequence -> Sequence
+combine : Ids -> Ids -> Ids
 combine (Sequence a) (Sequence b) =
     Sequence (max a b)

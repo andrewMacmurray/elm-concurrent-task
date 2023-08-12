@@ -47,7 +47,7 @@ module Concurrent.Task exposing
 
 -}
 
-import Internal.Task as Internal
+import Concurrent.Internal.Task as Internal
 import Json.Decode exposing (Decoder)
 import Json.Encode as Encode
 

@@ -1,4 +1,4 @@
-module Internal.Task exposing
+module Concurrent.Internal.Task exposing
     ( Attempt
     , Definition
     , Error(..)
@@ -36,10 +36,9 @@ module Internal.Task exposing
     )
 
 import Array exposing (Array)
+import Concurrent.Internal.Ids as Ids exposing (Ids)
+import Concurrent.Internal.Utils.List
 import Dict exposing (Dict)
-import Internal.Id as Id
-import Internal.List as Utils
-import Internal.Utils.List
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -59,12 +58,8 @@ type Task_ x a
     | Done (Result x a)
 
 
-type alias Ids =
-    Id.Sequence
-
-
 type alias TaskId =
-    Id.Id
+    Ids.Id
 
 
 type alias Definition_ =
@@ -125,9 +120,9 @@ define a =
         (\results ids ->
             let
                 taskId =
-                    Id.get ids
+                    Ids.get ids
             in
-            ( Id.next ids
+            ( Ids.next ids
             , Pending
                 (Array.fromList
                     [ { taskId = taskId
@@ -190,7 +185,7 @@ andMap (Task run1) (Task run2) =
                 ( ids__, task1 ) =
                     run1 res ids_
             in
-            ( Id.combine ids_ ids__
+            ( Ids.combine ids_ ids__
             , case ( task1, task2 ) of
                 ( Pending defs1 next1, Pending defs2 next2 ) ->
                     Pending (Array.append defs1 defs2) (andMap next1 next2)
@@ -296,7 +291,7 @@ batch tasks =
 
 miniBatchesOf : Int -> List (Task x a) -> List (Task x (List a))
 miniBatchesOf n =
-    Internal.Utils.List.chunk n >> List.map doBatch
+    Concurrent.Internal.Utils.List.chunk n >> List.map doBatch
 
 
 doBatch : List (Task x a) -> Task x (List a)
@@ -476,7 +471,7 @@ type alias OnProgress msg x a =
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
 attempt attempt_ task =
-    case stepTask Dict.empty ( Id.init, task ) of
+    case stepTask Dict.empty ( Ids.init, task ) of
         ( _, Done res ) ->
             ( attempt_.pool
             , sendResult attempt_.onComplete attempt_.id res
@@ -484,7 +479,7 @@ attempt attempt_ task =
 
         ( _, Pending defs _ ) ->
             ( startAttempt attempt_.id
-                { task = ( Id.init, task )
+                { task = ( Ids.init, task )
                 , inFlight = recordSent defs Set.empty
                 }
                 attempt_.pool
