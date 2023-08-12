@@ -1,7 +1,7 @@
 module Concurrent.Task exposing
     ( Task, Definition, define
     , Expect, expectJson, expectString, expectWhatever
-    , succeed, fail, fromResult, andThen, andThenDo
+    , succeed, fail, fromResult, andThen, andThenDo, return
     , sequence, batch
     , map, andMap, map2, map3, map4, map5
     , Error, mapError, onError, errorToString
@@ -23,7 +23,7 @@ module Concurrent.Task exposing
 
 # Chains
 
-@docs succeed, fail, fromResult, andThen, andThenDo
+@docs succeed, fail, fromResult, andThen, andThenDo, return
 
 
 # Bulk
@@ -140,6 +140,12 @@ andThen =
 andThenDo : Task x b -> Task x a -> Task x b
 andThenDo =
     Internal.andThenDo
+
+
+{-| -}
+return : b -> Task x a -> Task x b
+return =
+    Internal.return
 
 
 

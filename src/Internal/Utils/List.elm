@@ -1,28 +1,11 @@
-module Internal.Utils exposing (chunk)
+module Internal.Utils.List exposing (chunk)
 
 import Array exposing (Array)
 
 
+{-| Adapted from <https://package.elm-lang.org/packages/krisajenkins/elm-exts/latest/Exts-List#chunk>
 
--- Trampoline
-
-
-type Trampoline a
-    = Done a
-    | Jump (() -> Trampoline a)
-
-
-eval : Trampoline a -> a
-eval trampoline =
-    case trampoline of
-        Done value ->
-            value
-
-        Jump f ->
-            eval (f ())
-
-
-{-| Split a list into chunks of length `n`.
+Split a list into chunks of length `n`.
 
 Be aware that the last sub-list may be smaller than `n`-items long.
 
@@ -50,3 +33,22 @@ chunkHelp n xs acc =
                     (List.drop n xs)
                     (Array.push (List.take n xs) acc)
             )
+
+
+
+-- Trampoline
+
+
+type Trampoline a
+    = Done a
+    | Jump (() -> Trampoline a)
+
+
+eval : Trampoline a -> a
+eval trampoline =
+    case trampoline of
+        Done value ->
+            value
+
+        Jump f ->
+            eval (f ())

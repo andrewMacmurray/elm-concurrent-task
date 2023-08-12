@@ -29,6 +29,7 @@ module Internal.Task exposing
     , onError
     , onProgress
     , pool
+    , return
     , sequence
     , succeed
     , testEval
@@ -37,7 +38,8 @@ module Internal.Task exposing
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Internal.Id as Id
-import Internal.Utils as Utils
+import Internal.List as Utils
+import Internal.Utils.List
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -275,18 +277,12 @@ sequenceHelp tasks combined =
 batch : List (Task x a) -> Task x (List a)
 batch tasks =
     tasks
-        |> Utils.chunk 10
-        |> List.map doBatch
-        |> Utils.chunk 10
-        |> List.map doBatch
-        |> Utils.chunk 10
-        |> List.map doBatch
-        |> Utils.chunk 10
-        |> List.map doBatch
-        |> Utils.chunk 10
-        |> List.map doBatch
-        |> Utils.chunk 10
-        |> List.map doBatch
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
         |> doBatch
         |> map
             (List.concat
@@ -295,23 +291,17 @@ batch tasks =
                 >> List.concat
                 >> List.concat
                 >> List.concat
-                >> List.reverse
             )
 
 
+miniBatchesOf : Int -> List (Task x a) -> List (Task x (List a))
+miniBatchesOf n =
+    Internal.Utils.List.chunk n >> List.map doBatch
+
+
 doBatch : List (Task x a) -> Task x (List a)
-doBatch tasks =
-    doBatchHelp tasks (succeed [])
-
-
-doBatchHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
-doBatchHelp tasks combined =
-    case tasks of
-        task :: rest ->
-            doBatchHelp rest (map2 (::) task combined)
-
-        [] ->
-            combined
+doBatch =
+    List.foldr (map2 (::)) (succeed [])
 
 
 
@@ -363,6 +353,11 @@ unwrap res ids (Task run) =
 andThenDo : Task x b -> Task x a -> Task x b
 andThenDo t2 t1 =
     t1 |> andThen (\_ -> t2)
+
+
+return : a -> Task x b -> Task x a
+return a =
+    map (\_ -> a)
 
 
 
