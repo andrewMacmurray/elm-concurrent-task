@@ -1,9 +1,9 @@
 module TaskTest exposing (suite)
 
+import Concurrent.Internal.Ids as Ids exposing (Ids)
+import Concurrent.Internal.Task as Task exposing (Task)
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, intRange, string)
-import Internal.Id as Id
-import Internal.Task as Task exposing (Task)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Test exposing (..)
@@ -152,7 +152,7 @@ responses =
                                 )
                         )
                     |> Tuple.first
-                    |> Id.get
+                    |> Ids.get
                     |> Expect.equal (String.fromInt n)
         , test "handles large sequences" <|
             \_ ->
@@ -177,8 +177,7 @@ responses =
             \_ ->
                 let
                     n =
-                        -- TODO: this needs to be optimized like Task.sequence
-                        1000
+                        5000
                 in
                 List.repeat n (create Decode.int)
                     |> Task.batch
@@ -286,13 +285,13 @@ runTaskWith results task =
     Tuple.second (evalTask results task)
 
 
-evalTask : List ( Int, Encode.Value ) -> Task Task.Error a -> ( Id.Sequence, Result Task.Error a )
+evalTask : List ( Int, Encode.Value ) -> Task Task.Error a -> ( Ids, Result Task.Error a )
 evalTask results task =
     Task.testEval
         { maxDepth = 100000000
         , results = results
         , task = task
-        , ids = Id.init
+        , ids = Ids.init
         }
 
 

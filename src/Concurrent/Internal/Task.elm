@@ -1,4 +1,4 @@
-module Internal.Task exposing
+module Concurrent.Internal.Task exposing
     ( Attempt
     , Definition
     , Error(..)
@@ -29,13 +29,16 @@ module Internal.Task exposing
     , onError
     , onProgress
     , pool
+    , return
     , sequence
     , succeed
     , testEval
     )
 
+import Array exposing (Array)
+import Concurrent.Internal.Ids as Ids exposing (Ids)
+import Concurrent.Internal.Utils.List
 import Dict exposing (Dict)
-import Internal.Id as Id
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -47,20 +50,16 @@ import Task as CoreTask
 
 
 type Task x a
-    = Task (TaskResults -> Ids -> ( Ids, Task_ x a ))
+    = Task (Results -> Ids -> ( Ids, Task_ x a ))
 
 
 type Task_ x a
-    = Pending (List Definition_) (Task x a)
+    = Pending (Array Definition_) (Task x a)
     | Done (Result x a)
 
 
-type alias Ids =
-    Id.Sequence
-
-
 type alias TaskId =
-    Id.Id
+    Ids.Id
 
 
 type alias Definition_ =
@@ -70,7 +69,7 @@ type alias Definition_ =
     }
 
 
-type alias TaskResults =
+type alias Results =
     Dict TaskId Decode.Value
 
 
@@ -121,15 +120,17 @@ define a =
         (\results ids ->
             let
                 taskId =
-                    Id.get ids
+                    Ids.get ids
             in
-            ( Id.next ids
+            ( Ids.next ids
             , Pending
-                [ { taskId = taskId
-                  , function = a.function
-                  , args = a.args
-                  }
-                ]
+                (Array.fromList
+                    [ { taskId = taskId
+                      , function = a.function
+                      , args = a.args
+                      }
+                    ]
+                )
                 (case Dict.get taskId results of
                     Just result ->
                         result
@@ -173,8 +174,8 @@ map f (Task run) =
         )
 
 
-map2Internal : (a -> b -> c) -> Task x a -> Task x b -> Task x c
-map2Internal f (Task run1) (Task run2) =
+andMap : Task x a -> Task x (a -> b) -> Task x b
+andMap (Task run1) (Task run2) =
     Task
         (\res ids ->
             let
@@ -184,19 +185,19 @@ map2Internal f (Task run1) (Task run2) =
                 ( ids__, task1 ) =
                     run1 res ids_
             in
-            ( Id.combine ids_ ids__
+            ( Ids.combine ids_ ids__
             , case ( task1, task2 ) of
                 ( Pending defs1 next1, Pending defs2 next2 ) ->
-                    Pending (defs1 ++ defs2) (map2Internal f next1 next2)
+                    Pending (Array.append defs1 defs2) (andMap next1 next2)
 
                 ( Pending defs next1, Done b ) ->
-                    haltOnError b (Pending defs (map2Internal f next1 (fromResult b)))
+                    haltOnError b (Pending defs (andMap next1 (fromResult b)))
 
                 ( Done a, Pending defs next2 ) ->
-                    haltOnError a (Pending defs (map2Internal f (fromResult a) next2))
+                    haltOnError a (Pending defs (andMap (fromResult a) next2))
 
                 ( Done a, Done b ) ->
-                    Done (Result.map2 f a b)
+                    Done (Result.map2 (|>) a b)
             )
         )
 
@@ -209,11 +210,6 @@ haltOnError res task =
 
         Ok _ ->
             task
-
-
-andMap : Task x a -> Task x (a -> b) -> Task x b
-andMap =
-    map2Internal (|>)
 
 
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
@@ -275,17 +271,32 @@ sequenceHelp tasks combined =
 
 batch : List (Task x a) -> Task x (List a)
 batch tasks =
-    batchHelp tasks (succeed []) |> map List.reverse
+    tasks
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> doBatch
+        |> map
+            (List.concat
+                >> List.concat
+                >> List.concat
+                >> List.concat
+                >> List.concat
+                >> List.concat
+            )
 
 
-batchHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
-batchHelp tasks combined =
-    case tasks of
-        task :: rest ->
-            batchHelp rest (map2 (::) task combined)
+miniBatchesOf : Int -> List (Task x a) -> List (Task x (List a))
+miniBatchesOf n =
+    Concurrent.Internal.Utils.List.chunk n >> List.map doBatch
 
-        [] ->
-            combined
+
+doBatch : List (Task x a) -> Task x (List a)
+doBatch =
+    List.foldr (map2 (::)) (succeed [])
 
 
 
@@ -329,7 +340,7 @@ andThen f (Task run) =
         )
 
 
-unwrap : TaskResults -> Ids -> Task x a -> ( Ids, Task_ x a )
+unwrap : Results -> Ids -> Task x a -> ( Ids, Task_ x a )
 unwrap res ids (Task run) =
     run res ids
 
@@ -337,6 +348,11 @@ unwrap res ids (Task run) =
 andThenDo : Task x b -> Task x a -> Task x b
 andThenDo t2 t1 =
     t1 |> andThen (\_ -> t2)
+
+
+return : a -> Task x b -> Task x a
+return a =
+    map (\_ -> a)
 
 
 
@@ -419,7 +435,7 @@ type alias Progress x a =
 
 
 type alias BatchResults =
-    Dict AttemptId TaskResults
+    Dict AttemptId Results
 
 
 type alias RawResults =
@@ -455,7 +471,7 @@ type alias OnProgress msg x a =
 
 attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
 attempt attempt_ task =
-    case stepTask Dict.empty ( Id.init, task ) of
+    case stepTask Dict.empty ( Ids.init, task ) of
         ( _, Done res ) ->
             ( attempt_.pool
             , sendResult attempt_.onComplete attempt_.id res
@@ -463,7 +479,7 @@ attempt attempt_ task =
 
         ( _, Pending defs _ ) ->
             ( startAttempt attempt_.id
-                { task = ( Id.init, task )
+                { task = ( Ids.init, task )
                 , inFlight = recordSent defs Set.empty
                 }
                 attempt_.pool
@@ -493,7 +509,7 @@ onProgress options pool_ =
         )
 
 
-updateAttempt : OnProgress msg x a -> Pool x a -> ( AttemptId, TaskResults ) -> Progress x a -> ( Pool x a, Cmd msg )
+updateAttempt : OnProgress msg x a -> Pool x a -> ( AttemptId, Results ) -> Progress x a -> ( Pool x a, Cmd msg )
 updateAttempt options pool_ ( attemptId, results ) progress =
     case stepTask results progress.task of
         ( ids_, Pending _ next_ ) ->
@@ -524,7 +540,7 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                         }
                         pool_
                     , defs
-                        |> List.filter (notStarted progress)
+                        |> Array.filter (notStarted progress)
                         |> encodeDefinitions attemptId
                         |> options.send
                     )
@@ -533,24 +549,26 @@ updateAttempt options pool_ ( attemptId, results ) progress =
             ( pool_, Cmd.none )
 
 
-stepTask : TaskResults -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
+stepTask : Results -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
 stepTask res ( ids, Task run ) =
     run res ids
 
 
-recordSent : List Definition_ -> Set TaskId -> Set TaskId
+recordSent : Array Definition_ -> Set TaskId -> Set TaskId
 recordSent defs inFlight =
     Set.union inFlight (toSentIds defs)
 
 
-removeCompleted : TaskResults -> Set TaskId -> Set TaskId
+removeCompleted : Results -> Set TaskId -> Set TaskId
 removeCompleted res inFlight =
     Set.diff inFlight (Set.fromList (Dict.keys res))
 
 
-toSentIds : List Definition_ -> Set TaskId
+toSentIds : Array Definition_ -> Set TaskId
 toSentIds defs =
-    Set.fromList (List.map .taskId defs)
+    Array.map .taskId defs
+        |> Array.toList
+        |> Set.fromList
 
 
 sendResult : (AttemptId -> Result x a -> msg) -> AttemptId -> Result x a -> Cmd msg
@@ -619,9 +637,9 @@ decodeError =
             )
 
 
-encodeDefinitions : AttemptId -> List Definition_ -> Encode.Value
+encodeDefinitions : AttemptId -> Array Definition_ -> Encode.Value
 encodeDefinitions attemptId =
-    Encode.list (encodeDefinition attemptId)
+    Encode.array (encodeDefinition attemptId)
 
 
 encodeDefinition : AttemptId -> Definition_ -> Encode.Value
@@ -683,7 +701,7 @@ type alias TestEval a =
 testEval : TestEval a -> ( Ids, Result Error a )
 testEval options =
     let
-        results : TaskResults
+        results : Results
         results =
             options.results
                 |> List.head
