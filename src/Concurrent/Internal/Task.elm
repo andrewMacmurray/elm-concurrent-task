@@ -5,15 +5,16 @@ module Concurrent.Internal.Task exposing
     , Expect
     , OnProgress
     , Pool
-    , RawResult
-    , RawResults
-    , Task
+    , Results
+    , Task(..)
+    , Task_(..)
     , andMap
     , andThen
     , andThenDo
     , attempt
     , batch
     , define
+    , doBatch
     , errorToString
     , expectJson
     , expectString
@@ -32,7 +33,6 @@ module Concurrent.Internal.Task exposing
     , return
     , sequence
     , succeed
-    , testEval
     )
 
 import Array exposing (Array)
@@ -54,7 +54,7 @@ type Task x a
 
 
 type Task_ x a
-    = Pending (Array Definition_) (Task x a)
+    = Pending (Array Todo) (Task x a)
     | Done (Result x a)
 
 
@@ -62,7 +62,7 @@ type alias TaskId =
     Ids.Id
 
 
-type alias Definition_ =
+type alias Todo =
     { taskId : TaskId
     , function : String
     , args : Encode.Value
@@ -115,7 +115,7 @@ type alias Definition a =
 
 
 define : Definition a -> Task Error a
-define a =
+define def =
     Task
         (\results ids ->
             let
@@ -126,21 +126,21 @@ define a =
             , Pending
                 (Array.fromList
                     [ { taskId = taskId
-                      , function = a.function
-                      , args = a.args
+                      , function = def.function
+                      , args = def.args
                       }
                     ]
                 )
                 (case Dict.get taskId results of
                     Just result ->
                         result
-                            |> Decode.decodeValue (decodeResponse a.expect)
+                            |> Decode.decodeValue (decodeResponse def.expect)
                             |> Result.mapError DecodeResponseError
                             |> Result.andThen identity
                             |> fromResult
 
                     Nothing ->
-                        runWith ids (define a)
+                        runWith ids (define def)
                 )
             )
         )
@@ -438,10 +438,6 @@ type alias BatchResults =
     Dict AttemptId Results
 
 
-type alias RawResults =
-    List RawResult
-
-
 type alias RawResult =
     { attemptId : AttemptId
     , taskId : TaskId
@@ -456,14 +452,14 @@ type alias AttemptId =
 type alias Attempt msg x a =
     { id : AttemptId
     , pool : Pool x a
-    , send : Encode.Value -> Cmd msg
+    , send : Decode.Value -> Cmd msg
     , onComplete : AttemptId -> Result x a -> msg
     }
 
 
 type alias OnProgress msg x a =
-    { send : Encode.Value -> Cmd msg
-    , receive : (RawResults -> msg) -> Sub msg
+    { send : Decode.Value -> Cmd msg
+    , receive : (Decode.Value -> msg) -> Sub msg
     , onComplete : AttemptId -> Result x a -> msg
     , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
@@ -554,7 +550,7 @@ stepTask res ( ids, Task run ) =
     run res ids
 
 
-recordSent : Array Definition_ -> Set TaskId -> Set TaskId
+recordSent : Array Todo -> Set TaskId -> Set TaskId
 recordSent defs inFlight =
     Set.union inFlight (toSentIds defs)
 
@@ -564,7 +560,7 @@ removeCompleted res inFlight =
     Set.diff inFlight (Set.fromList (Dict.keys res))
 
 
-toSentIds : Array Definition_ -> Set TaskId
+toSentIds : Array Todo -> Set TaskId
 toSentIds defs =
     Array.map .taskId defs
         |> Array.toList
@@ -576,13 +572,20 @@ sendResult onComplete attemptId res =
     CoreTask.succeed res |> CoreTask.perform (onComplete attemptId)
 
 
-notStarted : Progress x a -> Definition_ -> Bool
+notStarted : Progress x a -> Todo -> Bool
 notStarted model def =
     not (Set.member def.taskId model.inFlight)
 
 
-toBatchResults : RawResults -> BatchResults
+toBatchResults : Decode.Value -> BatchResults
 toBatchResults =
+    Decode.decodeValue (Decode.list decodeRawResult)
+        >> Result.map toBatchResults_
+        >> Result.withDefault Dict.empty
+
+
+toBatchResults_ : List RawResult -> BatchResults
+toBatchResults_ =
     List.foldl
         (\result batch_ ->
             Dict.update result.attemptId
@@ -601,6 +604,14 @@ toBatchResults =
 
 
 -- Encode / Decode
+
+
+decodeRawResult : Decoder RawResult
+decodeRawResult =
+    Decode.map3 RawResult
+        (Decode.field "attemptId" Decode.string)
+        (Decode.field "taskId" Decode.string)
+        (Decode.field "result" Decode.value)
 
 
 decodeResponse : Expect value -> Decoder (Result Error value)
@@ -637,12 +648,12 @@ decodeError =
             )
 
 
-encodeDefinitions : AttemptId -> Array Definition_ -> Encode.Value
+encodeDefinitions : AttemptId -> Array Todo -> Encode.Value
 encodeDefinitions attemptId =
     Encode.array (encodeDefinition attemptId)
 
 
-encodeDefinition : AttemptId -> Definition_ -> Encode.Value
+encodeDefinition : AttemptId -> Todo -> Encode.Value
 encodeDefinition attemptId def =
     Encode.object
         [ ( "attemptId", Encode.string attemptId )
@@ -684,45 +695,3 @@ findAttempt attemptId (Pool p) =
 mapPool : (Pool_ x a -> Pool_ x a) -> Pool x a -> Pool x a
 mapPool f (Pool p) =
     Pool (f p)
-
-
-
--- Test Eval
-
-
-type alias TestEval a =
-    { maxDepth : Int
-    , results : List ( Int, Encode.Value )
-    , task : Task Error a
-    , ids : Ids
-    }
-
-
-testEval : TestEval a -> ( Ids, Result Error a )
-testEval options =
-    let
-        results : Results
-        results =
-            options.results
-                |> List.head
-                |> Maybe.withDefault ( 100, Encode.null )
-                |> Tuple.mapFirst String.fromInt
-                |> List.singleton
-                |> Dict.fromList
-    in
-    case stepTask results ( options.ids, options.task ) of
-        ( ids, Done a ) ->
-            ( ids, a )
-
-        ( ids, Pending _ next ) ->
-            if options.maxDepth > 0 then
-                testEval
-                    { options
-                        | maxDepth = options.maxDepth - 1
-                        , results = List.drop 1 options.results
-                        , task = next
-                        , ids = ids
-                    }
-
-            else
-                ( ids, Err (InternalError "timeout") )

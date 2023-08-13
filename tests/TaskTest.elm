@@ -2,6 +2,7 @@ module TaskTest exposing (suite)
 
 import Concurrent.Internal.Ids as Ids exposing (Ids)
 import Concurrent.Internal.Task as Task exposing (Task)
+import Dict
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, intRange, string)
 import Json.Decode as Decode
@@ -272,7 +273,7 @@ hardcoded =
 
 
 
--- Helpers
+-- Task Runner
 
 
 runTask : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
@@ -287,12 +288,59 @@ runTaskWith results task =
 
 evalTask : List ( Int, Encode.Value ) -> Task Task.Error a -> ( Ids, Result Task.Error a )
 evalTask results task =
-    Task.testEval
+    evalWith
         { maxDepth = 100000000
         , results = results
         , task = task
         , ids = Ids.init
         }
+
+
+type alias Eval a =
+    { maxDepth : Int
+    , results : List ( Int, Encode.Value )
+    , task : Task Task.Error a
+    , ids : Ids
+    }
+
+
+evalWith : Eval a -> ( Ids, Result Task.Error a )
+evalWith options =
+    let
+        results : Task.Results
+        results =
+            options.results
+                |> List.head
+                |> Maybe.withDefault ( -1, Encode.null )
+                |> Tuple.mapFirst String.fromInt
+                |> List.singleton
+                |> Dict.fromList
+    in
+    case stepTask results ( options.ids, options.task ) of
+        ( ids, Task.Done a ) ->
+            ( ids, a )
+
+        ( ids, Task.Pending _ next ) ->
+            if options.maxDepth > 0 then
+                evalWith
+                    { options
+                        | maxDepth = options.maxDepth - 1
+                        , results = List.drop 1 options.results
+                        , task = next
+                        , ids = ids
+                    }
+
+            else
+                ( ids, Err (Task.InternalError "timeout") )
+
+
+stepTask : Task.Results -> ( Ids, Task x a ) -> ( Ids, Task.Task_ x a )
+stepTask res ( ids, Task.Task run ) =
+    run res ids
+
+
+
+-- Helpers
 
 
 success : Encode.Value -> Encode.Value
@@ -348,3 +396,7 @@ join3 a b c =
 join2 : String -> String -> String
 join2 a b =
     a ++ b
+
+
+
+-- Runner

@@ -5,7 +5,7 @@ module Concurrent.Task exposing
     , sequence, batch
     , map, andMap, map2, map3, map4, map5
     , Error, mapError, onError, errorToString
-    , attempt, pool, onProgress, Pool, AttemptId, RawResults
+    , attempt, pool, onProgress, Pool, AttemptId
     )
 
 {-| A near drop in replacement for `elm/core`'s `Task`
@@ -43,12 +43,12 @@ module Concurrent.Task exposing
 
 # Run a Task
 
-@docs attempt, pool, onProgress, Pool, AttemptId, RawResults
+@docs attempt, pool, onProgress, Pool, AttemptId
 
 -}
 
 import Concurrent.Internal.Task as Internal
-import Json.Decode exposing (Decoder)
+import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
@@ -259,15 +259,10 @@ type alias Pool x a =
 
 
 {-| -}
-type alias RawResults =
-    Internal.RawResults
-
-
-{-| -}
 attempt :
     { id : AttemptId
     , pool : Pool x a
-    , send : Encode.Value -> Cmd msg
+    , send : Decode.Value -> Cmd msg
     , onComplete : AttemptId -> Result x a -> msg
     }
     -> Task x a
@@ -284,8 +279,8 @@ pool =
 
 {-| -}
 onProgress :
-    { send : Encode.Value -> Cmd msg
-    , receive : (RawResults -> msg) -> Sub msg
+    { send : Decode.Value -> Cmd msg
+    , receive : (Decode.Value -> msg) -> Sub msg
     , onComplete : AttemptId -> Result x a -> msg
     , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
