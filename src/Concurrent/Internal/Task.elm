@@ -5,8 +5,6 @@ module Concurrent.Internal.Task exposing
     , Expect
     , OnProgress
     , Pool
-    , RawResult
-    , RawResults
     , Task
     , andMap
     , andThen
@@ -438,10 +436,6 @@ type alias BatchResults =
     Dict AttemptId Results
 
 
-type alias RawResults =
-    List RawResult
-
-
 type alias RawResult =
     { attemptId : AttemptId
     , taskId : TaskId
@@ -456,14 +450,14 @@ type alias AttemptId =
 type alias Attempt msg x a =
     { id : AttemptId
     , pool : Pool x a
-    , send : Encode.Value -> Cmd msg
+    , send : Decode.Value -> Cmd msg
     , onComplete : AttemptId -> Result x a -> msg
     }
 
 
 type alias OnProgress msg x a =
-    { send : Encode.Value -> Cmd msg
-    , receive : (RawResults -> msg) -> Sub msg
+    { send : Decode.Value -> Cmd msg
+    , receive : (Decode.Value -> msg) -> Sub msg
     , onComplete : AttemptId -> Result x a -> msg
     , onProgress : ( Pool x a, Cmd msg ) -> msg
     }
@@ -581,8 +575,15 @@ notStarted model def =
     not (Set.member def.taskId model.inFlight)
 
 
-toBatchResults : RawResults -> BatchResults
+toBatchResults : Decode.Value -> BatchResults
 toBatchResults =
+    Decode.decodeValue (Decode.list decodeRawResult)
+        >> Result.map toBatchResults_
+        >> Result.withDefault Dict.empty
+
+
+toBatchResults_ : List RawResult -> BatchResults
+toBatchResults_ =
     List.foldl
         (\result batch_ ->
             Dict.update result.attemptId
@@ -601,6 +602,14 @@ toBatchResults =
 
 
 -- Encode / Decode
+
+
+decodeRawResult : Decoder RawResult
+decodeRawResult =
+    Decode.map3 RawResult
+        (Decode.field "attemptId" Decode.string)
+        (Decode.field "taskId" Decode.string)
+        (Decode.field "result" Decode.value)
 
 
 decodeResponse : Expect value -> Decoder (Result Error value)
