@@ -56,12 +56,20 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Debug Options
+
+interface DebugOptions {
+  taskStart?: boolean;
+  taskFinish?: boolean;
+}
+
 // Register Runner
 
 export interface Options {
   tasks: Tasks;
   ports: ElmPorts;
   builtins?: Builtins;
+  debug?: boolean | DebugOptions;
 }
 
 export function register(options: Options): void {
@@ -73,6 +81,7 @@ export function register(options: Options): void {
     for (let i = 0; i < defs.length; i++) {
       const def = defs[i];
       if (!tasks[def.function]) {
+        console.error(`ERROR: ${def.function} is not a registered task`);
         return send([
           {
             attemptId: def.attemptId,
@@ -89,16 +98,13 @@ export function register(options: Options): void {
       }
     }
 
-    const debouncedSend = debounce(send, debounceInterval(defs));
+    const debouncedSend = debounce(send, debounceThreshold(defs));
 
     defs.map(async (def) => {
       try {
-        console.log(
-          "--STARTING--",
-          def.function,
-          `${def.attemptId} - ${def.taskId}`
-        );
+        logTaskStart(def, options);
         const result = await tasks[def.function](def.args);
+        logTaskFinish(def, options);
         debouncedSend({
           attemptId: def.attemptId,
           taskId: def.taskId,
@@ -121,7 +127,33 @@ export function register(options: Options): void {
   });
 }
 
-function debounceInterval(defs: TaskDefinition[]): number {
+function logTaskStart(def: TaskDefinition, options: Options): void {
+  const logStart =
+    options.debug &&
+    typeof options.debug !== "boolean" &&
+    options.debug.taskStart;
+
+  if (logStart || options.debug === true) {
+    console.info(
+      `--starting-- ${def.function} attempt-${def.attemptId} id-${def.taskId}`
+    );
+  }
+}
+
+function logTaskFinish(def: TaskDefinition, options: Options): void {
+  const logStart =
+    options.debug &&
+    typeof options.debug !== "boolean" &&
+    options.debug.taskFinish;
+
+  if (logStart || options.debug === true) {
+    console.info(
+      `--complete-- ${def.function} attempt - ${def.attemptId} id - ${def.taskId}`
+    );
+  }
+}
+
+function debounceThreshold(defs: TaskDefinition[]): number {
   return defs.length > 10 ? 20 : 0;
 }
 

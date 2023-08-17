@@ -32,6 +32,7 @@ TaskRunner.register({
     send: ports.send,
     receive: ports.receive,
   },
+  debug: { taskStart: true },
 });
 
 const rl = readline.createInterface({
