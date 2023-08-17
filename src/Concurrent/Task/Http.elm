@@ -64,6 +64,7 @@ type Body
 type Expect a
     = ExpectJson (Decoder a)
     | ExpectString (Decoder a)
+    | ExpectWhatever (Decoder a)
 
 
 {-| -}
@@ -85,7 +86,7 @@ type Error
 type alias StatusDetails =
     { code : Int
     , text : String
-    , body : Decode.Value
+    , body : Maybe String
     }
 
 
@@ -118,7 +119,7 @@ expectString =
 {-| -}
 expectWhatever : Expect ()
 expectWhatever =
-    ExpectJson (Decode.succeed ())
+    ExpectWhatever (Decode.succeed ())
 
 
 
@@ -156,7 +157,7 @@ request r =
 wrapError : Task.Error -> Error
 wrapError err =
     case err of
-        Internal.DecodeResponseError e ->
+        Internal.ResponseError e ->
             BadBody (Decode.errorToString e)
 
         _ ->
@@ -208,6 +209,9 @@ decodeExpect expect =
                         ExpectString decoder ->
                             Decode.field "body" (Decode.map Ok decoder)
 
+                        ExpectWhatever decoder ->
+                            Decode.field "body" (Decode.map Ok decoder)
+
                 else
                     Decode.map2
                         (\text body ->
@@ -220,7 +224,7 @@ decodeExpect expect =
                                 )
                         )
                         (Decode.field "statusText" Decode.string)
-                        (Decode.field "body" Decode.value)
+                        (Decode.field "body" (Decode.maybe Decode.string))
             )
 
 
@@ -247,6 +251,9 @@ encodeExpect expect =
 
         ExpectJson _ ->
             Encode.string "JSON"
+
+        ExpectWhatever _ ->
+            Encode.string "WHATEVER"
 
 
 encodeHeader : Header -> Encode.Value

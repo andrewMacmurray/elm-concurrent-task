@@ -6,31 +6,31 @@ export function http(request: Request): Promise<Response> {
     body: request.body ? JSON.stringify(request.body) : null,
     headers: toHeaders(request),
   })
-    .then((res) =>
-      res.text().then((body) => {
-        try {
-          switch (request.expect) {
-            case "JSON":
-              return {
-                status: res.status,
-                statusText: res.statusText,
-                body: JSON.parse(body),
-              };
-            case "STRING":
-              return {
-                status: res.status,
-                statusText: res.statusText,
-                body: body,
-              };
-          }
-        } catch (e) {
+    .then((res) => {
+      switch (request.expect) {
+        case "JSON": {
+          return res.json().then((x) => ({
+            status: res.status,
+            statusText: res.statusText,
+            body: x,
+          }));
+        }
+        case "STRING": {
+          return res.text().then((x) => ({
+            status: res.status,
+            statusText: res.statusText,
+            body: x,
+          }));
+        }
+        case "WHATEVER": {
           return {
-            error: "BAD_BODY",
-            body: body,
+            status: res.status,
+            statusText: res.statusText,
+            body: null,
           };
         }
-      })
-    )
+      }
+    })
     .catch((e) => {
       return {
         error: toHttpError(e),

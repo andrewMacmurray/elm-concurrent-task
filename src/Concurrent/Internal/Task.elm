@@ -78,7 +78,7 @@ type Expect a
 
 
 type Error
-    = DecodeResponseError Decode.Error
+    = ResponseError Decode.Error
     | JsException String
     | MissingFunction String
     | InternalError String
@@ -134,8 +134,8 @@ define def =
                 (case Dict.get taskId results of
                     Just result ->
                         result
-                            |> Decode.decodeValue (decodeResponse def.expect)
-                            |> Result.mapError DecodeResponseError
+                            |> Decode.decodeValue (decodeResult def.expect)
+                            |> Result.mapError ResponseError
                             |> Result.andThen identity
                             |> fromResult
 
@@ -403,7 +403,7 @@ mapError f (Task run) =
 errorToString : Error -> String
 errorToString err =
     case err of
-        DecodeResponseError e ->
+        ResponseError e ->
             "DecodeResponseError: " ++ Decode.errorToString e
 
         JsException string ->
@@ -614,8 +614,8 @@ decodeRawResult =
         (Decode.field "result" Decode.value)
 
 
-decodeResponse : Expect value -> Decoder (Result Error value)
-decodeResponse (ExpectJson expect) =
+decodeResult : Expect value -> Decoder (Result Error value)
+decodeResult (ExpectJson expect) =
     Decode.field "status" Decode.string
         |> Decode.andThen
             (\status ->
