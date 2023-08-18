@@ -9,11 +9,21 @@ export function http(request: Request): Promise<Response> {
     .then((res) => {
       switch (request.expect) {
         case "JSON": {
-          return res.json().then((x) => ({
-            status: res.status,
-            statusText: res.statusText,
-            body: x,
-          }));
+          return res
+            .json()
+            .then((x) => ({
+              status: res.status,
+              statusText: res.statusText,
+              body: x,
+            }))
+            .catch((e) => {
+              return {
+                status: res.status,
+                statusText: res.statusText,
+                error: "BAD_BODY",
+                body: e,
+              };
+            });
         }
         case "STRING": {
           return res.text().then((x) => ({

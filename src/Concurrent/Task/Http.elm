@@ -6,7 +6,23 @@ module Concurrent.Task.Http exposing
     , Body, emptyBody, jsonBody
     )
 
-{-| Make concurrent http requests
+{-| Make concurrent http requests.
+
+The JavaScript runner has this task builtin by default.
+
+It uses the [fetch api](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) internally which is widely supported in the Browser and (as of Node 18) in NodeJS.
+
+If needed you can supply a custom implementation like so:
+
+    Tasks.register({
+      tasks: {},
+      ports: app.ports,
+      builtins: {
+        http: (request) => customHttp(request),
+      },
+    });
+
+See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/fetch.ts) to see how to create your own.
 
 
 # Request
@@ -192,7 +208,7 @@ decodeError r =
                             |> Decode.map (Err << BadBody)
 
                     _ ->
-                        Decode.succeed (Err (TaskError (Internal.InternalError ("Unknown error code: " ++ code))))
+                        Decode.succeed (Err (TaskError (Internal.UnknownError ("Unknown error code: " ++ code))))
             )
 
 

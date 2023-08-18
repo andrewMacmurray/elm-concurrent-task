@@ -230,7 +230,7 @@ errors =
                         [ ( 0, success (Encode.string "a") )
                         , ( 1, error "other_error" "..." )
                         ]
-                    |> Expect.equal (Err (Task.InternalError "Unknown error reason: other_error"))
+                    |> Expect.equal (Err (Task.UnknownError "Unknown error reason: other_error"))
         ]
 
 
@@ -258,14 +258,14 @@ hardcoded =
                 Task.succeed 1
                     |> Task.andThenDo (Task.succeed 2)
                     |> Task.andThen (\_ -> Task.fail "hardcoded error")
-                    |> Task.mapError Task.InternalError
+                    |> Task.mapError Task.UnknownError
                     |> runTask []
-                    |> Expect.equal (Err (Task.InternalError "hardcoded error"))
+                    |> Expect.equal (Err (Task.UnknownError "hardcoded error"))
         , fuzz2 int int "tasks can recover from an error" <|
             \a b ->
                 Task.succeed a
                     |> Task.andThen (\_ -> Task.fail "error")
-                    |> Task.mapError Task.InternalError
+                    |> Task.mapError Task.UnknownError
                     |> Task.onError (\_ -> Task.succeed b)
                     |> runTask []
                     |> Expect.equal (Ok b)
@@ -331,7 +331,7 @@ evalWith options =
                     }
 
             else
-                ( ids, Err (Task.InternalError "timeout") )
+                ( ids, Err (Task.UnknownError "timeout") )
 
 
 stepTask : Task.Results -> ( Ids, Task x a ) -> ( Ids, Task.Task_ x a )

@@ -40,8 +40,8 @@ type alias Model =
 type Msg
     = OnFireMany Int
     | OnManualEnter String
-    | OnComplete String (Result Error String)
     | OnProgress ( Task.Pool Error String, Cmd Msg )
+    | OnComplete Task.AttemptId (Result Error String)
 
 
 type Error

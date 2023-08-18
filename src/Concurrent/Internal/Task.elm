@@ -81,7 +81,7 @@ type Error
     = ResponseError Decode.Error
     | JsException String
     | MissingFunction String
-    | InternalError String
+    | UnknownError String
 
 
 
@@ -412,7 +412,7 @@ errorToString err =
         MissingFunction string ->
             "MissingFunction: " ++ string
 
-        InternalError string ->
+        UnknownError string ->
             "InternalError: " ++ string
 
 
@@ -627,7 +627,7 @@ decodeResult (ExpectJson expect) =
                         Decode.field "error" (Decode.map Err decodeError)
 
                     _ ->
-                        Decode.succeed (Err (InternalError ("Unknown response status: " ++ status)))
+                        Decode.succeed (Err (UnknownError ("Unknown response status: " ++ status)))
             )
 
 
@@ -644,7 +644,7 @@ decodeError =
                         Decode.field "message" (Decode.map MissingFunction Decode.string)
 
                     _ ->
-                        Decode.succeed (InternalError ("Unknown error reason: " ++ reason))
+                        Decode.succeed (UnknownError ("Unknown error reason: " ++ reason))
             )
 
 
