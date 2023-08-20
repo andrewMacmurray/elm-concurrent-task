@@ -5,6 +5,7 @@ export interface Request {
   method: string;
   headers: { name: string; value: string }[];
   expect: Expect;
+  timeout: number | null;
   body: any;
 }
 

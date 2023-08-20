@@ -1,10 +1,18 @@
 import { Request, Response, HttpError, toHeaders } from "./index";
 
 export function http(request: Request): Promise<Response> {
+  let controller;
+
+  if (request.timeout) {
+    controller = new AbortController();
+    setTimeout(() => controller.abort(), request.timeout);
+  }
+
   return fetch(request.url, {
     method: request.method,
     body: request.body ? JSON.stringify(request.body) : null,
     headers: toHeaders(request),
+    signal: controller?.signal,
   })
     .then((res) => {
       switch (request.expect) {
@@ -49,6 +57,9 @@ export function http(request: Request): Promise<Response> {
 }
 
 function toHttpError(err): HttpError {
+  if (err.name === "AbortError") {
+    return "TIMEOUT";
+  }
   switch (err.cause?.code) {
     case "ENOTFOUND":
       return "NETWORK_ERROR";

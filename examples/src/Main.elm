@@ -214,7 +214,7 @@ batchAndSequence =
 bigBatch : Task Http.Error String
 bigBatch =
     timeExecution "bigBatch"
-        (List.repeat 10000 (longRequest_ 0)
+        (List.repeat 1000 (longRequest_ 1000)
             |> Task.batch
             |> Task.map String.concat
         )
@@ -337,6 +337,7 @@ getExternalTodo =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "title" Decode.string)
+        , timeout = Nothing
         }
 
 
@@ -348,6 +349,7 @@ malformed =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectString
+        , timeout = Nothing
         }
 
 
@@ -410,6 +412,7 @@ longRequest_ ms =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "message" Decode.string)
+        , timeout = Nothing
         }
 
 
@@ -421,6 +424,7 @@ getBigFile =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson Decode.string
+        , timeout = Nothing
         }
 
 
@@ -432,6 +436,7 @@ httpError =
         , headers = []
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.succeed "whatever")
+        , timeout = Nothing
         }
 
 

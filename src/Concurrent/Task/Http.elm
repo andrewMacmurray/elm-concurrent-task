@@ -68,6 +68,7 @@ type alias Request a =
     , headers : List Header
     , body : Body
     , expect : Expect a
+    , timeout : Maybe Int
     }
 
 
@@ -102,7 +103,7 @@ type Error
 type alias StatusDetails =
     { code : Int
     , text : String
-    , body : Maybe String
+    , body : Decode.Value
     }
 
 
@@ -240,7 +241,7 @@ decodeExpect expect =
                                 )
                         )
                         (Decode.field "statusText" Decode.string)
-                        (Decode.field "body" (Decode.maybe Decode.string))
+                        (Decode.field "body" Decode.value)
             )
 
 
@@ -256,7 +257,13 @@ encode r =
         , ( "headers", Encode.list encodeHeader r.headers )
         , ( "expect", encodeExpect r.expect )
         , ( "body", encodeBody r.body )
+        , ( "timeout", encodeTimeout r.timeout )
         ]
+
+
+encodeTimeout : Maybe Int -> Encode.Value
+encodeTimeout =
+    Maybe.map Encode.int >> Maybe.withDefault Encode.null
 
 
 encodeExpect : Expect a -> Encode.Value
