@@ -44,7 +44,7 @@ Task.map2 combine
     )
 ```
 
-This is the elm equivalent of "callback hell"
+This is the elm equivalent of "callback hell".
 
 This library helps you do this with a lot less boilerplate.
 
@@ -63,13 +63,8 @@ import Json.Encode as Encode
 updateTheme : Theme -> Task Error ()
 updateTheme theme =
     getItem "preferences" decodePreferences
-        |> Task.map (setTheme theme)
-        |> Task.andThen
-            (\preferences ->
-                preferences
-                    |> encodePreferences
-                    |> setItem "preferences"
-            )
+        |> Task.map (setTheme theme >> encodePreferences)
+        |> Task.andThen (setItem "preferences")
 
 
 setItem : String -> Encode.Value -> Task Error ()
@@ -80,7 +75,7 @@ setItem key item =
         , args =
             Encode.object
                 [ ( "key", Encode.string key )
-                , ( "item", item )
+                , ( "item", Encode.string (Encode.encode 0 item) )
                 ]
         }
 
@@ -89,9 +84,10 @@ getItem : String -> Decoder a -> Task Error a
 getItem key decoder =
     Task.define
         { function = "storage:getItem"
-        , expect = Task.expectJson decoder
+        , expect = Task.expectString
         , args = Encode.object [ ( "key", Encode.string key ) ]
         }
+        |> Task.andThen (decodeItem decoder)
 ```
 
 ## Hack Free you say?
@@ -108,6 +104,19 @@ Both methods are not ideal (modifying global methods is pretty dodgy), and neith
 `elm-concurrent-task` uses plain ports and a bit of wiring to create a nice Task api.
 
 This makes it dependency free - so more portable (🤓) and less likely to break (😄).
+
+## Caveats
+
+Because `elm-concurrent-task` uses a different type to `elm/core` `Task` it is unfortunately not compatible with existing `elm/core` `Task`s.
+
+However, there are a number of tasks built into the JavaScript runner and supporting modules that should cover a large amount of the existing functionality of `elm/core` `Task`s.
+
+Check out the built-ins for more details:
+
+- [`Http.request`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Http)
+- [`Process.sleep`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Process)
+- [`Random.generate`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Random)
+- [`Time.now`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Time)
 
 ## How?
 
@@ -135,7 +144,7 @@ Your Elm program needs
 
   ```elm
   type alias Model =
-      { tasks : Task.Pool Error Success
+      { tasks : Task.Pool Msg Error Success
       }
   ```
 
@@ -143,8 +152,8 @@ Your Elm program needs
 
   ```elm
   type Msg
-      = OnProgress ( Task.Pool Error Success, Cmd Msg ) -- updates task progress
-      | OnComplete Task.AttemptId (Result Error Success) -- called when a task completes
+      = OnProgress ( Task.Pool Msg Error Success, Cmd Msg ) -- updates task progress
+      | OnComplete (Result Error Success) -- called when a task completes
   ```
 
 - 2 ports with the following signatures:
@@ -165,13 +174,13 @@ import Json.Decode as Decode
 
 
 type alias Model =
-    { tasks : Task.Pool Error Titles
+    { tasks : Task.Pool Msg Error Titles
     }
 
 
 type Msg
-    = OnProgress ( Task.Pool Error Titles, Cmd Msg )
-    | OnComplete Task.AttemptId (Result Error Titles)
+    = OnProgress ( Task.Pool Msg Error Titles, Cmd Msg )
+    | OnComplete (Result Error Titles)
 
 
 type alias Error =
@@ -217,10 +226,9 @@ init =
     let
         ( tasks, cmd ) =
             Task.attempt
-                { id = "attempt-id"
+                { send = send
                 , pool = Task.pool
                 , onComplete = OnComplete
-                , send = send
                 }
                 getAllTitles
     in
@@ -230,14 +238,12 @@ init =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnComplete attempt result ->
+        OnComplete result ->
             let
                 _ =
-                    Debug.log attempt result
+                    Debug.log "result" result
             in
-            ( model
-            , Cmd.none
-            )
+            ( model, Cmd.none )
 
         OnProgress ( tasks, cmd ) ->
             ( { model | tasks = tasks }, cmd )
@@ -248,7 +254,6 @@ subscriptions model =
     Task.onProgress
         { send = send
         , receive = receive
-        , onComplete = OnComplete
         , onProgress = OnProgress
         }
         model.tasks

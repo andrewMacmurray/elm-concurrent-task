@@ -280,8 +280,8 @@ update msg model =
                 ( tasks, cmd ) =
                     Task.attempt
                         { send = send
-                        , onComplete = OnComplete id
                         , pool = model.tasks
+                        , onComplete = OnComplete id
                         }
                         (Task.mapError HttpError bigBatch)
             in
@@ -292,8 +292,8 @@ update msg model =
                 ( tasks, cmd ) =
                     Task.attempt
                         { send = send
-                        , onComplete = OnComplete (String.fromInt id)
                         , pool = model.tasks
+                        , onComplete = OnComplete (String.fromInt id)
                         }
                         (slowSequence id)
             in

@@ -37,7 +37,7 @@ module Concurrent.Internal.Task exposing
 
 import Array exposing (Array)
 import Concurrent.Internal.Ids as Ids exposing (Ids)
-import Concurrent.Internal.Utils.List
+import Concurrent.Internal.List as List
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -291,7 +291,7 @@ batch tasks =
 
 miniBatchesOf : Int -> List (Task x a) -> List (Task x (List a))
 miniBatchesOf n =
-    Concurrent.Internal.Utils.List.chunk n >> List.map doBatch
+    List.chunk n >> List.map doBatch
 
 
 doBatch : List (Task x a) -> Task x (List a)

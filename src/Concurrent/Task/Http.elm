@@ -9,8 +9,7 @@ module Concurrent.Task.Http exposing
 {-| Make concurrent http requests.
 
 The JavaScript runner has this task builtin by default.
-
-It uses the [fetch api](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) internally which is widely supported in the Browser and (as of Node 18) in NodeJS.
+Internally It uses the [fetch api](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) which is widely supported in the Browser and (as of Node 18) in NodeJS.
 
 If needed you can supply a custom implementation like so:
 

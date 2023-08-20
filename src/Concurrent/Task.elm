@@ -6,7 +6,7 @@ module Concurrent.Task exposing
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , mapError, onError, errorToString
-    , attempt, pool, onProgress, Pool
+    , attempt, onProgress, Pool, pool
     )
 
 {-| A Task very similar to `elm/core`'s `Task` but:
@@ -14,7 +14,19 @@ module Concurrent.Task exposing
   - Allows concurrent execution of `map2`, `map3`, ...
   - Can safely call external JavaScript and chain the results (also known as Task Ports).
 
-TODO: add note about builtin tasks
+
+## Built-in Tasks
+
+Because `elm-concurrent-task` uses a different type to `elm/core` `Task` it is unfortunately not compatible with existing `elm/core` `Task`s.
+
+However, there are a number of tasks built into the JavaScript runner and supporting modules that should cover a large amount of the existing functionality of `elm/core` `Task`s.
+
+Check out the built-ins for more details:
+
+  - [`Http.request`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Http)
+  - [`Process.sleep`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Process)
+  - [`Random.generate`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Random)
+  - [`Time.now`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Time)
 
 
 # Tasks
@@ -71,7 +83,11 @@ Transform values returned from tasks.
 
 # Run a Task
 
-@docs attempt, pool, onProgress, Pool
+Once you've constructed a Task it needs to be passed to the runner to perform all of the effects.
+
+This can be done using the following functions:
+
+@docs attempt, onProgress, Pool, pool
 
 -}
 
@@ -432,19 +448,22 @@ map5 =
 -- Errors
 
 
-{-| -}
+{-| Transform the value of an Error (like `map` but for errors).
+-}
 mapError : (x -> y) -> Task x a -> Task y a
 mapError =
     Internal.mapError
 
 
-{-| -}
+{-| If the previous Task fails, catch that error and return a new Task (like `andThen` but for errors).
+-}
 onError : (x -> Task y a) -> Task x a -> Task y a
 onError =
     Internal.onError
 
 
-{-| -}
+{-| Convenience for formatting a Task error as a String.
+-}
 errorToString : Error -> String
 errorToString =
     Internal.errorToString
@@ -454,12 +473,29 @@ errorToString =
 -- Run a Task
 
 
-{-| -}
-type alias Pool msg x a =
-    Internal.Pool msg x a
+{-| Start a Task.
 
+This needs:
 
-{-| -}
+  - A task `Pool` (The internal model to keep track of task progress).
+  - The `send` port.
+  - The `Msg` to be called when the task completes.
+  - Your `Task` to be run.
+
+Make sure to update your `Model` and pass in the `Cmd` returned from `attempt`. e.g. in a branch of `update`:
+
+    let
+        ( tasks, cmd ) =
+            Task.attempt
+                { send = send
+                , pool = model.pool
+                , onComplete = OnComplete
+                }
+                myTask
+    in
+    ( { model | tasks = tasks }, cmd )
+
+-}
 attempt :
     { pool : Pool msg x a
     , send : Decode.Value -> Cmd msg
@@ -471,13 +507,27 @@ attempt =
     Internal.attempt
 
 
-{-| -}
-pool : Pool msg x a
-pool =
-    Internal.pool
+{-| Subscribe to updates from the JavaScript task runner.
 
+This needs:
 
-{-| -}
+  - The `send` port.
+  - The `receive` port.
+  - The `Msg` to be called with the updated progress.
+  - The task `Pool` stored in your model.
+
+You can wire this in like so:
+
+    subscriptions : Model -> Sub Msg
+    subscriptions model =
+        Task.onProgress
+            { send = send
+            , receive = receive
+            , onProgress = OnProgress
+            }
+            model.tasks
+
+-}
 onProgress :
     { send : Decode.Value -> Cmd msg
     , receive : (Decode.Value -> msg) -> Sub msg
@@ -487,3 +537,24 @@ onProgress :
     -> Sub msg
 onProgress =
     Internal.onProgress
+
+
+{-| -}
+type alias Pool msg x a =
+    Internal.Pool msg x a
+
+
+{-| Create an empty Task Pool.
+
+This is used to keep track of each Task's progress.
+
+Right now it doesn't expose any functionality, but it could be used in the future to do things like:
+
+  - Buffer the number of in-flight tasks (e.g. a server request queue, or database connection pool).
+  - Handle graceful process termination (e.g. abort or cleanup all in-flight tasks).
+  - Expose metrics on tasks.
+
+-}
+pool : Pool msg x a
+pool =
+    Internal.pool
