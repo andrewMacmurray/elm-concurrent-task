@@ -33,15 +33,15 @@ type alias Flags =
 
 
 type alias Model =
-    { tasks : Task.Pool Error String
+    { tasks : Task.Pool Msg Error String
     }
 
 
 type Msg
     = OnFireMany Int
     | OnManualEnter String
-    | OnProgress ( Task.Pool Error String, Cmd Msg )
-    | OnComplete Task.AttemptId (Result Error String)
+    | OnProgress ( Task.Pool Msg Error String, Cmd Msg )
+    | OnComplete String (Result Error String)
 
 
 type Error
@@ -280,8 +280,7 @@ update msg model =
                 ( tasks, cmd ) =
                     Task.attempt
                         { send = send
-                        , onComplete = OnComplete
-                        , id = id
+                        , onComplete = OnComplete id
                         , pool = model.tasks
                         }
                         (Task.mapError HttpError bigBatch)
@@ -293,8 +292,7 @@ update msg model =
                 ( tasks, cmd ) =
                     Task.attempt
                         { send = send
-                        , onComplete = OnComplete
-                        , id = String.fromInt id
+                        , onComplete = OnComplete (String.fromInt id)
                         , pool = model.tasks
                         }
                         (slowSequence id)
@@ -590,7 +588,6 @@ subscriptions model =
         , Task.onProgress
             { send = send
             , receive = receive
-            , onComplete = OnComplete
             , onProgress = OnProgress
             }
             model.tasks

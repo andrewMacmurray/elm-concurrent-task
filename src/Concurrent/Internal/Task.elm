@@ -420,17 +420,20 @@ errorToString err =
 -- Execute a Task
 
 
-type Pool x a
-    = Pool (Pool_ x a)
+type Pool msg x a
+    = Pool (Pool_ msg x a)
 
 
-type alias Pool_ x a =
-    Dict AttemptId (Progress x a)
+type alias Pool_ msg x a =
+    { attempts : Dict AttemptId (Progress msg x a)
+    , attemptIds : Ids
+    }
 
 
-type alias Progress x a =
+type alias Progress msg x a =
     { inFlight : Set TaskId
     , task : ( Ids, Task x a )
+    , onComplete : Result x a -> msg
     }
 
 
@@ -446,44 +449,48 @@ type alias RawResult =
 
 
 type alias AttemptId =
-    String
+    Ids.Id
 
 
 type alias Attempt msg x a =
-    { id : AttemptId
-    , pool : Pool x a
+    { pool : Pool msg x a
     , send : Decode.Value -> Cmd msg
-    , onComplete : AttemptId -> Result x a -> msg
+    , onComplete : Result x a -> msg
     }
 
 
 type alias OnProgress msg x a =
     { send : Decode.Value -> Cmd msg
     , receive : (Decode.Value -> msg) -> Sub msg
-    , onComplete : AttemptId -> Result x a -> msg
-    , onProgress : ( Pool x a, Cmd msg ) -> msg
+    , onProgress : ( Pool msg x a, Cmd msg ) -> msg
     }
 
 
-attempt : Attempt msg x a -> Task x a -> ( Pool x a, Cmd msg )
+attempt : Attempt msg x a -> Task x a -> ( Pool msg x a, Cmd msg )
 attempt attempt_ task =
     case stepTask Dict.empty ( Ids.init, task ) of
         ( _, Done res ) ->
             ( attempt_.pool
-            , sendResult attempt_.onComplete attempt_.id res
+            , sendResult attempt_.onComplete res
             )
 
         ( _, Pending defs _ ) ->
-            ( startAttempt attempt_.id
+            ( startAttempt
                 { task = ( Ids.init, task )
                 , inFlight = recordSent defs Set.empty
+                , onComplete = attempt_.onComplete
                 }
                 attempt_.pool
-            , attempt_.send (encodeDefinitions attempt_.id defs)
+            , attempt_.send (encodeDefinitions (currentAttemptId attempt_.pool) defs)
             )
 
 
-onProgress : OnProgress msg x a -> Pool x a -> Sub msg
+currentAttemptId : Pool msg x a -> AttemptId
+currentAttemptId (Pool pool_) =
+    Ids.get pool_.attemptIds
+
+
+onProgress : OnProgress msg x a -> Pool msg x a -> Sub msg
 onProgress options pool_ =
     options.receive
         (\rawResults ->
@@ -505,7 +512,7 @@ onProgress options pool_ =
         )
 
 
-updateAttempt : OnProgress msg x a -> Pool x a -> ( AttemptId, Results ) -> Progress x a -> ( Pool x a, Cmd msg )
+updateAttempt : OnProgress msg x a -> Pool msg x a -> ( AttemptId, Results ) -> Progress msg x a -> ( Pool msg x a, Cmd msg )
 updateAttempt options pool_ ( attemptId, results ) progress =
     case stepTask results progress.task of
         ( ids_, Pending _ next_ ) ->
@@ -518,21 +525,22 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                     case res of
                         Ok a ->
                             ( removeFromPool attemptId pool_
-                            , sendResult options.onComplete attemptId (Ok a)
+                            , sendResult progress.onComplete (Ok a)
                             )
 
                         Err e ->
                             ( removeFromPool attemptId pool_
-                            , sendResult options.onComplete attemptId (Err e)
+                            , sendResult progress.onComplete (Err e)
                             )
 
                 ( _, Pending defs _ ) ->
                     ( updateProgressFor attemptId
-                        { task = nextProgress
-                        , inFlight =
-                            progress.inFlight
-                                |> recordSent defs
-                                |> removeCompleted results
+                        { progress
+                            | task = nextProgress
+                            , inFlight =
+                                progress.inFlight
+                                    |> recordSent defs
+                                    |> removeCompleted results
                         }
                         pool_
                     , defs
@@ -567,12 +575,12 @@ toSentIds defs =
         |> Set.fromList
 
 
-sendResult : (AttemptId -> Result x a -> msg) -> AttemptId -> Result x a -> Cmd msg
-sendResult onComplete attemptId res =
-    CoreTask.succeed res |> CoreTask.perform (onComplete attemptId)
+sendResult : (Result x a -> msg) -> Result x a -> Cmd msg
+sendResult onComplete res =
+    CoreTask.succeed res |> CoreTask.perform onComplete
 
 
-notStarted : Progress x a -> Todo -> Bool
+notStarted : Progress msg x a -> Todo -> Bool
 notStarted model def =
     not (Set.member def.taskId model.inFlight)
 
@@ -667,31 +675,40 @@ encodeDefinition attemptId def =
 -- Pool
 
 
-pool : Pool x a
+pool : Pool msg x a
 pool =
-    Pool Dict.empty
+    Pool
+        { attempts = Dict.empty
+        , attemptIds = Ids.init
+        }
 
 
-startAttempt : AttemptId -> Progress x a -> Pool x a -> Pool x a
-startAttempt attemptId progress =
-    mapPool (Dict.insert attemptId progress)
+startAttempt : Progress msg x a -> Pool msg x a -> Pool msg x a
+startAttempt progress =
+    mapPool
+        (\pool_ ->
+            { pool_
+                | attempts = Dict.insert (Ids.get pool_.attemptIds) progress pool_.attempts
+                , attemptIds = Ids.next pool_.attemptIds
+            }
+        )
 
 
-updateProgressFor : AttemptId -> Progress x a -> Pool x a -> Pool x a
+updateProgressFor : AttemptId -> Progress msg x a -> Pool msg x a -> Pool msg x a
 updateProgressFor attemptId progress_ =
-    mapPool (Dict.update attemptId (Maybe.map (always progress_)))
+    mapPool (\pool_ -> { pool_ | attempts = Dict.update attemptId (Maybe.map (always progress_)) pool_.attempts })
 
 
-removeFromPool : AttemptId -> Pool x a -> Pool x a
+removeFromPool : AttemptId -> Pool msg x a -> Pool msg x a
 removeFromPool attemptId =
-    mapPool (Dict.remove attemptId)
+    mapPool (\pool_ -> { pool_ | attempts = Dict.remove attemptId pool_.attempts })
 
 
-findAttempt : AttemptId -> Pool x a -> Maybe (Progress x a)
+findAttempt : AttemptId -> Pool msg x a -> Maybe (Progress msg x a)
 findAttempt attemptId (Pool p) =
-    Dict.get attemptId p
+    Dict.get attemptId p.attempts
 
 
-mapPool : (Pool_ x a -> Pool_ x a) -> Pool x a -> Pool x a
+mapPool : (Pool_ msg x a -> Pool_ msg x a) -> Pool msg x a -> Pool msg x a
 mapPool f (Pool p) =
     Pool (f p)

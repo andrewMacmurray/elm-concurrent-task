@@ -6,7 +6,7 @@ module Concurrent.Task exposing
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , mapError, onError, errorToString
-    , attempt, pool, onProgress, Pool, AttemptId
+    , attempt, pool, onProgress, Pool
     )
 
 {-| A Task very similar to `elm/core`'s `Task` but:
@@ -71,7 +71,7 @@ Transform values returned from tasks.
 
 # Run a Task
 
-@docs attempt, pool, onProgress, Pool, AttemptId
+@docs attempt, pool, onProgress, Pool
 
 -}
 
@@ -455,30 +455,24 @@ errorToString =
 
 
 {-| -}
-type alias AttemptId =
-    String
-
-
-{-| -}
-type alias Pool x a =
-    Internal.Pool x a
+type alias Pool msg x a =
+    Internal.Pool msg x a
 
 
 {-| -}
 attempt :
-    { id : AttemptId
-    , pool : Pool x a
+    { pool : Pool msg x a
     , send : Decode.Value -> Cmd msg
-    , onComplete : AttemptId -> Result x a -> msg
+    , onComplete : Result x a -> msg
     }
     -> Task x a
-    -> ( Pool x a, Cmd msg )
+    -> ( Pool msg x a, Cmd msg )
 attempt =
     Internal.attempt
 
 
 {-| -}
-pool : Pool x a
+pool : Pool msg x a
 pool =
     Internal.pool
 
@@ -487,10 +481,9 @@ pool =
 onProgress :
     { send : Decode.Value -> Cmd msg
     , receive : (Decode.Value -> msg) -> Sub msg
-    , onComplete : AttemptId -> Result x a -> msg
-    , onProgress : ( Pool x a, Cmd msg ) -> msg
+    , onProgress : ( Pool msg x a, Cmd msg ) -> msg
     }
-    -> Pool x a
+    -> Pool msg x a
     -> Sub msg
 onProgress =
     Internal.onProgress
