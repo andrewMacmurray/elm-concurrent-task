@@ -10,7 +10,7 @@ export function http(request: Request): Promise<Response> {
 
   return fetch(request.url, {
     method: request.method,
-    body: request.body ? JSON.stringify(request.body) : null,
+    body: request.body || null,
     headers: toHeaders(request),
     signal: controller?.signal,
   })
@@ -52,14 +52,19 @@ export function http(request: Request): Promise<Response> {
     .catch((e) => {
       return {
         error: toHttpError(e),
+        body: e.message,
       };
     });
 }
 
 function toHttpError(err): HttpError {
-  if (err.name === "AbortError") {
-    return "TIMEOUT";
+  switch (err.name) {
+    case "AbortError":
+      return "TIMEOUT";
+    case "TypeError":
+      return "BAD_BODY";
   }
+
   switch (err.cause?.code) {
     case "ENOTFOUND":
       return "NETWORK_ERROR";
@@ -71,7 +76,7 @@ function toHttpError(err): HttpError {
       return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
-    default:
-      return err.cause?.code;
   }
+
+  return err.cause?.code;
 }

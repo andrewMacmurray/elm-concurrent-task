@@ -283,7 +283,7 @@ update msg model =
                         , pool = model.tasks
                         , onComplete = OnComplete id
                         }
-                        (Task.mapError HttpError bigBatch)
+                        (Task.mapError HttpError malformed)
             in
             ( { tasks = tasks }, cmd )
 
@@ -345,8 +345,20 @@ malformed =
         { url = "http://localhost:4000/malformed"
         , method = "GET"
         , headers = []
-        , body = Http.emptyBody
+        , body = Http.stringBody "text/html" "foo"
         , expect = Http.expectString
+        , timeout = Nothing
+        }
+
+
+echoBody : Task Http.Error String
+echoBody =
+    Http.request
+        { url = "http://localhost:4000/echo-body"
+        , method = "POST"
+        , headers = []
+        , body = Http.jsonBody (Encode.object [ ( "hello", Encode.string "world" ) ])
+        , expect = Http.expectJson (Decode.field "hello" Decode.string)
         , timeout = Nothing
         }
 

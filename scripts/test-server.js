@@ -6,6 +6,7 @@ const app = express();
 const PORT = 4000;
 
 app.use(morgan("tiny"));
+app.use(express.json());
 
 app.get("/wait-then-respond/:time", (req, res) => {
   setTimeout(() => {
@@ -15,6 +16,11 @@ app.get("/wait-then-respond/:time", (req, res) => {
 
 app.get("/big-file", (req, res) => {
   fs.readFile("./500kb.csv").then((file) => res.send(file));
+});
+
+app.post("/echo-body", (req, res) => {
+  console.log(req.body, req.headers);
+  res.send(req.body);
 });
 
 app.get("/boom", (req, res) => {

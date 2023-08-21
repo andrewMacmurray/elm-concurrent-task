@@ -3,7 +3,7 @@ module Concurrent.Task.Http exposing
     , Expect, expectJson, expectString, expectWhatever
     , Error(..), StatusDetails
     , Header, header
-    , Body, emptyBody, jsonBody
+    , Body, emptyBody, stringBody, jsonBody
     )
 
 {-| Make concurrent http requests.
@@ -46,7 +46,7 @@ See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurre
 
 # Body
 
-@docs Body, emptyBody, jsonBody
+@docs Body, emptyBody, stringBody, jsonBody
 
 -}
 
@@ -73,7 +73,8 @@ type alias Request a =
 
 {-| -}
 type Body
-    = Json Encode.Value
+    = EmptyBody
+    | StringBody String String
 
 
 {-| -}
@@ -145,13 +146,19 @@ expectWhatever =
 {-| -}
 emptyBody : Body
 emptyBody =
-    Json Encode.null
+    EmptyBody
 
 
 {-| -}
 jsonBody : Encode.Value -> Body
-jsonBody =
-    Json
+jsonBody value =
+    StringBody "application/json" (Encode.encode 0 value)
+
+
+{-| -}
+stringBody : String -> String -> Body
+stringBody =
+    StringBody
 
 
 
@@ -253,7 +260,7 @@ encode r =
     Encode.object
         [ ( "url", Encode.string r.url )
         , ( "method", Encode.string r.method )
-        , ( "headers", Encode.list encodeHeader r.headers )
+        , ( "headers", encodeHeaders r.body r.headers )
         , ( "expect", encodeExpect r.expect )
         , ( "body", encodeBody r.body )
         , ( "timeout", encodeTimeout r.timeout )
@@ -278,6 +285,23 @@ encodeExpect expect =
             Encode.string "WHATEVER"
 
 
+encodeHeaders : Body -> List Header -> Encode.Value
+encodeHeaders body headers =
+    headers
+        |> addContentTypeForBody body
+        |> Encode.list encodeHeader
+
+
+addContentTypeForBody : Body -> List Header -> List Header
+addContentTypeForBody body headers =
+    case body of
+        EmptyBody ->
+            headers
+
+        StringBody contentType _ ->
+            header "Content-Type" contentType :: headers
+
+
 encodeHeader : Header -> Encode.Value
 encodeHeader ( name, value ) =
     Encode.object
@@ -289,5 +313,8 @@ encodeHeader ( name, value ) =
 encodeBody : Body -> Encode.Value
 encodeBody body =
     case body of
-        Json value ->
-            value
+        StringBody _ value ->
+            Encode.string value
+
+        EmptyBody ->
+            Encode.null
