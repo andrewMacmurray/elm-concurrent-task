@@ -58,13 +58,6 @@ export function http(request: Request): Promise<Response> {
 }
 
 function toHttpError(err): HttpError {
-  switch (err.name) {
-    case "AbortError":
-      return "TIMEOUT";
-    case "TypeError":
-      return "BAD_BODY";
-  }
-
   switch (err.cause?.code) {
     case "ENOTFOUND":
       return "NETWORK_ERROR";
@@ -76,6 +69,13 @@ function toHttpError(err): HttpError {
       return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
+  }
+
+  switch (err.name) {
+    case "AbortError":
+      return "TIMEOUT";
+    case "TypeError":
+      return "BAD_BODY";
   }
 
   return err.cause?.code;

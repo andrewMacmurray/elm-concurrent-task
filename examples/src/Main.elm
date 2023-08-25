@@ -41,12 +41,12 @@ type Msg
     = OnFireMany Int
     | OnManualEnter String
     | OnProgress ( Task.Pool Msg Error String, Cmd Msg )
-    | OnComplete String (Result Error String)
+    | OnComplete String (Task.Response Error String)
 
 
 type Error
     = HttpError Http.Error
-    | TaskError Task.Error
+    | TaskError String
 
 
 
@@ -462,13 +462,12 @@ getUser =
 
 getEnv : String -> Task Error String
 getEnv var =
-    Task.mapError TaskError
-        (Task.define
-            { function = "getEnv"
-            , args = Encode.string var
-            , expect = Task.expectJson Decode.string
-            }
-        )
+    Task.define
+        { function = "getEnv"
+        , expect = Task.expectJson Decode.string
+        , errors = Task.catchException TaskError
+        , args = Encode.string var
+        }
 
 
 slowInts : Task Error String
@@ -488,13 +487,12 @@ doubleSlowInt i =
 
 slowInt : Int -> Task Error String
 slowInt id =
-    Task.mapError TaskError
-        (Task.define
-            { function = "slowInt"
-            , args = Encode.int id
-            , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
-            }
-        )
+    Task.define
+        { function = "slowInt"
+        , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
+        , errors = Task.catchException TaskError
+        , args = Encode.int id
+        }
 
 
 
@@ -518,20 +516,20 @@ consoleTime : String -> Task x ()
 consoleTime label =
     Task.define
         { function = "consoleTime"
-        , args = Encode.string label
         , expect = Task.expectWhatever
+        , errors = Task.catchAll ()
+        , args = Encode.string label
         }
-        |> Task.onError (always (Task.succeed ()))
 
 
 consoleTimeEnd : String -> Task x ()
 consoleTimeEnd label =
     Task.define
         { function = "consoleTimeEnd"
-        , args = Encode.string label
         , expect = Task.expectWhatever
+        , errors = Task.catchAll ()
+        , args = Encode.string label
         }
-        |> Task.onError (always (Task.succeed ()))
 
 
 

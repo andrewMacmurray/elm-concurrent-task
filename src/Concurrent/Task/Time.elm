@@ -28,7 +28,7 @@ now : Task x Time.Posix
 now =
     Task.define
         { function = "builtin:timeNow"
-        , args = Encode.null
         , expect = Task.expectJson (Decode.map Time.millisToPosix Decode.int)
+        , errors = Task.catchAll (Time.millisToPosix 0)
+        , args = Encode.null
         }
-        |> Task.onError (\_ -> Task.succeed (Time.millisToPosix 0))

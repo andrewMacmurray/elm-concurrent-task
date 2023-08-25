@@ -1,12 +1,13 @@
 module Concurrent.Task exposing
-    ( Task, define, Error
+    ( Task, define
     , Expect, expectJson, expectString, expectWhatever
     , succeed, fail, andThen
     , fromResult, andThenDo, return
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , mapError, onError, errorToString
+    , mapError, onError
     , attempt, onProgress, Pool, pool
+    , Errors, Response, catchAll, catchException, expectError, onDecodeResponseError
     )
 
 {-| A Task very similar to `elm/core`'s `Task` but:
@@ -105,6 +106,10 @@ type alias Task x a =
     Internal.Task x a
 
 
+type alias Response x a =
+    Internal.Response x a
+
+
 {-| Define a `Task` from an external JavaScript function with:
 
   - The `name` of the registered function you want to call
@@ -153,10 +158,11 @@ NOTE:
 -}
 define :
     { function : String
-    , args : Encode.Value
     , expect : Expect a
+    , errors : Errors x a
+    , args : Encode.Value
     }
-    -> Task Error a
+    -> Task x a
 define =
     Internal.define
 
@@ -171,8 +177,8 @@ A Task can also error with `UnknownError String` (represents an internal decode 
 However this should not happen in practice - if it does, [please leave an issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues).
 
 -}
-type alias Error =
-    Internal.Error
+type alias Errors x a =
+    Internal.Errors x a
 
 
 
@@ -203,6 +209,25 @@ expectString =
 expectWhatever : Expect ()
 expectWhatever =
     Internal.expectWhatever
+
+
+
+-- Errors
+
+
+catchAll : a -> Errors x a
+catchAll =
+    Internal.catchAll
+
+
+catchException : (String -> x) -> Errors x a
+catchException =
+    Internal.catchException
+
+
+expectError : Decoder x -> Errors x a
+expectError =
+    Internal.expectError
 
 
 
@@ -462,11 +487,9 @@ onError =
     Internal.onError
 
 
-{-| Convenience for formatting a Task error as a String.
--}
-errorToString : Error -> String
-errorToString =
-    Internal.errorToString
+onDecodeResponseError : (Decode.Error -> Task x a) -> Task x a -> Task x a
+onDecodeResponseError =
+    Internal.onDecodeResponseError
 
 
 
@@ -499,7 +522,7 @@ Make sure to update your `Model` and pass in the `Cmd` returned from `attempt`. 
 attempt :
     { pool : Pool msg x a
     , send : Decode.Value -> Cmd msg
-    , onComplete : Result x a -> msg
+    , onComplete : Response x a -> msg
     }
     -> Task x a
     -> ( Pool msg x a, Cmd msg )
