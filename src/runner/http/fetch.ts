@@ -26,10 +26,10 @@ export function http(request: Request): Promise<Response> {
             }))
             .catch((e) => {
               return {
-                status: res.status,
-                statusText: res.statusText,
-                error: "BAD_BODY",
-                body: e,
+                error: {
+                  reason: "BAD_BODY",
+                  message: e.message,
+                },
               };
             });
         }
@@ -51,8 +51,10 @@ export function http(request: Request): Promise<Response> {
     })
     .catch((e) => {
       return {
-        error: toHttpError(e),
-        body: e.message,
+        error: {
+          reason: toHttpError(e),
+          message: e.message,
+        },
       };
     });
 }

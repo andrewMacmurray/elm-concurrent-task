@@ -26,10 +26,7 @@ export type HttpError =
   | string;
 
 export interface ResponseError {
-  error: HttpError;
-  body?: any;
-  status?: number;
-  statusText?: string;
+  error: { reason: HttpError; message: string };
 }
 
 export function toHeaders(request: Request): { [header: string]: string } {

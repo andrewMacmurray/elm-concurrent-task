@@ -185,7 +185,7 @@ wrapError =
 
 decodeError : Request a -> Decoder Error
 decodeError r =
-    Decode.field "error" Decode.string
+    Decode.field "reason" Decode.string
         |> Decode.andThen
             (\code ->
                 case code of
@@ -199,7 +199,7 @@ decodeError r =
                         Decode.succeed (BadUrl r.url)
 
                     "BAD_BODY" ->
-                        Decode.field "body" Decode.string
+                        Decode.field "message" Decode.string
                             |> Decode.map BadBody
 
                     _ ->

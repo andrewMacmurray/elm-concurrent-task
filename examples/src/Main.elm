@@ -283,7 +283,7 @@ update msg model =
                         , pool = model.tasks
                         , onComplete = OnComplete id
                         }
-                        (Task.mapError HttpError malformed)
+                        (Task.mapError HttpError bigBatch)
             in
             ( { tasks = tasks }, cmd )
 

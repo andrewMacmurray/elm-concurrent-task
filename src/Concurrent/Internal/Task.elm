@@ -794,7 +794,7 @@ decodeResult def val =
                     case Decode.decodeValue (Decode.field "value" (Decode.field "error" Decode.value)) val of
                         -- Try error path
                         Ok _ ->
-                            case Decode.decodeValue (Decode.field "value" expect_) val of
+                            case Decode.decodeValue (Decode.field "value" (Decode.field "error" expect_)) val of
                                 Ok err_ ->
                                     Error err_
 

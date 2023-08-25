@@ -5,23 +5,31 @@ import Concurrent.Internal.Task as Task exposing (Task)
 import Dict
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, intRange, string)
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Test exposing (..)
+
+
+
+-- Task Tests
 
 
 suite : Test
 suite =
     describe "Tasks"
         [ hardcoded
-        , responses
+        , successResponses
         , errors
         ]
 
 
-responses : Test
-responses =
-    describe "Tasks with Responses"
+
+-- Success Responses
+
+
+successResponses : Test
+successResponses =
+    describe "Tasks with Success Responses"
         [ fuzz3 string string string "successful responses combine" <|
             \a b c ->
                 Task.map3 join3
@@ -196,32 +204,187 @@ responses =
         ]
 
 
+
+-- Task with Errors
+
+
 errors : Test
 errors =
-    describe "Tasks With Errors"
-        [ test "tasks with JS Exceptions" <|
-            \_ ->
-                Task.map2 join2
-                    createTask
-                    createTask
-                    |> runTaskWith
-                        [ ( 0, success (Encode.string "a") )
-                        , ( 1, error "js_exception" "f threw an exception" )
-                        ]
-                    |> Expect.equal (Task.Error "f threw an exception")
-        , test "tasks with missing functions" <|
-            \_ ->
-                Task.map3 join3
-                    createTask
-                    createTask
-                    createTask
-                    |> runTaskWith
-                        [ ( 0, success (Encode.string "a") )
-                        , ( 1, error "missing_function" "f is missing" )
-                        , ( 2, success (Encode.string "c") )
-                        ]
-                    |> Expect.equal (Task.RunnerError (Task.MissingFunction "f is missing"))
-        , test "task with an unknown error reason" <|
+    describe "Task Errors"
+        (let
+            customErrorTask : Task Error String
+            customErrorTask =
+                Task.define
+                    { function = "custom"
+                    , expect = Task.expectString
+                    , errors = Task.expectError (Decode.field "error" Decode.string)
+                    , args = Encode.null
+                    }
+
+            catchTask : Task Error String
+            catchTask =
+                Task.define
+                    { function = "catch"
+                    , expect = Task.expectString
+                    , errors = Task.catchException identity
+                    , args = Encode.null
+                    }
+
+            catchAllTask : Task x String
+            catchAllTask =
+                Task.define
+                    { function = "catchAll"
+                    , expect = Task.expectString
+                    , errors = Task.catchAll "CAUGHT"
+                    , args = Encode.null
+                    }
+         in
+         [ describe "JS Exceptions"
+            [ test "Errors with a RunnerError UnhandledJsException if a task throws and does not catch exception" <|
+                \_ ->
+                    Task.map2 join2
+                        customErrorTask
+                        customErrorTask
+                        |> runTaskWith
+                            [ ( 0, success (Encode.string "a") )
+                            , ( 1, error "js_exception" "f threw an exception" )
+                            ]
+                        |> Expect.equal
+                            (Task.RunnerError
+                                (Task.UnhandledJsException
+                                    { function = "custom"
+                                    , message = "f threw an exception"
+                                    }
+                                )
+                            )
+            , test "Errors with caught exception if task throws and has catch handler" <|
+                \_ ->
+                    Task.map3 join3
+                        catchTask
+                        customErrorTask
+                        catchTask
+                        |> runTaskWith
+                            [ ( 0, success (Encode.string "a") )
+                            , ( 1, success (Encode.string "b") )
+                            , ( 2, error "js_exception" "f threw an exception" )
+                            ]
+                        |> Expect.equal (Task.Error "f threw an exception")
+            , test "Succeeds with fallback if task throws and has a catchAll handler" <|
+                \_ ->
+                    Task.map3 join3
+                        customErrorTask
+                        catchAllTask
+                        catchTask
+                        |> runTaskWith
+                            [ ( 0, success (Encode.string "a") )
+                            , ( 1, error "js_exception" "f threw an exception" )
+                            , ( 2, success (Encode.string "b") )
+                            ]
+                        |> Expect.equal (Task.Success "aCAUGHTb")
+            ]
+         , describe "Tasks with Missing functions"
+            [ fuzz
+                (fuzzEnum
+                    [ catchTask
+                    , customErrorTask
+                    , catchAllTask
+                    ]
+                )
+                "Always errors with a RunnerError regardless of error handling strategy"
+                (\task ->
+                    Task.map3 join3 task task task
+                        |> runTaskWith
+                            [ ( 0, success (Encode.string "a") )
+                            , ( 1, success (Encode.string "b") )
+                            , ( 2, error "missing_function" "f is missing" )
+                            ]
+                        |> Expect.equal (Task.RunnerError (Task.MissingFunction "f is missing"))
+                )
+            ]
+         , describe "Tasks with unexpected responses"
+            [ test "Errors with a RunnerError ResponseDecoderFailure if a task returns an unexpected value" <|
+                \_ ->
+                    Task.map2 join2
+                        catchTask
+                        customErrorTask
+                        |> runTaskWith
+                            [ ( 0, success (Encode.int 1) )
+                            , ( 1, success (Encode.string "2") )
+                            ]
+                        |> expectResponseDecoderFailureFor "catch" "Expecting a STRING"
+            , test "ResponseDecoderFailures can be caught and returned in regular task flow" <|
+                \_ ->
+                    customErrorTask
+                        |> Task.onDecodeResponseError
+                            (Decode.errorToString
+                                >> String.right 18
+                                >> Task.succeed
+                            )
+                        |> runTaskWith
+                            [ ( 0, success (Encode.int 1) )
+                            ]
+                        |> Expect.equal (Task.Success "Expecting a STRING")
+            , test "ResponseDecodeFailures are caught by tasks with a catchAll handler" <|
+                \_ ->
+                    Task.map2 join2
+                        catchTask
+                        catchAllTask
+                        |> runTaskWith
+                            [ ( 0, success (Encode.string "a") )
+                            , ( 1, success (Encode.int 1) )
+                            ]
+                        |> Expect.equal (Task.Success "aCAUGHT")
+            ]
+         , describe "Tasks with custom errors"
+            (let
+                decodeError : Decoder CustomError
+                decodeError =
+                    Decode.string
+                        |> Decode.andThen
+                            (\e ->
+                                case e of
+                                    "ERR_1" ->
+                                        Decode.succeed Error1
+
+                                    "ERR_2" ->
+                                        Decode.succeed Error2
+
+                                    _ ->
+                                        Decode.fail ("Unrecognized Error: " ++ e)
+                            )
+
+                task : Task CustomError String
+                task =
+                    Task.define
+                        { function = "custom"
+                        , expect = Task.expectString
+                        , errors = Task.expectError decodeError
+                        , args = Encode.null
+                        }
+             in
+             [ test "Tasks can specify a custom error decoder" <|
+                \_ ->
+                    Task.map2 join2
+                        task
+                        task
+                        |> runTaskWith
+                            [ ( 0, success (Encode.string "1") )
+                            , ( 1, success (Encode.object [ ( "error", Encode.string "ERR_1" ) ]) )
+                            ]
+                        |> Expect.equal (Task.Error Error1)
+             , test "Errors with ErrorDecoderFailure if the task returns an error key with an unexpected value on it" <|
+                \_ ->
+                    Task.map2 join2
+                        task
+                        task
+                        |> runTaskWith
+                            [ ( 0, success (Encode.string "1") )
+                            , ( 1, success (Encode.object [ ( "error", Encode.string "ERR_3" ) ]) )
+                            ]
+                        |> expectErrorDecoderFailureFor "custom" "Unrecognized Error: ERR_3"
+             ]
+            )
+         , test "task with an unknown error reason" <|
             \_ ->
                 Task.map2 join2
                     createTask
@@ -231,7 +394,17 @@ errors =
                         , ( 1, error "other_error" "..." )
                         ]
                     |> Expect.equal (Task.RunnerError (Task.InternalError "Unknown runner error reason: other_error"))
-        ]
+         ]
+        )
+
+
+type CustomError
+    = Error1
+    | Error2
+
+
+
+-- Hardcoded Tasks
 
 
 hardcoded : Test
@@ -274,17 +447,17 @@ hardcoded =
 -- Task Runner
 
 
-runTask : List ( Int, Encode.Value ) -> Task Error a -> Task.Response Error a
+runTask : List ( Int, Encode.Value ) -> Task x a -> Task.Response x a
 runTask results =
     runTaskWith (List.map (Tuple.mapSecond success) results)
 
 
-runTaskWith : List ( Int, Encode.Value ) -> Task Error a -> Task.Response Error a
+runTaskWith : List ( Int, Encode.Value ) -> Task x a -> Task.Response x a
 runTaskWith results task =
     Tuple.second (evalTask results task)
 
 
-evalTask : List ( Int, Encode.Value ) -> Task Error a -> ( Ids, Task.Response Error a )
+evalTask : List ( Int, Encode.Value ) -> Task x a -> ( Ids, Task.Response x a )
 evalTask results task =
     evalWith
         { maxDepth = 100000000
@@ -294,15 +467,15 @@ evalTask results task =
         }
 
 
-type alias Eval a =
+type alias Eval x a =
     { maxDepth : Int
     , results : List ( Int, Encode.Value )
-    , task : Task Error a
+    , task : Task x a
     , ids : Ids
     }
 
 
-evalWith : Eval a -> ( Ids, Task.Response Error a )
+evalWith : Eval x a -> ( Ids, Task.Response x a )
 evalWith options =
     let
         results : Task.Results
@@ -329,7 +502,7 @@ evalWith options =
                     }
 
             else
-                ( ids, Task.Error "timeout" )
+                ( ids, Task.RunnerError (Task.InternalError "timeout") )
 
 
 stepTask : Task.Results -> ( Ids, Task x a ) -> ( Ids, Task.Task_ x a )
@@ -376,7 +549,7 @@ createTask =
     create Decode.string
 
 
-create : Decode.Decoder a -> Task Error a
+create : Decoder a -> Task Error a
 create decoder =
     Task.define
         { function = "aTask"
@@ -384,6 +557,61 @@ create decoder =
         , errors = Task.catchException identity
         , args = Encode.null
         }
+
+
+expectResponseDecoderFailureFor : String -> String -> Task.Response x a -> Expectation
+expectResponseDecoderFailureFor function message res =
+    case res of
+        Task.RunnerError (Task.ResponseDecoderFailure err) ->
+            if err.function == function && String.contains message (Decode.errorToString err.error) then
+                Expect.pass
+
+            else
+                Expect.fail
+                    (String.concat
+                        [ "Got a ResponseDecoderFailure but with the wrong config \n\nexpected: function - "
+                        , function
+                        , ", message - "
+                        , message
+                        , "\n\ngot: function - "
+                        , err.function
+                        , ", message - "
+                        , Decode.errorToString err.error
+                        ]
+                    )
+
+        _ ->
+            Expect.fail ("Expected an ResponseDecoderFailure, got instead " ++ Debug.toString res)
+
+
+expectErrorDecoderFailureFor : String -> String -> Task.Response x a -> Expectation
+expectErrorDecoderFailureFor function message res =
+    case res of
+        Task.RunnerError (Task.ErrorDecoderFailure err) ->
+            if err.function == function && String.contains message (Decode.errorToString err.error) then
+                Expect.pass
+
+            else
+                Expect.fail
+                    (String.concat
+                        [ "Got a ErrorDecoderFailure but with the wrong config \n\nexpected: function - "
+                        , function
+                        , ", message - "
+                        , message
+                        , "\n\ngot: function - "
+                        , err.function
+                        , ", message - "
+                        , Decode.errorToString err.error
+                        ]
+                    )
+
+        _ ->
+            Expect.fail ("Expected an ErrorDecoderFailure, got instead " ++ Debug.toString res)
+
+
+fuzzEnum : List a -> Fuzzer a
+fuzzEnum =
+    List.map Fuzz.constant >> Fuzz.oneOf
 
 
 join4 : String -> String -> String -> String -> String
@@ -399,7 +627,3 @@ join3 a b c =
 join2 : String -> String -> String
 join2 a b =
     a ++ b
-
-
-
--- Runner
