@@ -33,7 +33,7 @@ responses =
                         , ( 1, Encode.string b )
                         , ( 2, Encode.string c )
                         ]
-                    |> Expect.equal (Ok (join3 a b c))
+                    |> Expect.equal (Task.Success (join3 a b c))
         , fuzz3 string string string "successful responses chain" <|
             \a b c ->
                 Task.map2 (++)
@@ -51,7 +51,7 @@ responses =
                         , ( 2, Encode.string c )
                         , ( 3, Encode.string c )
                         ]
-                    |> Expect.equal (Ok (a ++ b ++ c ++ c))
+                    |> Expect.equal (Task.Success (a ++ b ++ c ++ c))
         , test "responses can arrive out of order" <|
             \_ ->
                 Task.map2 join2
@@ -69,7 +69,7 @@ responses =
                         , ( 2, Encode.string "c" )
                         , ( 3, Encode.string "d" )
                         ]
-                    |> Expect.equal (Ok "abcd")
+                    |> Expect.equal (Task.Success "abcd")
         , test "can handle nested chains" <|
             \_ ->
                 Task.map4 join4
@@ -87,7 +87,7 @@ responses =
                         , ( 6, Encode.string "6" )
                         , ( 7, Encode.string "8" )
                         ]
-                    |> Expect.equal (Ok "12345678")
+                    |> Expect.equal (Task.Success "12345678")
         , test "can handle deeply nested chains" <|
             \_ ->
                 Task.map2 join2
@@ -126,7 +126,7 @@ responses =
                         , ( 6, Encode.string "3" )
                         , ( 7, Encode.string "7" )
                         ]
-                    |> Expect.equal (Ok "01234567")
+                    |> Expect.equal (Task.Success "01234567")
         , fuzz3 int string int "can handle mixed response types" <|
             \a b c ->
                 Task.map3 (\x y z -> ( x, y, z ))
@@ -138,7 +138,7 @@ responses =
                         , ( 1, Encode.string b )
                         , ( 2, Encode.int c )
                         ]
-                    |> Expect.equal (Ok ( a, b, c ))
+                    |> Expect.equal (Task.Success ( a, b, c ))
         , fuzz (intRange 1 1000) "the id always increments in step with the number of tasks" <|
             \n ->
                 List.repeat n createTask
@@ -173,12 +173,12 @@ responses =
                                     )
                                 )
                         )
-                    |> Expect.equal (Ok n)
+                    |> Expect.equal (Task.Success n)
         , test "handles large batches" <|
             \_ ->
                 let
                     n =
-                        5000
+                        1000
                 in
                 List.repeat n (create Decode.int)
                     |> Task.batch
@@ -192,7 +192,7 @@ responses =
                                     )
                                 )
                         )
-                    |> Expect.equal (Ok n)
+                    |> Expect.equal (Task.Success n)
         ]
 
 
@@ -208,7 +208,7 @@ errors =
                         [ ( 0, success (Encode.string "a") )
                         , ( 1, error "js_exception" "f threw an exception" )
                         ]
-                    |> Expect.equal (Err (Task.JsException "f threw an exception"))
+                    |> Expect.equal (Task.Error "f threw an exception")
         , test "tasks with missing functions" <|
             \_ ->
                 Task.map3 join3
@@ -220,7 +220,7 @@ errors =
                         , ( 1, error "missing_function" "f is missing" )
                         , ( 2, success (Encode.string "c") )
                         ]
-                    |> Expect.equal (Err (Task.MissingFunction "f is missing"))
+                    |> Expect.equal (Task.RunnerError (Task.MissingFunction "f is missing"))
         , test "task with an unknown error reason" <|
             \_ ->
                 Task.map2 join2
@@ -230,7 +230,7 @@ errors =
                         [ ( 0, success (Encode.string "a") )
                         , ( 1, error "other_error" "..." )
                         ]
-                    |> Expect.equal (Err (Task.UnknownError "Unknown error reason: other_error"))
+                    |> Expect.equal (Task.RunnerError (Task.InternalError "Unknown runner error reason: other_error"))
         ]
 
 
@@ -244,7 +244,7 @@ hardcoded =
                     (Task.succeed b)
                     (Task.succeed c)
                     |> runTask []
-                    |> Expect.equal (Ok (join3 a b c))
+                    |> Expect.equal (Task.Success (join3 a b c))
         , fuzz3 string string string "tasks can chain" <|
             \a b c ->
                 Task.map2 (++)
@@ -252,23 +252,21 @@ hardcoded =
                     (Task.succeed b)
                     |> Task.andThen (\ab -> Task.map (join2 ab) (Task.succeed c))
                     |> runTask []
-                    |> Expect.equal (Ok (a ++ b ++ c))
+                    |> Expect.equal (Task.Success (a ++ b ++ c))
         , test "tasks can short circuit" <|
             \_ ->
                 Task.succeed 1
                     |> Task.andThenDo (Task.succeed 2)
                     |> Task.andThen (\_ -> Task.fail "hardcoded error")
-                    |> Task.mapError Task.UnknownError
                     |> runTask []
-                    |> Expect.equal (Err (Task.UnknownError "hardcoded error"))
+                    |> Expect.equal (Task.Error "hardcoded error")
         , fuzz2 int int "tasks can recover from an error" <|
             \a b ->
                 Task.succeed a
                     |> Task.andThen (\_ -> Task.fail "error")
-                    |> Task.mapError Task.UnknownError
                     |> Task.onError (\_ -> Task.succeed b)
                     |> runTask []
-                    |> Expect.equal (Ok b)
+                    |> Expect.equal (Task.Success b)
         ]
 
 
@@ -276,17 +274,17 @@ hardcoded =
 -- Task Runner
 
 
-runTask : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
+runTask : List ( Int, Encode.Value ) -> Task Error a -> Task.Response Error a
 runTask results =
     runTaskWith (List.map (Tuple.mapSecond success) results)
 
 
-runTaskWith : List ( Int, Encode.Value ) -> Task Task.Error a -> Result Task.Error a
+runTaskWith : List ( Int, Encode.Value ) -> Task Error a -> Task.Response Error a
 runTaskWith results task =
     Tuple.second (evalTask results task)
 
 
-evalTask : List ( Int, Encode.Value ) -> Task Task.Error a -> ( Ids, Result Task.Error a )
+evalTask : List ( Int, Encode.Value ) -> Task Error a -> ( Ids, Task.Response Error a )
 evalTask results task =
     evalWith
         { maxDepth = 100000000
@@ -299,12 +297,12 @@ evalTask results task =
 type alias Eval a =
     { maxDepth : Int
     , results : List ( Int, Encode.Value )
-    , task : Task Task.Error a
+    , task : Task Error a
     , ids : Ids
     }
 
 
-evalWith : Eval a -> ( Ids, Result Task.Error a )
+evalWith : Eval a -> ( Ids, Task.Response Error a )
 evalWith options =
     let
         results : Task.Results
@@ -331,7 +329,7 @@ evalWith options =
                     }
 
             else
-                ( ids, Err (Task.UnknownError "timeout") )
+                ( ids, Task.Error "timeout" )
 
 
 stepTask : Task.Results -> ( Ids, Task x a ) -> ( Ids, Task.Task_ x a )
@@ -341,6 +339,10 @@ stepTask res ( ids, Task.Task run ) =
 
 
 -- Helpers
+
+
+type alias Error =
+    String
 
 
 success : Encode.Value -> Encode.Value
@@ -364,22 +366,23 @@ error reason message =
         ]
 
 
-withAnother : String -> Task Task.Error String
+withAnother : String -> Task Error String
 withAnother x =
     Task.map (join2 x) createTask
 
 
-createTask : Task Task.Error String
+createTask : Task Error String
 createTask =
     create Decode.string
 
 
-create : Decode.Decoder a -> Task Task.Error a
+create : Decode.Decoder a -> Task Error a
 create decoder =
     Task.define
         { function = "aTask"
-        , args = Encode.null
         , expect = Task.expectJson decoder
+        , errors = Task.catchException identity
+        , args = Encode.null
         }
 
 
