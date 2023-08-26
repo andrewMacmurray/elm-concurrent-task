@@ -5,6 +5,7 @@ import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
+import Env
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -46,6 +47,7 @@ type Msg
 
 type Error
     = HttpError Http.Error
+    | EnvError Env.Error
     | TaskError String
 
 
@@ -365,11 +367,19 @@ echoBody =
 
 manyEnvs : Task Error String
 manyEnvs =
-    Task.map3 join3
-        (getEnv "ONE" |> andThenJoinWith (getEnv "TWO"))
-        (getEnv "THREE")
-        getHome
-        |> andThenJoinWith getUser
+    loadEnv
+        (Env.succeed join5
+            |> Env.required (Env.string "ONE")
+            |> Env.required (Env.string "TWO")
+            |> Env.required (Env.string "THREE")
+            |> Env.required (Env.string "HOME")
+            |> Env.required (Env.string "USER")
+        )
+
+
+loadEnv : Env.Parser a -> Task Error a
+loadEnv =
+    Env.load >> Task.mapError EnvError
 
 
 slowSequence : Int -> Task Error String
@@ -447,26 +457,6 @@ httpError =
         , body = Http.emptyBody
         , expect = Http.expectJson (Decode.succeed "whatever")
         , timeout = Nothing
-        }
-
-
-getHome : Task Error String
-getHome =
-    getEnv "HOME"
-
-
-getUser : Task Error String
-getUser =
-    getEnv "USER"
-
-
-getEnv : String -> Task Error String
-getEnv var =
-    Task.define
-        { function = "getEnv"
-        , expect = Task.expectJson Decode.string
-        , errors = Task.catchException TaskError
-        , args = Encode.string var
         }
 
 

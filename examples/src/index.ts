@@ -7,7 +7,7 @@ import readline from "node:readline/promises";
 
 const Tasks = {
   slowInt: (i) => waitRandom().then(() => i),
-  getEnv: (x) => process.env[x],
+  "env:load": () => process.env,
   consoleTime: (label) => console.time(label),
   consoleTimeEnd: (label) => console.timeEnd(label),
 };
