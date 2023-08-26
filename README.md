@@ -133,7 +133,7 @@ Check out the built-ins for more details:
 Install the elm package with
 
 ```
-elm install andrewMacMurray/elm-concurrent-task
+elm install andrewMacmurray/elm-concurrent-task
 ```
 
 Install the JavaScript/TypeScript runner with
