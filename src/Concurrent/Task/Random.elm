@@ -40,7 +40,7 @@ randomSeed : Task x Int
 randomSeed =
     Task.define
         { function = "builtin:randomSeed"
-        , args = Encode.null
         , expect = Task.expectJson Decode.int
+        , errors = Task.catchAll 0
+        , args = Encode.null
         }
-        |> Task.onError (\_ -> Task.succeed 0)

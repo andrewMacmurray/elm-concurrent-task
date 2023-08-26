@@ -5,6 +5,7 @@ import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
+import Env
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -41,12 +42,13 @@ type Msg
     = OnFireMany Int
     | OnManualEnter String
     | OnProgress ( Task.Pool Msg Error String, Cmd Msg )
-    | OnComplete String (Result Error String)
+    | OnComplete String (Task.Response Error String)
 
 
 type Error
     = HttpError Http.Error
-    | TaskError Task.Error
+    | EnvError Env.Error
+    | TaskError String
 
 
 
@@ -283,7 +285,7 @@ update msg model =
                         , pool = model.tasks
                         , onComplete = OnComplete id
                         }
-                        (Task.mapError HttpError malformed)
+                        (Task.mapError HttpError bigBatch)
             in
             ( { tasks = tasks }, cmd )
 
@@ -365,11 +367,19 @@ echoBody =
 
 manyEnvs : Task Error String
 manyEnvs =
-    Task.map3 join3
-        (getEnv "ONE" |> andThenJoinWith (getEnv "TWO"))
-        (getEnv "THREE")
-        getHome
-        |> andThenJoinWith getUser
+    loadEnv
+        (Env.succeed join5
+            |> Env.required (Env.string "ONE")
+            |> Env.required (Env.string "TWO")
+            |> Env.required (Env.string "THREE")
+            |> Env.required (Env.string "HOME")
+            |> Env.required (Env.string "USER")
+        )
+
+
+loadEnv : Env.Parser a -> Task Error a
+loadEnv =
+    Env.load >> Task.mapError EnvError
 
 
 slowSequence : Int -> Task Error String
@@ -450,27 +460,6 @@ httpError =
         }
 
 
-getHome : Task Error String
-getHome =
-    getEnv "HOME"
-
-
-getUser : Task Error String
-getUser =
-    getEnv "USER"
-
-
-getEnv : String -> Task Error String
-getEnv var =
-    Task.mapError TaskError
-        (Task.define
-            { function = "getEnv"
-            , args = Encode.string var
-            , expect = Task.expectJson Decode.string
-            }
-        )
-
-
 slowInts : Task Error String
 slowInts =
     Task.map3 join3
@@ -488,13 +477,12 @@ doubleSlowInt i =
 
 slowInt : Int -> Task Error String
 slowInt id =
-    Task.mapError TaskError
-        (Task.define
-            { function = "slowInt"
-            , args = Encode.int id
-            , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
-            }
-        )
+    Task.define
+        { function = "slowInt"
+        , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
+        , errors = Task.expectThrows TaskError
+        , args = Encode.int id
+        }
 
 
 
@@ -518,20 +506,20 @@ consoleTime : String -> Task x ()
 consoleTime label =
     Task.define
         { function = "consoleTime"
-        , args = Encode.string label
         , expect = Task.expectWhatever
+        , errors = Task.catchAll ()
+        , args = Encode.string label
         }
-        |> Task.onError (always (Task.succeed ()))
 
 
 consoleTimeEnd : String -> Task x ()
 consoleTimeEnd label =
     Task.define
         { function = "consoleTimeEnd"
-        , args = Encode.string label
         , expect = Task.expectWhatever
+        , errors = Task.catchAll ()
+        , args = Encode.string label
         }
-        |> Task.onError (always (Task.succeed ()))
 
 
 

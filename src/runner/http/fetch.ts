@@ -26,10 +26,10 @@ export function http(request: Request): Promise<Response> {
             }))
             .catch((e) => {
               return {
-                status: res.status,
-                statusText: res.statusText,
-                error: "BAD_BODY",
-                body: e,
+                error: {
+                  reason: "BAD_BODY",
+                  message: e.message,
+                },
               };
             });
         }
@@ -51,20 +51,15 @@ export function http(request: Request): Promise<Response> {
     })
     .catch((e) => {
       return {
-        error: toHttpError(e),
-        body: e.message,
+        error: {
+          reason: toHttpError(e),
+          message: e.message,
+        },
       };
     });
 }
 
 function toHttpError(err): HttpError {
-  switch (err.name) {
-    case "AbortError":
-      return "TIMEOUT";
-    case "TypeError":
-      return "BAD_BODY";
-  }
-
   switch (err.cause?.code) {
     case "ENOTFOUND":
       return "NETWORK_ERROR";
@@ -76,6 +71,13 @@ function toHttpError(err): HttpError {
       return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
+  }
+
+  switch (err.name) {
+    case "AbortError":
+      return "TIMEOUT";
+    case "TypeError":
+      return "BAD_BODY";
   }
 
   return err.cause?.code;

@@ -50,7 +50,6 @@ See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurre
 
 -}
 
-import Concurrent.Internal.Task as Internal
 import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -96,7 +95,6 @@ type Error
     | NetworkError
     | BadStatus StatusDetails
     | BadBody String
-    | TaskError Task.Error
 
 
 {-| -}
@@ -170,52 +168,42 @@ request : Request a -> Task Error a
 request r =
     Task.define
         { function = "builtin:http"
+        , expect = Task.expectJson (decodeExpect r.expect)
+        , errors = Task.expectErrors (decodeError r)
         , args = encode r
-        , expect = Task.expectJson (decodeResponse r)
         }
-        |> Task.mapError wrapError
         |> Task.andThen Task.fromResult
+        |> Task.onResponseDecoderFailure wrapError
 
 
-wrapError : Task.Error -> Error
-wrapError err =
-    case err of
-        Internal.ResponseError e ->
-            BadBody (Decode.errorToString e)
-
-        _ ->
-            TaskError err
+wrapError : Decode.Error -> Task Error a
+wrapError =
+    Decode.errorToString
+        >> BadBody
+        >> Task.fail
 
 
-decodeResponse : Request a -> Decoder (Result Error a)
-decodeResponse r =
-    Decode.oneOf
-        [ decodeExpect r.expect
-        , decodeError r
-        ]
-
-
-decodeError : Request a -> Decoder (Result Error value)
+decodeError : Request a -> Decoder Error
 decodeError r =
-    Decode.field "error" Decode.string
+    Decode.field "reason" Decode.string
         |> Decode.andThen
             (\code ->
                 case code of
                     "TIMEOUT" ->
-                        Decode.succeed (Err Timeout)
+                        Decode.succeed Timeout
 
                     "NETWORK_ERROR" ->
-                        Decode.succeed (Err NetworkError)
+                        Decode.succeed NetworkError
 
                     "BAD_URL" ->
-                        Decode.succeed (Err (BadUrl r.url))
+                        Decode.succeed (BadUrl r.url)
 
                     "BAD_BODY" ->
-                        Decode.field "body" Decode.string
-                            |> Decode.map (Err << BadBody)
+                        Decode.field "message" Decode.string
+                            |> Decode.map BadBody
 
                     _ ->
-                        Decode.succeed (Err (TaskError (Internal.UnknownError ("Unknown error code: " ++ code))))
+                        Decode.fail ("Unknown error code: " ++ code)
             )
 
 

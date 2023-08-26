@@ -1,15 +1,16 @@
 module Concurrent.Task exposing
-    ( Task, define, Error
+    ( Task, define
     , Expect, expectJson, expectString, expectWhatever
+    , Errors, expectThrows, expectErrors, catchAll, onResponseDecoderFailure
+    , mapError, onError
     , succeed, fail, andThen
     , fromResult, andThenDo, return
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , mapError, onError, errorToString
-    , attempt, onProgress, Pool, pool
+    , attempt, Response, onProgress, Pool, pool
     )
 
-{-| A Task very similar to `elm/core`'s `Task` but:
+{-| A Task similar to `elm/core`'s `Task` but:
 
   - Allows concurrent execution of `map2`, `map3`, ...
   - Can safely call external JavaScript and chain the results (also known as Task Ports).
@@ -23,10 +24,10 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-  - [`Http.request`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Http)
-  - [`Process.sleep`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Process)
-  - [`Random.generate`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Random)
-  - [`Time.now`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Time)
+  - [`Http.request`](Concurrent-Task-Http)
+  - [`Process.sleep`](Concurrent-Task-Process)
+  - [`Random.generate`](Concurrent-Task-Random)
+  - [`Time.now`](Concurrent-Task-Time)
 
 
 # Tasks
@@ -35,7 +36,7 @@ A `Task` represents an asynchronous unit of work with the possibility of failure
 
 Underneath, each task represents a call to a JavaScript function and the runner handles batching and sequencing the calls.
 
-@docs Task, define, Error
+@docs Task, define
 
 
 # Expectations
@@ -43,6 +44,59 @@ Underneath, each task represents a call to a JavaScript function and the runner 
 Decode the response of a JS function into an Elm value.
 
 @docs Expect, expectJson, expectString, expectWhatever
+
+
+# Error Handling
+
+`Error` handlers provide different ways to capture errors for a `Task`.
+
+
+## Understanding Errors
+
+`Concurrent.Task` has two main kinds of `Errors`:
+
+
+## TaskError
+
+This is the `x` in the `Task x a` and represents an expected error as part of your task flow. You handle these with `mapError` and `onError`.
+
+
+## RunnerError
+
+You can think of these as "unhandled" errors that are not a normal part of your task flow.
+These include:
+
+  - `UnhandledJsException` - an exception was thrown and the task didn't handle it.
+  - `ResponseDecoderFailure` - a function returned an unexpected value (e.g. expected an Int and got a String).
+  - `ErrorsDecoderFailure` - a returned error didn't match the provided `expectErrors` decoder.
+  - `MissingFunction` - a function name could not be found in the registered JS functions.
+
+The idea behind `RunnerError` is to keep your task flow types `Task x a` clean and meaningful,
+and optionally lift some of them into your `TaskError` type where it makes sense.
+
+
+## Handling Runner Errors
+
+Some of these can be captured as regular `TaskErrors` (The `x` in `Task x a`) using handlers:
+
+  - `UnhandledJsException` - can be converted into a regular `TaskError` with [expectThrows](Concurrent-Task#expectThrows).
+  - `UnhandledJsException` - can be converted into a `Success` with [catchAll](Concurrent-Task#catchAll).
+  - `ResponseDecoderFailure` - can be lifted into regular task flow with [onResponseDecoderFailure](Concurrent-Task#onResponseDecoderFailure).
+
+
+## Fatal Errors
+
+Some `RunnerError`s cannot be caught, these are assumed to have no meaningful way to recover from:
+
+  - `MissingFunction` will always be thrown if there is a mismatch between JS and Elm function names.
+  - `ErrorsDecoderFailure` will always be thrown if a returned error didn't match a provided [expectErrors](Concurrent-Task#expectErrors) decoder.
+
+@docs Errors, expectThrows, expectErrors, catchAll, onResponseDecoderFailure
+
+
+# Transforming Errors
+
+@docs mapError, onError
 
 
 # Chaining Tasks
@@ -76,18 +130,13 @@ Transform values returned from tasks.
 @docs map, andMap, map2, map3, map4, map5
 
 
-# Errors
-
-@docs mapError, onError, errorToString
-
-
 # Run a Task
 
 Once you've constructed a Task it needs to be passed to the runner to perform all of the effects.
 
-This can be done using the following functions:
+This can be done using the following types and functions:
 
-@docs attempt, onProgress, Pool, pool
+@docs attempt, Response, onProgress, Pool, pool
 
 -}
 
@@ -107,23 +156,28 @@ type alias Task x a =
 
 {-| Define a `Task` from an external JavaScript function with:
 
-  - The `name` of the registered function you want to call
-  - The encoded `args` to pass to the function
-  - What you `expect` to come back from the function when it returns
+  - The `name` of the registered function you want to call.
+  - What you `expect` to come back from the function when it returns.
+  - How to interpret `errors` coming from the function (exceptions or explicitly returned errors).
+  - The encoded `args` to pass to the function.
 
 Say you wanted to interact with the node filesystem:
 
 Define your task in `Elm`:
 
-    import Concurrent.Task as Task exposing (Error, Task)
+    import Concurrent.Task as Task exposing (Task)
     import Json.Encode as Encode
+
+    type Error
+        = Error String
 
     readFile : String -> Task Error String
     readFile path =
         Task.define
             { function = "fs:readFile"
-            , args = Encode.object [ ( "path", Encode.string path ) ]
             , expect = Task.expectString
+            , errors = Task.expectThrows Error
+            , args = Encode.object [ ( "path", Encode.string path ) ]
             }
 
 And in your `JavaScript` runner:
@@ -144,35 +198,28 @@ And in your `JavaScript` runner:
       },
     });
 
-NOTE:
 
-  - If the function names don't match between Elm and JavaScript the task will complete with an `Err (MissingFunction name)`
-  - If the function returns a value that doesn't match `expect` the task will complete with an `Err (ResponseError error)`
-  - If the function throws an exception the task will complete with an `Err (JsException error)`
+## A note on Errors:
+
+The example `fs:readFile` Task has very simple error handling (turn any thrown exceptions into the Error type).
+This can be a great way to start, but what if you want more detailed errors?
+
+The `Errors` section will go into more detail on different error handling strategies, including:
+
+  - how to define and handle more meaningful error types.
+  - bypassing all errors for Tasks which never fail (e.g. get the current time, log to the console).
+  - handling unexpected return data (e.g. the function returns an `Int` when you were expecting a `String`).
 
 -}
 define :
     { function : String
-    , args : Encode.Value
     , expect : Expect a
+    , errors : Errors x a
+    , args : Encode.Value
     }
-    -> Task Error a
+    -> Task x a
 define =
     Internal.define
-
-
-{-| A defined `Task` can error in the following ways:
-
-1.  `ResponseError Decode.Error` - The `JavaScript` function returned a value but it was the wrong shape
-2.  `MissingFunction String` - The function name was not found in the registered tasks (the `String` is the name of the function that was not found)
-3.  `JsException String` - The `JavaScript` function threw an exception
-
-A Task can also error with `UnknownError String` (represents an internal decode failure).
-However this should not happen in practice - if it does, [please leave an issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues).
-
--}
-type alias Error =
-    Internal.Error
 
 
 
@@ -203,6 +250,205 @@ expectString =
 expectWhatever : Expect ()
 expectWhatever =
     Internal.expectWhatever
+
+
+
+-- Errors
+
+
+{-| A handler passed to `Task.define`.
+-}
+type alias Errors x a =
+    Internal.Errors x a
+
+
+{-| The simplest Error handler. If a JS function throws an Exception, it will be wrapped in the provided `Error` type.
+
+Maybe your JS function throws an `AccessError`:
+
+    import Concurrent.Task as Task exposing (Task)
+
+    type Error
+        = MyError String
+
+    example : Task Error String
+    example =
+        Task.define
+            { function = "functionThatThrows"
+            , expect = Task.expectString
+            , errors = Task.expectThrows MyError
+            , args = Encode.null
+            }
+
+When the task is run it will complete with `Task.Error (MyError "AccessError: access denied")`.
+This can be transformed and chained using `Task.mapError` and `Task.onError`.
+
+
+### Note:
+
+This kind of error handling can be useful to get started quickly,
+but it's often much more expressive and useful if you catch and explicitly return error data in your JS function that can be decoded with the `expectError` handler.
+
+-}
+expectThrows : (String -> x) -> Errors x a
+expectThrows =
+    Internal.expectThrows
+
+
+{-| Decode explicit errors returned by a Task. Use this when you want more meaningful errors in your task.
+
+This will decode the value from an `error` key returned by a JS function, e.g.:
+
+    return {
+      error: {
+        code: "MY_ERROR_CODE",
+        message: "Something Went Wrong",
+      }
+    }
+
+**Important Notes**:
+
+  - If your function doesn't return an `"error"` key it will be interpreted as a success response.
+  - If your JS function throws an exception it will surface as a `RunnerError UnhandledJsException` -
+    make sure to catch these in your JS function and return them as structured error responses.
+  - If your error decoder fails the task will surface a `RunnerError ExpectErrorFailure`.
+
+Maybe you want to handle different kinds of errors when writing to `localStorage`:
+
+    import Concurrent.Task as Task exposing (Task)
+    import Json.Decode as Decode
+    import Json.Encode as Encode
+
+    type WriteError
+        = QuotaExceeded
+        | WriteBlocked
+
+    set : String -> String -> Task WriteError ()
+    set key value =
+        Task.define
+            { function = "storage:set"
+            , expect = Task.expectWhatever
+            , errors = Task.expectErrors decodeWriteError
+            , args =
+                Encode.object
+                    [ ( "key", Encode.string key )
+                    , ( "value", Encode.string value )
+                    ]
+            }
+
+    decodeWriteError : Decode.Decoder WriteError
+    decodeWriteError =
+        Decode.string
+            |> Decode.andThen
+                (\reason ->
+                    case reason of
+                        "QUOTA_EXCEEDED" ->
+                            Decode.succeed QuotaExceeded
+
+                        "WRITE_BLOCKED" ->
+                            Decode.succeed WriteBlocked
+
+                        _ ->
+                            Decode.fail ("Unknown WriteError Reason: " ++ reason)
+                )
+
+And on the JS side:
+
+    Tasks.register({
+      tasks: {
+        "storage:set": (args) => setItem(args),
+      },
+      ports: {
+        send: app.ports.send,
+        receive: app.ports.receive,
+      },
+    });
+
+
+    function setItem(args) {
+      try {
+        localStorage.setItem(args.key, args.value);
+      } catch (e) {
+        if (e.name === "QuotaExceededError") {
+          return {
+            error: "QUOTA_EXCEEDED",
+          };
+        } else {
+          return {
+            error: "WRITE_BLOCKED",
+          };
+        }
+      }
+    }
+
+-}
+expectErrors : Decoder x -> Errors x a
+expectErrors =
+    Internal.expectErrors
+
+
+{-| Using this handler transforms any `JS Exceptions` or `ResponseDecoderFailures` into a `Success` with the provided fallback.
+
+Only use this handler for functions that can't fail.
+
+e.g. logging to the console:
+
+    import Concurrent.Task as Task exposing (Task)
+
+    log : String -> Task x ()
+    log msg =
+        Task.define
+            { function = "console:log"
+            , expect = Task.expectWhatever ()
+            , errors = Task.catchAll ()
+            , args = Encode.string msg
+            }
+
+On the JS side:
+
+    Tasks.register({
+      tasks: {
+        "console:log": (msg) => console.log(msg),
+      },
+      ports: {
+        send: app.ports.send,
+        receive: app.ports.receive,
+      },
+    });
+
+-}
+catchAll : a -> Errors x a
+catchAll =
+    Internal.catchAll
+
+
+{-| Use this alongside other error handlers to lift a `ResponseDecoderFailure`'s `Json.Decode` error into regular task flow.
+
+Maybe you want to represent an unexpected response as a `BadBody` error for a http request:
+
+    import Concurrent.Task as Task
+
+    type Error
+        = Timeout
+        | NetworkError
+        | BadStatus Int
+        | BadUrl String
+        | BadBody Decode.Error
+
+    request : Request a -> Task Error a
+    request options =
+        Task.define
+            { function = "http:request"
+            , expect = Task.expectJson options.expect
+            , errors = Task.expectErrors decodeHttpErrors
+            , args = encodeArgs options
+            }
+            |> Task.onResponseDecoderFailure (BadBody >> Task.fail)
+
+-}
+onResponseDecoderFailure : (Decode.Error -> Task x a) -> Task x a -> Task x a
+onResponseDecoderFailure =
+    Internal.onResponseDecoderFailure
 
 
 
@@ -462,13 +708,6 @@ onError =
     Internal.onError
 
 
-{-| Convenience for formatting a Task error as a String.
--}
-errorToString : Error -> String
-errorToString =
-    Internal.errorToString
-
-
 
 -- Run a Task
 
@@ -499,12 +738,25 @@ Make sure to update your `Model` and pass in the `Cmd` returned from `attempt`. 
 attempt :
     { pool : Pool msg x a
     , send : Decode.Value -> Cmd msg
-    , onComplete : Result x a -> msg
+    , onComplete : Response x a -> msg
     }
     -> Task x a
     -> ( Pool msg x a, Cmd msg )
 attempt =
     Internal.attempt
+
+
+{-| The value returned from a task when it completes (returned in the `OnComplete` msg).
+
+Can be either:
+
+  - `Success a` - the task succeeded with no errors, woo!
+  - `TaskError x` - the task failed with an expected error.
+  - `RunnerError` - the task failed with an unexpected error (see the section on `Error Handling` for more details).
+
+-}
+type alias Response x a =
+    Internal.Response x a
 
 
 {-| Subscribe to updates from the JavaScript task runner.
@@ -526,6 +778,11 @@ You can wire this in like so:
             , onProgress = OnProgress
             }
             model.tasks
+
+Make sure to update your `Model` and pass in the `Cmd` in your `OnProgress` branch in `update`:
+
+    OnProgress ( tasks, cmd ) ->
+        ( { model | tasks = tasks }, cmd )
 
 -}
 onProgress :

@@ -26,7 +26,7 @@ sleep : Int -> Task x ()
 sleep ms =
     Task.define
         { function = "builtin:sleep"
-        , args = Encode.int ms
         , expect = Task.expectWhatever
+        , errors = Task.catchAll ()
+        , args = Encode.int ms
         }
-        |> Task.onError (\_ -> Task.succeed ())
