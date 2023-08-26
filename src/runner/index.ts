@@ -31,12 +31,10 @@ export interface TaskResult {
 }
 
 export interface Success {
-  status: "success";
   value: any;
 }
 
 export interface Error {
-  status: "error";
   error: {
     reason: string;
     message: string;
@@ -87,7 +85,6 @@ export function register(options: Options): void {
             attemptId: def.attemptId,
             taskId: def.taskId,
             result: {
-              status: "error",
               error: {
                 reason: "missing_function",
                 message: `${def.function} is not registered`,
@@ -108,14 +105,13 @@ export function register(options: Options): void {
         debouncedSend({
           attemptId: def.attemptId,
           taskId: def.taskId,
-          result: { status: "success", value: result },
+          result: { value: result },
         });
       } catch (e) {
         debouncedSend({
           attemptId: def.attemptId,
           taskId: def.taskId,
           result: {
-            status: "error",
             error: {
               reason: "js_exception",
               message: `${def.function} threw an execption: ${e.message}`,

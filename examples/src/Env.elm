@@ -59,7 +59,7 @@ type alias Detail =
 type Reason
     = MissingRequiredField
     | UnexpectedValue String
-    | CustomError String
+    | ParsingLogicError String
 
 
 parse : Parser a -> Decode.Value -> Result Error a
@@ -91,7 +91,7 @@ printReason reason =
         UnexpectedValue help ->
             "Required field present but " ++ help
 
-        CustomError help ->
+        ParsingLogicError help ->
             "Parsing logic failed - " ++ help
 
 
@@ -288,7 +288,7 @@ succeed a =
 
 fail : String -> String -> Parser a
 fail name reason =
-    Parser (\_ -> Err (toError name (CustomError reason)))
+    Parser (\_ -> Err (toError name (ParsingLogicError reason)))
 
 
 map : (a -> b) -> Parser a -> Parser b

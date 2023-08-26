@@ -171,7 +171,7 @@ define def =
                 )
                 (case Dict.get taskId results of
                     Just result ->
-                        wrap (decodeResult def result)
+                        wrap (decodeResponse def result)
 
                     Nothing ->
                         runWith ids (define def)
@@ -244,14 +244,14 @@ andMap ((Task run1) as task1) ((Task run2) as task2) =
 haltOnError : Response x a -> Task_ x b -> Task_ x b
 haltOnError res task =
     case res of
+        Success _ ->
+            task
+
         Error e ->
             Done (Error e)
 
         RunnerError e ->
             Done (RunnerError e)
-
-        Success _ ->
-            task
 
 
 map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
@@ -383,14 +383,14 @@ andThen f (Task run) =
             case task of
                 Done a ->
                     case a of
+                        Success a_ ->
+                            unwrap res ids_ (f a_)
+
                         Error e ->
                             ( ids_, Done (Error e) )
 
                         RunnerError e ->
                             ( ids, Done (RunnerError e) )
-
-                        Success a_ ->
-                            unwrap res ids_ (f a_)
 
                 Pending defs next ->
                     ( ids_, Pending defs (andThen f next) )
@@ -427,11 +427,11 @@ onError f (Task run) =
             case task of
                 Done a ->
                     case a of
-                        Error e ->
-                            unwrap res ids_ (f e)
-
                         Success a_ ->
                             ( ids_, Done (Success a_) )
+
+                        Error e ->
+                            unwrap res ids_ (f e)
 
                         RunnerError e ->
                             ( ids_, Done (RunnerError e) )
@@ -469,21 +469,11 @@ onDecodeResponseError f (Task run) =
                     run res ids
             in
             case task of
-                Done a ->
-                    case a of
-                        Error e ->
-                            ( ids_, Done (Error e) )
+                Done (RunnerError (ResponseDecoderFailure e_)) ->
+                    unwrap res ids_ (f e_.error)
 
-                        Success a_ ->
-                            ( ids_, Done (Success a_) )
-
-                        RunnerError e ->
-                            case e of
-                                ResponseDecoderFailure e_ ->
-                                    unwrap res ids_ (f e_.error)
-
-                                _ ->
-                                    ( ids_, Done (RunnerError e) )
+                Done _ ->
+                    ( ids, task )
 
                 Pending defs next ->
                     ( ids_, Pending defs (onDecodeResponseError f next) )
@@ -738,87 +728,105 @@ decodeRawResult =
         (Decode.field "result" Decode.value)
 
 
-decodeResult : Definition x a -> Decode.Value -> Response x a
-decodeResult def val =
+decodeResponse : Definition x a -> Decode.Value -> Response x a
+decodeResponse def val =
     case def.errors of
         CatchAll fallback ->
-            case Decode.decodeValue (decodeRunnerError def) val of
-                Ok err ->
-                    case err of
-                        UnhandledJsException _ ->
-                            Success fallback
-
-                        ResponseDecoderFailure _ ->
-                            Success fallback
-
-                        _ ->
-                            RunnerError err
-
-                Err _ ->
-                    case Decode.decodeValue (decodeRunnerSuccess def) val of
-                        Ok a ->
-                            Success a
-
-                        Err _ ->
-                            Success fallback
+            decodeCatchAll fallback def val
 
         CatchException catch ->
-            case Decode.decodeValue (decodeRunnerError def) val of
-                Ok err ->
-                    case err of
-                        UnhandledJsException e ->
-                            Error (catch e.message)
+            decodeCatchException catch def val
 
-                        _ ->
-                            RunnerError err
+        ExpectError expect_ ->
+            decodeExpectError expect_ def val
+
+
+decodeCatchAll : a -> Definition x a -> Decode.Value -> Response b a
+decodeCatchAll fallback def val =
+    case Decode.decodeValue (decodeRunnerError def) val of
+        Ok err ->
+            case err of
+                UnhandledJsException _ ->
+                    Success fallback
+
+                ResponseDecoderFailure _ ->
+                    Success fallback
+
+                _ ->
+                    RunnerError err
+
+        Err _ ->
+            case Decode.decodeValue (decodeRunnerSuccess def) val of
+                Ok a ->
+                    Success a
 
                 Err _ ->
-                    case Decode.decodeValue (decodeRunnerSuccess def) val of
-                        Ok a ->
-                            Success a
+                    Success fallback
 
-                        Err e ->
+
+decodeCatchException : (String -> x) -> Definition a b -> Decode.Value -> Response x b
+decodeCatchException catch def val =
+    case Decode.decodeValue (decodeRunnerError def) val of
+        Ok err ->
+            case err of
+                UnhandledJsException e ->
+                    Error (catch e.message)
+
+                _ ->
+                    RunnerError err
+
+        Err _ ->
+            case Decode.decodeValue (decodeRunnerSuccess def) val of
+                Ok a ->
+                    Success a
+
+                Err e ->
+                    RunnerError
+                        (ResponseDecoderFailure
+                            { function = def.function
+                            , error = e
+                            }
+                        )
+
+
+decodeExpectError : Decoder x -> Definition a b -> Decode.Value -> Response x b
+decodeExpectError expect def val =
+    case Decode.decodeValue (decodeRunnerError def) val of
+        Ok err ->
+            RunnerError err
+
+        Err _ ->
+            case Decode.decodeValue (decodeExpectErrorField Decode.value) val of
+                Ok _ ->
+                    case Decode.decodeValue (decodeExpectErrorField expect) val of
+                        Ok err_ ->
+                            Error err_
+
+                        Err e_ ->
                             RunnerError
-                                (ResponseDecoderFailure
+                                (ErrorDecoderFailure
                                     { function = def.function
-                                    , error = e
+                                    , error = e_
                                     }
                                 )
 
-        ExpectError expect_ ->
-            case Decode.decodeValue (decodeRunnerError def) val of
-                Ok err ->
-                    RunnerError err
-
                 Err _ ->
-                    case Decode.decodeValue (Decode.field "value" (Decode.field "error" Decode.value)) val of
-                        -- Try error path
-                        Ok _ ->
-                            case Decode.decodeValue (Decode.field "value" (Decode.field "error" expect_)) val of
-                                Ok err_ ->
-                                    Error err_
+                    case Decode.decodeValue (decodeRunnerSuccess def) val of
+                        Ok a ->
+                            Success a
 
-                                Err e_ ->
-                                    RunnerError
-                                        (ErrorDecoderFailure
-                                            { function = def.function
-                                            , error = e_
-                                            }
-                                        )
+                        Err e_ ->
+                            RunnerError
+                                (ResponseDecoderFailure
+                                    { function = def.function
+                                    , error = e_
+                                    }
+                                )
 
-                        Err _ ->
-                            -- Try success path
-                            case Decode.decodeValue (decodeRunnerSuccess def) val of
-                                Ok a ->
-                                    Success a
 
-                                Err e_ ->
-                                    RunnerError
-                                        (ResponseDecoderFailure
-                                            { function = def.function
-                                            , error = e_
-                                            }
-                                        )
+decodeExpectErrorField : Decoder a -> Decoder a
+decodeExpectErrorField decoder =
+    Decode.field "value" (Decode.field "error" decoder)
 
 
 decodeRunnerSuccess : Definition x a -> Decoder a
