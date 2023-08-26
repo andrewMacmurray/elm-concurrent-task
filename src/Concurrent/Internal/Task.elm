@@ -16,12 +16,12 @@ module Concurrent.Internal.Task exposing
     , attempt
     , batch
     , catchAll
-    , catchException
     , define
     , doBatch
-    , expectError
+    , expectErrors
     , expectJson
     , expectString
+    , expectThrows
     , expectWhatever
     , fail
     , fromResult
@@ -31,9 +31,9 @@ module Concurrent.Internal.Task exposing
     , map4
     , map5
     , mapError
-    , onDecodeResponseError
     , onError
     , onProgress
+    , onResponseDecoderFailure
     , pool
     , return
     , sequence
@@ -63,6 +63,12 @@ type Task_ x a
     | Done (Response x a)
 
 
+type Response x a
+    = Success a
+    | TaskError x
+    | RunnerError RunnerError
+
+
 type alias TaskId =
     Ids.Id
 
@@ -84,19 +90,13 @@ type Expect a
 
 type Errors x a
     = CatchAll a
-    | CatchException (String -> x)
-    | ExpectError (Decoder x)
-
-
-type Response x a
-    = Success a
-    | Error x
-    | RunnerError RunnerError
+    | ExpectThrows (String -> x)
+    | ExpectErrors (Decoder x)
 
 
 type RunnerError
     = ResponseDecoderFailure { function : String, error : Decode.Error }
-    | ErrorDecoderFailure { function : String, error : Decode.Error }
+    | ErrorsDecoderFailure { function : String, error : Decode.Error }
     | UnhandledJsException { function : String, message : String }
     | MissingFunction String
     | InternalError String
@@ -130,14 +130,14 @@ catchAll =
     CatchAll
 
 
-catchException : (String -> x) -> Errors x a
-catchException =
-    CatchException
+expectThrows : (String -> x) -> Errors x a
+expectThrows =
+    ExpectThrows
 
 
-expectError : Decoder x -> Errors x a
-expectError =
-    ExpectError
+expectErrors : Decoder x -> Errors x a
+expectErrors =
+    ExpectErrors
 
 
 
@@ -247,8 +247,8 @@ haltOnError res task =
         Success _ ->
             task
 
-        Error e ->
-            Done (Error e)
+        TaskError e ->
+            Done (TaskError e)
 
         RunnerError e ->
             Done (RunnerError e)
@@ -352,7 +352,7 @@ succeed a =
 
 fail : x -> Task x a
 fail x =
-    wrap (Error x)
+    wrap (TaskError x)
 
 
 fromResult : Result x a -> Task x a
@@ -366,7 +366,7 @@ fromResult res =
                         Success a
 
                     Err e ->
-                        Error e
+                        TaskError e
                 )
             )
         )
@@ -386,8 +386,8 @@ andThen f (Task run) =
                         Success a_ ->
                             unwrap res ids_ (f a_)
 
-                        Error e ->
-                            ( ids_, Done (Error e) )
+                        TaskError e ->
+                            ( ids_, Done (TaskError e) )
 
                         RunnerError e ->
                             ( ids, Done (RunnerError e) )
@@ -430,7 +430,7 @@ onError f (Task run) =
                         Success a_ ->
                             ( ids_, Done (Success a_) )
 
-                        Error e ->
+                        TaskError e ->
                             unwrap res ids_ (f e)
 
                         RunnerError e ->
@@ -460,8 +460,8 @@ mapError f (Task run) =
         )
 
 
-onDecodeResponseError : (Decode.Error -> Task x a) -> Task x a -> Task x a
-onDecodeResponseError f (Task run) =
+onResponseDecoderFailure : (Decode.Error -> Task x a) -> Task x a -> Task x a
+onResponseDecoderFailure f (Task run) =
     Task
         (\res ids ->
             let
@@ -476,7 +476,7 @@ onDecodeResponseError f (Task run) =
                     ( ids, task )
 
                 Pending defs next ->
-                    ( ids_, Pending defs (onDecodeResponseError f next) )
+                    ( ids_, Pending defs (onResponseDecoderFailure f next) )
         )
 
 
@@ -490,8 +490,8 @@ mapResponse f res =
         Success a ->
             Success (f a)
 
-        Error e ->
-            Error e
+        TaskError e ->
+            TaskError e
 
         RunnerError e ->
             RunnerError e
@@ -509,11 +509,11 @@ map2Response f res1 res2 =
         ( _, RunnerError e ) ->
             RunnerError e
 
-        ( Error e, _ ) ->
-            Error e
+        ( TaskError e, _ ) ->
+            TaskError e
 
-        ( _, Error e ) ->
-            Error e
+        ( _, TaskError e ) ->
+            TaskError e
 
 
 mapResponseError : (x -> y) -> Response x a -> Response y a
@@ -522,8 +522,8 @@ mapResponseError f res =
         Success a ->
             Success a
 
-        Error e ->
-            Error (f e)
+        TaskError e ->
+            TaskError (f e)
 
         RunnerError e ->
             RunnerError e
@@ -734,11 +734,11 @@ decodeResponse def val =
         CatchAll fallback ->
             decodeCatchAll fallback def val
 
-        CatchException catch ->
-            decodeCatchException catch def val
+        ExpectThrows catch ->
+            decodeExpectThrows catch def val
 
-        ExpectError expect_ ->
-            decodeExpectError expect_ def val
+        ExpectErrors expect ->
+            decodeExpectErrors expect def val
 
 
 decodeCatchAll : a -> Definition x a -> Decode.Value -> Response b a
@@ -764,13 +764,13 @@ decodeCatchAll fallback def val =
                     Success fallback
 
 
-decodeCatchException : (String -> x) -> Definition a b -> Decode.Value -> Response x b
-decodeCatchException catch def val =
+decodeExpectThrows : (String -> x) -> Definition a b -> Decode.Value -> Response x b
+decodeExpectThrows catch def val =
     case Decode.decodeValue (decodeRunnerError def) val of
         Ok err ->
             case err of
                 UnhandledJsException e ->
-                    Error (catch e.message)
+                    TaskError (catch e.message)
 
                 _ ->
                     RunnerError err
@@ -789,8 +789,8 @@ decodeCatchException catch def val =
                         )
 
 
-decodeExpectError : Decoder x -> Definition a b -> Decode.Value -> Response x b
-decodeExpectError expect def val =
+decodeExpectErrors : Decoder x -> Definition a b -> Decode.Value -> Response x b
+decodeExpectErrors expect def val =
     case Decode.decodeValue (decodeRunnerError def) val of
         Ok err ->
             RunnerError err
@@ -800,11 +800,11 @@ decodeExpectError expect def val =
                 Ok _ ->
                     case Decode.decodeValue (decodeExpectErrorField expect) val of
                         Ok err_ ->
-                            Error err_
+                            TaskError err_
 
                         Err e_ ->
                             RunnerError
-                                (ErrorDecoderFailure
+                                (ErrorsDecoderFailure
                                     { function = def.function
                                     , error = e_
                                     }

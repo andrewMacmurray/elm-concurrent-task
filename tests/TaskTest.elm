@@ -217,7 +217,7 @@ errors =
                 Task.define
                     { function = "custom"
                     , expect = Task.expectString
-                    , errors = Task.expectError (Decode.field "error" Decode.string)
+                    , errors = Task.expectErrors (Decode.field "error" Decode.string)
                     , args = Encode.null
                     }
 
@@ -226,7 +226,7 @@ errors =
                 Task.define
                     { function = "catch"
                     , expect = Task.expectString
-                    , errors = Task.catchException identity
+                    , errors = Task.expectThrows identity
                     , args = Encode.null
                     }
 
@@ -268,7 +268,7 @@ errors =
                             , ( 1, success (Encode.string "b") )
                             , ( 2, error "js_exception" "f threw an exception" )
                             ]
-                        |> Expect.equal (Task.Error "f threw an exception")
+                        |> Expect.equal (Task.TaskError "f threw an exception")
             , test "Succeeds with fallback if task throws and has a catchAll handler" <|
                 \_ ->
                     Task.map3 join3
@@ -315,7 +315,7 @@ errors =
             , test "ResponseDecoderFailures can be caught and returned in regular task flow" <|
                 \_ ->
                     customErrorTask
-                        |> Task.onDecodeResponseError
+                        |> Task.onResponseDecoderFailure
                             (Decode.errorToString
                                 >> String.right 18
                                 >> Task.succeed
@@ -358,7 +358,7 @@ errors =
                     Task.define
                         { function = "custom"
                         , expect = Task.expectString
-                        , errors = Task.expectError decodeError
+                        , errors = Task.expectErrors decodeError
                         , args = Encode.null
                         }
              in
@@ -371,7 +371,7 @@ errors =
                             [ ( 0, success (Encode.string "1") )
                             , ( 1, success (Encode.object [ ( "error", Encode.string "ERR_1" ) ]) )
                             ]
-                        |> Expect.equal (Task.Error Error1)
+                        |> Expect.equal (Task.TaskError Error1)
              , test "Errors with ErrorDecoderFailure if the task returns an error key with an unexpected value on it" <|
                 \_ ->
                     Task.map2 join2
@@ -432,7 +432,7 @@ hardcoded =
                     |> Task.andThenDo (Task.succeed 2)
                     |> Task.andThen (\_ -> Task.fail "hardcoded error")
                     |> runTask []
-                    |> Expect.equal (Task.Error "hardcoded error")
+                    |> Expect.equal (Task.TaskError "hardcoded error")
         , fuzz2 int int "tasks can recover from an error" <|
             \a b ->
                 Task.succeed a
@@ -554,7 +554,7 @@ create decoder =
     Task.define
         { function = "aTask"
         , expect = Task.expectJson decoder
-        , errors = Task.catchException identity
+        , errors = Task.expectThrows identity
         , args = Encode.null
         }
 
@@ -587,7 +587,7 @@ expectResponseDecoderFailureFor function message res =
 expectErrorDecoderFailureFor : String -> String -> Task.Response x a -> Expectation
 expectErrorDecoderFailureFor function message res =
     case res of
-        Task.RunnerError (Task.ErrorDecoderFailure err) ->
+        Task.RunnerError (Task.ErrorsDecoderFailure err) ->
             if err.function == function && String.contains message (Decode.errorToString err.error) then
                 Expect.pass
 

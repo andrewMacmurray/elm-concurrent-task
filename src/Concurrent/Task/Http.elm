@@ -169,11 +169,11 @@ request r =
     Task.define
         { function = "builtin:http"
         , expect = Task.expectJson (decodeExpect r.expect)
-        , errors = Task.expectError (decodeError r)
+        , errors = Task.expectErrors (decodeError r)
         , args = encode r
         }
         |> Task.andThen Task.fromResult
-        |> Task.onDecodeResponseError wrapError
+        |> Task.onResponseDecoderFailure wrapError
 
 
 wrapError : Decode.Error -> Task Error a

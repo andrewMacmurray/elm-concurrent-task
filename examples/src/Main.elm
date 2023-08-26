@@ -480,7 +480,7 @@ slowInt id =
     Task.define
         { function = "slowInt"
         , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
-        , errors = Task.catchException TaskError
+        , errors = Task.expectThrows TaskError
         , args = Encode.int id
         }
 

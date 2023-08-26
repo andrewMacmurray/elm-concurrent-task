@@ -114,7 +114,7 @@ export function register(options: Options): void {
           result: {
             error: {
               reason: "js_exception",
-              message: `${def.function} threw an execption: ${e.message}`,
+              message: `${e.name}: ${e.message}`,
             },
           },
         });

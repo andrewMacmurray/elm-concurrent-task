@@ -55,9 +55,13 @@ Sometimes you want to call JavaScript from elm in order.
 For example sequencing updates to localstorage:
 
 ```elm
-import Concurrent.Task as Task exposing (Error, Task)
+import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+
+
+type Error
+    = Error String
 
 
 updateTheme : Theme -> Task Error ()
@@ -72,6 +76,7 @@ setItem key item =
     Task.define
         { function = "storage:setItem"
         , expect = Task.expectWhatever
+        , errors = Task.expectThrows Error
         , args =
             Encode.object
                 [ ( "key", Encode.string key )
@@ -85,6 +90,7 @@ getItem key decoder =
     Task.define
         { function = "storage:getItem"
         , expect = Task.expectString
+        , errors = Task.expectThrows Error
         , args = Encode.object [ ( "key", Encode.string key ) ]
         }
         |> Task.andThen (decodeItem decoder)
@@ -113,10 +119,10 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-- [`Http.request`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Http)
-- [`Process.sleep`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Process)
-- [`Random.generate`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Random)
-- [`Time.now`](packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Time)
+- [`Http.request`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Http)
+- [`Process.sleep`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Process)
+- [`Random.generate`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Random)
+- [`Time.now`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Time)
 
 ## How?
 
@@ -153,7 +159,7 @@ Your Elm program needs
   ```elm
   type Msg
       = OnProgress ( Task.Pool Msg Error Success, Cmd Msg ) -- updates task progress
-      | OnComplete (Result Error Success) -- called when a task completes
+      | OnComplete (Task.Response Error Success) -- called when a task completes
   ```
 
 - 2 ports with the following signatures:
@@ -180,7 +186,7 @@ type alias Model =
 
 type Msg
     = OnProgress ( Task.Pool Msg Error Titles, Cmd Msg )
-    | OnComplete (Result Error Titles)
+    | OnComplete (Task.Response Error Titles)
 
 
 type alias Error =
@@ -238,10 +244,10 @@ init =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnComplete result ->
+        OnComplete response ->
             let
                 _ =
-                    Debug.log "result" result
+                    Debug.log "response" response
             in
             ( model, Cmd.none )
 
