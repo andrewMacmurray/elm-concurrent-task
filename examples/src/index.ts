@@ -2,6 +2,8 @@ import { Elm } from "./Main.elm";
 import crypto from "node:crypto";
 import * as Tasks from "../../src/runner";
 import readline from "node:readline/promises";
+import * as S3 from "./aws/s3";
+import * as SQS from "./aws/sqs";
 
 // Tasks
 
@@ -27,7 +29,11 @@ function wait(ms) {
 const { ports } = Elm.Main.init({ flags: null });
 
 Tasks.register({
-  tasks: CustomTasks,
+  tasks: {
+    ...S3.tasks(),
+    ...SQS.tasks(),
+    ...CustomTasks,
+  },
   ports: {
     send: ports.send,
     receive: ports.receive,

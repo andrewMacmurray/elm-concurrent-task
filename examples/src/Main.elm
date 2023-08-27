@@ -9,6 +9,8 @@ import Env
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
+import S3
+import SQS
 import Time
 
 
@@ -48,7 +50,9 @@ type Msg
 type Error
     = HttpError Http.Error
     | EnvError Env.Error
-    | TaskError String
+    | SlowIntError String
+    | S3Error S3.Error
+    | SQSError SQS.Error
 
 
 
@@ -216,7 +220,7 @@ batchAndSequence =
 bigBatch : Task Http.Error String
 bigBatch =
     timeExecution "bigBatch"
-        (List.repeat 1000 (longRequest_ 1000)
+        (List.repeat 10000 (longRequest_ 10)
             |> Task.batch
             |> Task.map String.concat
         )
@@ -283,7 +287,7 @@ update msg model =
                         , pool = model.tasks
                         , onComplete = OnComplete id
                         }
-                        (Task.mapError HttpError bigBatch)
+                        putAndGet
             in
             ( { tasks = tasks }, cmd )
 
@@ -306,6 +310,77 @@ update msg model =
 
         OnProgress ( task, cmd ) ->
             ( { model | tasks = task }, cmd )
+
+
+
+-- SQS
+
+
+receiveAndDelete : Task Error String
+receiveAndDelete =
+    sqsReceiveMessages
+        { queueName = "tasks-in"
+        , visibilityTimeout = 2
+        , maxMessages = 10
+        }
+        |> Task.andThen (deleteAll >> Task.batch)
+        |> Task.map deleteCountMessage
+
+
+deleteCountMessage : List a -> String
+deleteCountMessage xs =
+    "deleted " ++ String.fromInt (List.length xs) ++ " messages"
+
+
+deleteAll : List SQS.Message -> List (Task Error ())
+deleteAll =
+    List.map
+        (\msg ->
+            sqsDeleteMessage
+                { queueName = "tasks-in"
+                , receiptHandle = msg.receiptHandle
+                }
+        )
+
+
+sqsReceiveMessages : SQS.ReceiveMessages -> Task Error (List SQS.Message)
+sqsReceiveMessages =
+    SQS.receiveMessages >> Task.mapError SQSError
+
+
+sqsDeleteMessage : SQS.DeleteMessage -> Task Error ()
+sqsDeleteMessage =
+    SQS.deleteMessage >> Task.mapError SQSError
+
+
+
+-- S3
+
+
+putAndGet : Task Error String
+putAndGet =
+    s3PutObject
+        { bucket = "my-bucket"
+        , key = "hello.txt"
+        }
+        "HELLOoooooooooooo"
+        |> Task.andThenDo
+            (s3GetObject
+                { bucket = "my-bucket"
+                , key = "hello.txt"
+                }
+            )
+        |> Task.map String.toUpper
+
+
+s3GetObject : { bucket : String, key : String } -> Task Error String
+s3GetObject =
+    S3.getObject >> Task.mapError S3Error
+
+
+s3PutObject : { bucket : String, key : String } -> String -> Task Error ()
+s3PutObject options =
+    S3.putObject options >> Task.mapError S3Error
 
 
 
@@ -478,7 +553,7 @@ slowInt id =
     Task.define
         { function = "slowInt"
         , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
-        , errors = Task.expectThrows TaskError
+        , errors = Task.expectThrows SlowIntError
         , args = Encode.int id
         }
 
