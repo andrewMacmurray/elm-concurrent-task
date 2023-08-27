@@ -1,4 +1,4 @@
-import { Request, Response, HttpError, toHeaders } from "./index";
+import { Request, Response, HttpError } from "./index";
 
 export function http(request: Request): Promise<Response> {
   let controller;
@@ -11,15 +11,18 @@ export function http(request: Request): Promise<Response> {
   return fetch(request.url, {
     method: request.method,
     body: request.body || null,
-    headers: toHeaders(request),
+    headers: new Headers(request.headers),
     signal: controller?.signal,
   })
     .then((res) => {
+      const headers = Object.fromEntries(res.headers.entries());
       switch (request.expect) {
         case "JSON": {
           return res
             .json()
             .then((x) => ({
+              url: res.url,
+              headers: headers,
               status: res.status,
               statusText: res.statusText,
               body: x,
@@ -35,6 +38,8 @@ export function http(request: Request): Promise<Response> {
         }
         case "STRING": {
           return res.text().then((x) => ({
+            url: res.url,
+            headers: headers,
             status: res.status,
             statusText: res.statusText,
             body: x,
@@ -42,6 +47,8 @@ export function http(request: Request): Promise<Response> {
         }
         case "WHATEVER": {
           return {
+            url: res.url,
+            headers: headers,
             status: res.status,
             statusText: res.statusText,
             body: null,

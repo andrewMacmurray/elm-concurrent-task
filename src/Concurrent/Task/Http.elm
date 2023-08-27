@@ -1,9 +1,9 @@
 module Concurrent.Task.Http exposing
-    ( Request, request
-    , Expect, expectJson, expectString, expectWhatever
-    , Error(..), StatusDetails
-    , Header, header
+    ( request
     , Body, emptyBody, stringBody, jsonBody
+    , Expect, expectJson, expectString, expectWhatever
+    , Header, header
+    , Error(..), Metadata
     )
 
 {-| Make concurrent http requests.
@@ -23,20 +23,29 @@ If needed you can supply a custom implementation like so:
 
 See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/fetch.ts) to see how to create your own.
 
+**Note:**
+
+You're not required to use this module for http requests in `Concurrent.Task`, it's here for convenience.
+You could create entirely your own from scratch - maybe you want an http package with request caching or special retry logic built in on the JS side.
+
 
 # Request
 
-@docs Request, request
+@docs request
+
+
+# Body
+
+Send data in your http request.
+
+@docs Body, emptyBody, stringBody, jsonBody
 
 
 # Expect
 
+Describe what you expect to be returned in an http response body.
+
 @docs Expect, expectJson, expectString, expectWhatever
-
-
-# Error
-
-@docs Error, StatusDetails
 
 
 # Header
@@ -44,30 +53,20 @@ See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurre
 @docs Header, header
 
 
-# Body
+# Error
 
-@docs Body, emptyBody, stringBody, jsonBody
+@docs Error, Metadata
 
 -}
 
 import Concurrent.Task as Task exposing (Task)
+import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
 
 -- Http Task
-
-
-{-| -}
-type alias Request a =
-    { url : String
-    , method : String
-    , headers : List Header
-    , body : Body
-    , expect : Expect a
-    , timeout : Maybe Int
-    }
 
 
 {-| -}
@@ -83,25 +82,49 @@ type Expect a
     | ExpectWhatever (Decoder a)
 
 
-{-| -}
+{-| An Http header for configuring a request.
+-}
 type alias Header =
     ( String, String )
 
 
-{-| -}
+{-| A Request can fail in a couple ways:
+
+  - `BadUrl` means you did not provide a valid URL.
+  - `Timeout` means it took too long to get a response.
+  - `NetworkError` means the user turned off their wifi, went in a cave, etc.
+  - `BadStatus` means you got a response back, but the status code indicates failure.
+  - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected.
+    The String in this case is a debugging message that explains what went wrong with your JSON decoder or whatever.
+
+-}
 type Error
     = BadUrl String
     | Timeout
     | NetworkError
-    | BadStatus StatusDetails
+    | BadStatus Metadata Decode.Value
     | BadBody String
 
 
-{-| -}
-type alias StatusDetails =
-    { code : Int
-    , text : String
-    , body : Decode.Value
+{-| Extra information about the response:
+
+  - url of the server that actually responded (so you can detect redirects)
+  - statusCode like 200 or 404
+  - statusText describing what the statusCode means a little
+  - headers like Content-Length and Expires
+
+**Note:**
+
+It is possible for a response to have the same header multiple times.
+In that case, all the values end up in a single entry in the headers dictionary.
+The values are separated by commas, following the rules outlined [here](https://stackoverflow.com/questions/4371328/are-duplicate-http-response-headers-acceptable).
+
+-}
+type alias Metadata =
+    { url : String
+    , statusCode : Int
+    , statusText : String
+    , headers : Dict String String
     }
 
 
@@ -109,62 +132,101 @@ type alias StatusDetails =
 -- Header
 
 
-{-| -}
+{-| Create a `Header`. e.g.:
+
+    header "X-Requested-With" "Fetch"
+
+-}
 header : String -> String -> Header
 header =
     Tuple.pair
 
 
 
+-- Body
+
+
+{-| Create an empty body for your request.
+This is useful for `GET` requests and `POST` requests where you are not sending any data.
+-}
+emptyBody : Body
+emptyBody =
+    EmptyBody
+
+
+{-| Put a `String` in the body of your request. Defining `jsonBody` looks like this:
+
+    import Json.Encode as Encode
+
+    jsonBody : Encode.Value -> Body
+    jsonBody value =
+        stringBody "application/json" (Encode.encode 0 value)
+
+The first argument is a [MIME type](https://en.wikipedia.org/wiki/Media_type) of the body.
+
+-}
+stringBody : String -> String -> Body
+stringBody =
+    StringBody
+
+
+{-| Put some JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
+-}
+jsonBody : Encode.Value -> Body
+jsonBody value =
+    stringBody "application/json" (Encode.encode 0 value)
+
+
+
 -- Expect
 
 
-{-| -}
+{-| Expect the response body to be `JSON`, decode it using the supplied decoder.
+-}
 expectJson : Decoder a -> Expect a
 expectJson =
     ExpectJson
 
 
-{-| -}
+{-| Expect the response body to be a `String`.
+-}
 expectString : Expect String
 expectString =
     ExpectString Decode.string
 
 
-{-| -}
+{-| Discard the response body.
+-}
 expectWhatever : Expect ()
 expectWhatever =
     ExpectWhatever (Decode.succeed ())
 
 
 
--- Body
-
-
-{-| -}
-emptyBody : Body
-emptyBody =
-    EmptyBody
-
-
-{-| -}
-jsonBody : Encode.Value -> Body
-jsonBody value =
-    StringBody "application/json" (Encode.encode 0 value)
-
-
-{-| -}
-stringBody : String -> String -> Body
-stringBody =
-    StringBody
-
-
-
 -- Send Request
 
 
-{-| -}
-request : Request a -> Task Error a
+type alias Request a =
+    { url : String
+    , method : String
+    , headers : List Header
+    , body : Body
+    , expect : Expect a
+    , timeout : Maybe Int
+    }
+
+
+{-| Send an Http request - similar to `elm/http`'s [`Http.Task`](https://package.elm-lang.org/packages/elm/http/latest/Http#task)
+-}
+request :
+    { url : String
+    , method : String
+    , headers : List Header
+    , body : Body
+    , expect : Expect a
+    , timeout : Maybe Int
+    }
+    -> Task Error a
 request r =
     Task.define
         { function = "builtin:http"
@@ -224,18 +286,22 @@ decodeExpect expect =
                             Decode.field "body" (Decode.map Ok decoder)
 
                 else
-                    Decode.map2
-                        (\text body ->
+                    Decode.map4
+                        (\url text body headers ->
                             Err
                                 (BadStatus
-                                    { code = code
-                                    , text = text
-                                    , body = body
+                                    { url = url
+                                    , statusCode = code
+                                    , statusText = text
+                                    , headers = headers
                                     }
+                                    body
                                 )
                         )
+                        (Decode.field "url" Decode.string)
                         (Decode.field "statusText" Decode.string)
                         (Decode.field "body" Decode.value)
+                        (Decode.field "headers" (Decode.dict Decode.string))
             )
 
 
@@ -292,9 +358,9 @@ addContentTypeForBody body headers =
 
 encodeHeader : Header -> Encode.Value
 encodeHeader ( name, value ) =
-    Encode.object
-        [ ( "name", Encode.string name )
-        , ( "value", Encode.string value )
+    Encode.list identity
+        [ Encode.string name
+        , Encode.string value
         ]
 
 
