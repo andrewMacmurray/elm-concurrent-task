@@ -7,7 +7,7 @@ module Concurrent.Task exposing
     , fromResult, andThenDo, return
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , attempt, Response, onProgress, Pool, pool
+    , attempt, Response(..), RunnerError(..), onProgress, Pool, pool
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -58,21 +58,18 @@ Decode the response of a JS function into an Elm value.
 
 ## TaskError
 
-This is the `x` in the `Task x a` and represents an expected error as part of your task flow. You handle these with `mapError` and `onError`.
+This is the `x` in the `Task x a` and represents an **expected error** as part of your task flow.
+You can handle these with [mapError](Concurrent-Task#mapError) and [onError](Concurrent-Task#onError).
 
 
 ## RunnerError
 
-You can think of these as "unhandled" errors that are not a normal part of your task flow.
-These include:
-
-  - `UnhandledJsException` - an exception was thrown and the task didn't handle it.
-  - `ResponseDecoderFailure` - a function returned an unexpected value (e.g. expected an Int and got a String).
-  - `ErrorsDecoderFailure` - a returned error didn't match the provided `expectErrors` decoder.
-  - `MissingFunction` - a function name could not be found in the registered JS functions.
+You can think of these as **unhandled** errors that are not a normal part of your task flow.
 
 The idea behind `RunnerError` is to keep your task flow types `Task x a` clean and meaningful,
-and optionally lift some of them into your `TaskError` type where it makes sense.
+and optionally lift some of them into your `TaskError` type where it makes sense
+
+See the section on [RunnerError](Concurrent-Task#RunnerError)s for more details.
 
 
 ## Handling Runner Errors
@@ -136,7 +133,7 @@ Once you've constructed a Task it needs to be passed to the runner to perform al
 
 This can be done using the following types and functions:
 
-@docs attempt, Response, onProgress, Pool, pool
+@docs attempt, Response, RunnerError, onProgress, Pool, pool
 
 -}
 
@@ -742,8 +739,12 @@ attempt :
     }
     -> Task x a
     -> ( Pool msg x a, Cmd msg )
-attempt =
+attempt options =
     Internal.attempt
+        { pool = options.pool
+        , send = options.send
+        , onComplete = toResponse >> options.onComplete
+        }
 
 
 {-| The value returned from a task when it completes (returned in the `OnComplete` msg).
@@ -755,8 +756,64 @@ Can be either:
   - `RunnerError` - the task failed with an unexpected error (see the section on `Error Handling` for more details).
 
 -}
-type alias Response x a =
-    Internal.Response x a
+type Response x a
+    = Success a
+    | TaskError x
+    | RunnerError RunnerError
+
+
+{-| An error returned from the runner if something **unexpected** has happened during the task flow.
+
+These errors will be returned **if not handled** during task flow:
+
+  - `UnhandledJsException` - a task threw an exception and was not caught with an error handler (can be caught with `expectThrows` and `catchAll`).
+  - `ResponseDecoderFailure` - a task returned an unexpected response (can be caught with `onResponseDecoderFailure`).
+
+These errors will **always surface**, as they are assumed to have no meaningful way to recover from during regular task flow:
+
+  - `ErrorsDecoderFailure` - a task returned error data in an unexpected format.
+  - `MissingFunction` - a task tried to call a function in the JS runner which was not registered.
+  - `InternalError` - something went wrong with the runner internals - this should not happen, but if you see this error [please leave details and an issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues/new).
+
+-}
+type RunnerError
+    = UnhandledJsException { function : String, message : String }
+    | ResponseDecoderFailure { function : String, error : Decode.Error }
+    | ErrorsDecoderFailure { function : String, error : Decode.Error }
+    | MissingFunction String
+    | InternalError String
+
+
+toResponse : Internal.Response x a -> Response x a
+toResponse res =
+    case res of
+        Internal.Success a ->
+            Success a
+
+        Internal.TaskError x ->
+            TaskError x
+
+        Internal.RunnerError e ->
+            RunnerError (toRunnerError e)
+
+
+toRunnerError : Internal.RunnerError -> RunnerError
+toRunnerError err =
+    case err of
+        Internal.UnhandledJsException e ->
+            UnhandledJsException e
+
+        Internal.ResponseDecoderFailure e ->
+            ResponseDecoderFailure e
+
+        Internal.ErrorsDecoderFailure e ->
+            ErrorsDecoderFailure e
+
+        Internal.MissingFunction e ->
+            MissingFunction e
+
+        Internal.InternalError e ->
+            InternalError e
 
 
 {-| Subscribe to updates from the JavaScript task runner.
@@ -809,7 +866,7 @@ Right now it doesn't expose any functionality, but it could be used in the futur
 
   - Buffer the number of in-flight tasks (e.g. a server request queue, or database connection pool).
   - Handle graceful process termination (e.g. abort or cleanup all in-flight tasks).
-  - Expose metrics on tasks.
+  - Expose metrics on previous or running tasks.
 
 -}
 pool : Pool msg x a

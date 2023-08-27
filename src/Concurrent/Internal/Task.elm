@@ -1,6 +1,5 @@
 module Concurrent.Internal.Task exposing
     ( Attempt
-    , Definition
     , Errors
     , Expect
     , OnProgress
@@ -17,7 +16,6 @@ module Concurrent.Internal.Task exposing
     , batch
     , catchAll
     , define
-    , doBatch
     , expectErrors
     , expectJson
     , expectString
@@ -69,6 +67,14 @@ type Response x a
     | RunnerError RunnerError
 
 
+type RunnerError
+    = UnhandledJsException { function : String, message : String }
+    | ResponseDecoderFailure { function : String, error : Decode.Error }
+    | ErrorsDecoderFailure { function : String, error : Decode.Error }
+    | MissingFunction String
+    | InternalError String
+
+
 type alias TaskId =
     Ids.Id
 
@@ -92,14 +98,6 @@ type Errors x a
     = CatchAll a
     | ExpectThrows (String -> x)
     | ExpectErrors (Decoder x)
-
-
-type RunnerError
-    = ResponseDecoderFailure { function : String, error : Decode.Error }
-    | ErrorsDecoderFailure { function : String, error : Decode.Error }
-    | UnhandledJsException { function : String, message : String }
-    | MissingFunction String
-    | InternalError String
 
 
 
