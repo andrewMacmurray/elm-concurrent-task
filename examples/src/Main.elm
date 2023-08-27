@@ -222,21 +222,19 @@ bigBatch =
         )
 
 
-badChain3 : Task Error String
+badChain3 : Task Http.Error String
 badChain3 =
-    Task.mapError HttpError
-        (Task.map3 join3
-            doThree
-            doThree
-            doThree
-            |> Task.andThenDo
-                (retry 100 httpError
-                    |> Task.onError (\_ -> longRequest_ 100)
-                )
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-            |> Task.andThenDo (longRequest_ 100)
-        )
+    Task.map3 join3
+        doThree
+        doThree
+        doThree
+        |> Task.andThenDo
+            (retry 100 httpError
+                |> Task.onError (\_ -> longRequest_ 100)
+            )
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
+        |> Task.andThenDo (longRequest_ 100)
 
 
 doThree2 : Task Http.Error String
@@ -505,7 +503,7 @@ timeExecution label task =
 consoleTime : String -> Task x ()
 consoleTime label =
     Task.define
-        { function = "consoleTime"
+        { function = "console:time"
         , expect = Task.expectWhatever
         , errors = Task.catchAll ()
         , args = Encode.string label
@@ -515,7 +513,7 @@ consoleTime label =
 consoleTimeEnd : String -> Task x ()
 consoleTimeEnd label =
     Task.define
-        { function = "consoleTimeEnd"
+        { function = "console:timeEnd"
         , expect = Task.expectWhatever
         , errors = Task.catchAll ()
         , args = Encode.string label

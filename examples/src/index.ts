@@ -1,15 +1,15 @@
 import { Elm } from "./Main.elm";
 import crypto from "node:crypto";
-import * as TaskRunner from "../../src/runner";
+import * as Tasks from "../../src/runner";
 import readline from "node:readline/promises";
 
-// Task
+// Tasks
 
-const Tasks = {
+const CustomTasks = {
   slowInt: (i) => waitRandom().then(() => i),
   "env:load": () => process.env,
-  consoleTime: (label) => console.time(label),
-  consoleTimeEnd: (label) => console.timeEnd(label),
+  "console:time": (label) => console.time(label),
+  "console:timeEnd": (label) => console.timeEnd(label),
 };
 
 function waitRandom() {
@@ -26,8 +26,8 @@ function wait(ms) {
 
 const { ports } = Elm.Main.init({ flags: null });
 
-TaskRunner.register({
-  tasks: Tasks,
+Tasks.register({
+  tasks: CustomTasks,
   ports: {
     send: ports.send,
     receive: ports.receive,

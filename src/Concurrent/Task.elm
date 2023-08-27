@@ -291,7 +291,7 @@ And in your `JavaScript` runner:
 The example `fs:readFile` Task has very simple error handling (turn any thrown exceptions into the Error type).
 This can be a great way to start, but what if you want more detailed errors?
 
-The `Errors` section will go into more detail on different error handling strategies, including:
+The `Errors` section goes into more detail on different error handling strategies, including:
 
   - how to define and handle more meaningful error types.
   - bypassing all errors for Tasks which never fail (e.g. get the current time, log to the console).
