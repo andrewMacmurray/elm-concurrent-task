@@ -131,7 +131,97 @@ Transform values returned from tasks.
 
 Once you've constructed a Task it needs to be passed to the runner to perform all of the effects.
 
-This can be done using the following types and functions:
+Here's a minimal complete example:
+
+
+## A task to fetch 3 resources concurrently:
+
+    type alias Titles =
+        { todo : String
+        , post : String
+        , album : String
+        }
+
+    getAllTitles : Task Http.Error Titles
+    getAllTitles =
+        Task.map3 Titles
+            (getTitle "/todos/1")
+            (getTitle "/posts/1")
+            (getTitle "/albums/1")
+
+    getTitle : String -> Task Http.Error String
+    getTitle path =
+        Http.request
+            { url = "https://jsonplaceholder.typicode.com" ++ path
+            , method = "GET"
+            , headers = []
+            , body = Http.emptyBody
+            , expect = Http.expectJson (Decode.field "title" Decode.string)
+            }
+
+
+## A program to run the task:
+
+    port module Example exposing (main)
+
+    import Concurrent.Task as Task exposing (Task)
+    import Concurrent.Task.Http as Http
+    import Json.Decode as Decode
+
+    type alias Model =
+        { tasks : Task.Pool Msg Http.Error Titles
+        }
+
+    type Msg
+        = OnProgress ( Task.Pool Msg Http.Error Titles, Cmd Msg )
+        | OnComplete (Task.Response Http.Error Titles)
+
+    init : ( Model, Cmd Msg )
+    init =
+        let
+            ( tasks, cmd ) =
+                Task.attempt
+                    { send = send
+                    , pool = Task.pool
+                    , onComplete = OnComplete
+                    }
+                    getAllTitles
+        in
+        ( { tasks = tasks }, cmd )
+
+    update : Msg -> Model -> ( Model, Cmd Msg )
+    update msg model =
+        case msg of
+            OnComplete response ->
+                let
+                    _ =
+                        Debug.log "response" response
+                in
+                ( model, Cmd.none )
+
+            OnProgress ( tasks, cmd ) ->
+                ( { model | tasks = tasks }, cmd )
+
+    subscriptions : Model -> Sub Msg
+    subscriptions model =
+        Task.onProgress
+            { send = send
+            , receive = receive
+            , onProgress = OnProgress
+            }
+            model.tasks
+
+    port send : Decode.Value -> Cmd msg
+
+    port receive : (Decode.Value -> msg) -> Sub msg
+
+    main : Program {} Model Msg
+    main =
+        Platform.worker
+            { init = always init
+            , update = update
+            , subscriptions = subscriptions
+            }
 
 @docs attempt, Response, RunnerError, onProgress, Pool, pool
 
