@@ -1,9 +1,10 @@
-import { Elm } from "./Main.elm";
+import { Elm } from "./Worker.elm";
 import crypto from "node:crypto";
 import * as Tasks from "../../src/runner";
 import readline from "node:readline/promises";
-import * as S3 from "./aws/s3";
-import * as SQS from "./aws/sqs";
+import * as S3 from "./Aws/s3";
+import * as SQS from "./Aws/sqs";
+import * as Logger from "./Common/logger";
 
 // Tasks
 
@@ -26,12 +27,13 @@ function wait(ms) {
 
 // App
 
-const { ports } = Elm.Main.init({ flags: null });
+const { ports } = Elm.Worker.init({ flags: null });
 
 Tasks.register({
   tasks: {
     ...S3.tasks(),
     ...SQS.tasks(),
+    ...Logger.tasks(),
     ...CustomTasks,
   },
   ports: {
@@ -41,18 +43,18 @@ Tasks.register({
   debug: { taskStart: true },
 });
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
+// const rl = readline.createInterface({
+//   input: process.stdin,
+//   output: process.stdout,
+// });
 
-ask();
+// ask();
 // fireMany();
 
-ports.sendResult.subscribe((result) => {
-  console.log(result);
-  ask();
-});
+// ports.sendResult.subscribe((result) => {
+//   console.log(result);
+//   ask();
+// });
 
 function fireMany() {
   for (let i = 0; i < 10; i++) {

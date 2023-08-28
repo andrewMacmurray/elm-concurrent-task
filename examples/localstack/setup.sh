@@ -15,4 +15,6 @@ aws --endpoint-url "${LOCALSTACK_ENDPOINT}" sns subscribe --topic-arn arn:aws:sn
     --attributes RawMessageDelivery=true \
     --notification-endpoint arn:aws:sqs:eu-west-1:123456789012:tasks-out
 
-aws --endpoint-url "${LOCALSTACK_ENDPOINT}" s3 mb s3://my-bucket
+# S3
+aws --endpoint-url "${LOCALSTACK_ENDPOINT}" s3 mb s3://in-bucket
+aws --endpoint-url "${LOCALSTACK_ENDPOINT}" s3 mb s3://out-bucket

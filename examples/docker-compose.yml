@@ -15,4 +15,4 @@ services:
       PERSISTENCE: "1"
     volumes:
       - "./.localstack:/var/lib/localstack"
-      - "./docker-compose-init/localstack:/etc/localstack/init/ready.d"
+      - "./localstack:/etc/localstack/init/ready.d"

@@ -1,5 +1,7 @@
 module Aws.S3 exposing
     ( Error(..)
+    , GetObject
+    , PutObject
     , getObject
     , putObject
     )
@@ -21,7 +23,13 @@ type Error
 -- Get Object
 
 
-getObject : { bucket : String, key : String } -> Task Error String
+type alias GetObject =
+    { bucket : String
+    , key : String
+    }
+
+
+getObject : GetObject -> Task Error String
 getObject options =
     Task.define
         { function = "s3:getObject"
@@ -39,7 +47,13 @@ getObject options =
 -- Put Object
 
 
-putObject : { bucket : String, key : String } -> String -> Task Error ()
+type alias PutObject =
+    { bucket : String
+    , key : String
+    }
+
+
+putObject : PutObject -> String -> Task Error ()
 putObject options contents =
     Task.define
         { function = "s3:putObject"
