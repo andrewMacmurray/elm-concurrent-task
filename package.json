@@ -14,12 +14,14 @@
     "test": "elm-test",
     "docs": "elm-doc-preview",
     "send-message": "./examples/scripts/send-message.sh",
+    "receive-message": "./examples/scripts/receive-message.sh",
     "start-dev": "DOCKER_UID=$(id -u) docker-compose up"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-sns": "^3.398.0",
     "@aws-sdk/client-sqs": "^3.398.0",
     "chalk": "^5.3.0"
   },

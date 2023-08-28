@@ -1,0 +1,4 @@
+{
+  "s3_key": "fruits.jsonl",
+  "s3_bucket": "in-bucket"
+}

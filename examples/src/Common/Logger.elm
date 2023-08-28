@@ -4,9 +4,7 @@ module Common.Logger exposing
     , info
     , inspect
     , warn
-    , withError
     , withInfo
-    , withWarn
     )
 
 import Concurrent.Task as Task exposing (Task)
@@ -20,8 +18,17 @@ import Json.Encode as Encode
 inspect : (x -> String) -> (a -> String) -> Task x a -> Task x a
 inspect onError onOk task_ =
     task_
-        |> Task.andThen (\a -> withInfo (onOk a) a)
-        |> Task.onError (\e -> withError (onError e) e |> Task.andThen (\_ -> Task.fail e))
+        |> Task.andThen
+            (\a ->
+                info (onOk a)
+                    |> Task.return a
+            )
+        |> Task.onError
+            (\e ->
+                error (onError e)
+                    |> Task.return e
+                    |> Task.andThen (\_ -> Task.fail e)
+            )
 
 
 
@@ -42,9 +49,9 @@ info =
     log_ "INFO"
 
 
-withInfo : String -> a -> Task x a
-withInfo message a =
-    info message |> Task.return a
+withInfo : String -> Task x a -> Task x a
+withInfo message task =
+    info message |> Task.andThenDo task
 
 
 
@@ -56,11 +63,6 @@ warn =
     log_ "WARN"
 
 
-withWarn : String -> a -> Task x a
-withWarn message a =
-    warn message |> Task.return a
-
-
 
 -- Error
 
@@ -68,11 +70,6 @@ withWarn message a =
 error : String -> Task x ()
 error =
     log_ "ERROR"
-
-
-withError : String -> a -> Task x a
-withError message a =
-    error message |> Task.return a
 
 
 

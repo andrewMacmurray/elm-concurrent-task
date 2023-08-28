@@ -8,11 +8,8 @@ services:
       SERVICES: "sqs,sns,s3"
       AWS_ACCESS_KEY_ID: "ANY"
       AWS_SECRET_ACCESS_KEY: "ANY_SECRET"
-      HOSTNAME: "${LOCALSTACK_HOSTNAME:-localhost}"
-      HOSTNAME_EXTERNAL: "${LOCALSTACK_HOSTNAME_EXTERNAL:-localhost}"
       USE_SINGLE_REGION: "true"
-      AWS_DEFAULT_REGION: "eu-west-1"
-      PERSISTENCE: "1"
+      DEFAULT_REGION: "eu-west-1"
     volumes:
       - "./.localstack:/var/lib/localstack"
       - "./localstack:/etc/localstack/init/ready.d"
