@@ -5,23 +5,14 @@ services:
       - "4510-4559:4510-4559"
       - "4566:4566"
     environment:
-      SERVICES: "sqs,sns"
+      SERVICES: "sqs,sns,s3"
       AWS_ACCESS_KEY_ID: "ANY"
       AWS_SECRET_ACCESS_KEY: "ANY_SECRET"
       HOSTNAME: "${LOCALSTACK_HOSTNAME:-localhost}"
       HOSTNAME_EXTERNAL: "${LOCALSTACK_HOSTNAME_EXTERNAL:-localhost}"
       USE_SINGLE_REGION: "true"
       AWS_DEFAULT_REGION: "eu-west-1"
+      PERSISTENCE: "1"
     volumes:
-      - "./docker-compose-init/localstack:/docker-entrypoint-initaws.d"
-  minio:
-    image: minio/minio:RELEASE.2023-08-23T10-07-06Z
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - "MINIO_ROOT_USER=ANY"
-      - "MINIO_ROOT_PASSWORD=ANY_SECRET"
-    volumes:
-      - "./${S3_DATA:-docker-compose-init/s3}:/data"
-    command: server /data --console-address ":9001"
+      - "./.localstack:/var/lib/localstack"
+      - "./docker-compose-init/localstack:/etc/localstack/init/ready.d"

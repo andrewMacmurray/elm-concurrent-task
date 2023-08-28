@@ -1,8 +1,19 @@
-module SQS exposing (..)
+module Aws.SQS exposing
+    ( DeleteMessage
+    , Error(..)
+    , Message
+    , ReceiveMessage
+    , deleteMessage
+    , receiveMessage
+    )
 
 import Concurrent.Task as Task exposing (Task)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+
+
+
+-- SQS
 
 
 type alias Message =
@@ -17,11 +28,8 @@ type Error
     | DeleteError String
 
 
-type alias ReceiveMessages =
-    { queueName : String
-    , visibilityTimeout : Int
-    , maxMessages : Int
-    }
+
+-- Delete Message
 
 
 type alias DeleteMessage =
@@ -38,30 +46,38 @@ deleteMessage options =
         , errors = Task.expectThrows DeleteError
         , args =
             Encode.object
-                [ ( "receiptHandle", Encode.string options.receiptHandle )
-                , ( "queueName", Encode.string options.queueName )
+                [ ( "queueName", Encode.string options.queueName )
+                , ( "receiptHandle", Encode.string options.receiptHandle )
                 ]
         }
 
 
-receiveMessages : ReceiveMessages -> Task Error (List Message)
-receiveMessages options =
+
+-- Receive Message
+
+
+type alias ReceiveMessage =
+    { queueName : String
+    , maxMessages : Int
+    , visibilityTimeout : Int
+    , waitTimeSeconds : Int
+    }
+
+
+receiveMessage : ReceiveMessage -> Task Error (List Message)
+receiveMessage options =
     Task.define
         { function = "sqs:receiveMessage"
-        , expect = Task.expectJson decodeMessages
+        , expect = Task.expectJson (Decode.list decodeMessage)
         , errors = Task.expectThrows ReceiveError
         , args =
             Encode.object
                 [ ( "queueName", Encode.string options.queueName )
                 , ( "visibilityTimeout", Encode.int options.visibilityTimeout )
                 , ( "maxMessages", Encode.int options.maxMessages )
+                , ( "waitTimeSeconds", Encode.int options.waitTimeSeconds )
                 ]
         }
-
-
-decodeMessages : Decoder (List Message)
-decodeMessages =
-    Decode.list decodeMessage
 
 
 decodeMessage : Decoder Message

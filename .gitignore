@@ -11,3 +11,4 @@ dist
 .vscode
 
 500kb.csv
+.localstack

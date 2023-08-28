@@ -24,6 +24,7 @@ function receiveMessage(args) {
       AttributeNames: ["All"],
       VisibilityTimeout: args.visibilityTimeout,
       MaxNumberOfMessages: args.maxMessages,
+      WaitTimeSeconds: args.waitTimeSeconds,
     })
     .then((res) => res.Messages || []);
 }

@@ -1,5 +1,7 @@
 port module Main exposing (main)
 
+import Aws.S3 as S3
+import Aws.SQS as SQS
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
@@ -9,8 +11,6 @@ import Env
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
-import S3
-import SQS
 import Time
 
 
@@ -287,7 +287,7 @@ update msg model =
                         , pool = model.tasks
                         , onComplete = OnComplete id
                         }
-                        putAndGet
+                        receiveAndDelete
             in
             ( { tasks = tasks }, cmd )
 
@@ -320,6 +320,7 @@ receiveAndDelete : Task Error String
 receiveAndDelete =
     sqsReceiveMessages
         { queueName = "tasks-in"
+        , waitTimeSeconds = 20
         , visibilityTimeout = 2
         , maxMessages = 10
         }
@@ -343,9 +344,9 @@ deleteAll =
         )
 
 
-sqsReceiveMessages : SQS.ReceiveMessages -> Task Error (List SQS.Message)
+sqsReceiveMessages : SQS.ReceiveMessage -> Task Error (List SQS.Message)
 sqsReceiveMessages =
-    SQS.receiveMessages >> Task.mapError SQSError
+    SQS.receiveMessage >> Task.mapError SQSError
 
 
 sqsDeleteMessage : SQS.DeleteMessage -> Task Error ()
@@ -363,14 +364,13 @@ putAndGet =
         { bucket = "my-bucket"
         , key = "hello.txt"
         }
-        "HELLOoooooooooooo"
+        "Hello World"
         |> Task.andThenDo
             (s3GetObject
                 { bucket = "my-bucket"
                 , key = "hello.txt"
                 }
             )
-        |> Task.map String.toUpper
 
 
 s3GetObject : { bucket : String, key : String } -> Task Error String
@@ -445,8 +445,8 @@ manyEnvs =
             |> Env.required (Env.string "ONE")
             |> Env.required (Env.string "TWO")
             |> Env.required (Env.string "THREE")
-            |> Env.required (Env.string "HOME")
             |> Env.required (Env.string "USER")
+            |> Env.required (Env.string "HOME")
         )
 
 
@@ -611,7 +611,8 @@ retry_ task =
         |> Task.onError
             (\( n, err ) ->
                 if n > 0 then
-                    task
+                    Concurrent.Task.Process.sleep (n * 100)
+                        |> Task.andThenDo task
                         |> Task.mapError (Tuple.mapFirst (\n_ -> n_ - 1))
                         |> retry_
 
