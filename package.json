@@ -4,8 +4,6 @@
   "description": "Run a tree of tasks concurrently",
   "type": "module",
   "scripts": {
-    "server": "node ./scripts/test-server.js",
-    "raw-comparison": "node ./scripts/raw-comparison.js",
     "test": "elm-test",
     "docs": "elm-doc-preview"
   },
