@@ -40,10 +40,6 @@ type alias Pool =
     Task.Pool Msg Error Output
 
 
-type alias WorkerTask =
-    Task Error Output
-
-
 type Error
     = SQSPollingError SQS.Error
     | ProcessingError ProcessError
@@ -79,9 +75,9 @@ update msg model =
             updateProgress progress ( model, Cmd.none )
 
 
-startTask : WorkerTask -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+startTask : Task Error Output -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 startTask task ( model, cmd ) =
-    updateProgress (startTask_ model task) ( model, cmd )
+    updateProgress (attempt model.tasks task) ( model, cmd )
 
 
 updateProgress : ( Pool, Cmd Msg ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -91,12 +87,12 @@ updateProgress ( tasks, taskCmd ) ( model, cmd ) =
     )
 
 
-startTask_ : Model -> WorkerTask -> ( Pool, Cmd Msg )
-startTask_ model =
+attempt : Pool -> Task Error Output -> ( Pool, Cmd Msg )
+attempt pool =
     Task.attempt
         { send = send
         , onComplete = OnComplete
-        , pool = model.tasks
+        , pool = pool
         }
 
 
@@ -327,7 +323,7 @@ decodeYield =
 -- SQS
 
 
-pollForMessages : (SQS.Message -> Task ProcessError a) -> WorkerTask
+pollForMessages : (SQS.Message -> Task ProcessError a) -> Task Error Output
 pollForMessages fn =
     Logger.info "polling for new messages.."
         |> Task.andThenDo

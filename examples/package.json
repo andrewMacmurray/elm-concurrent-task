@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "start": "node ./build.mjs",
+    "examples:worker": "node ./build.mjs worker",
+    "examples:requests": "node ./build.mjs requests",
     "infra": "docker-compose up",
     "server": "node ./scripts/test-server.mjs",
     "raw-comparison": "node ./scripts/raw-comparison.mjs",
