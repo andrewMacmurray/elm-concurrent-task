@@ -1,6 +1,5 @@
 import { Elm } from "./Main.elm";
 import * as Tasks from "../../../src/runner";
-import * as Logger from "./Common/logger";
 
 // App
 
@@ -16,5 +15,5 @@ Tasks.register({
 });
 
 ports.printResult.subscribe((res) => {
-  Logger.log({ level: "INFO", message: res });
+  console.log(res)
 });
