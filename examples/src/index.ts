@@ -5,14 +5,14 @@ import readline from "node:readline/promises";
 import * as S3 from "./Aws/s3";
 import * as SQS from "./Aws/sqs";
 import * as SNS from "./Aws/sns";
+import * as Env from "./Common/env";
+import * as Uuid from "./Common/uuid";
 import * as Logger from "./Common/logger";
 
 // Tasks
 
 const CustomTasks = {
   slowInt: (i) => waitRandom().then(() => i),
-  "uuid:generate": () => crypto.randomUUID(),
-  "env:load": () => process.env,
   "console:time": (label) => console.time(label),
   "console:timeEnd": (label) => console.timeEnd(label),
 };
@@ -36,6 +36,8 @@ Tasks.register({
     ...S3.tasks(),
     ...SQS.tasks(),
     ...SNS.tasks(),
+    ...Env.tasks(),
+    ...Uuid.tasks(),
     ...Logger.tasks(),
     ...CustomTasks,
   },
