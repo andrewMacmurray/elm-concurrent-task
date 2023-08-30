@@ -76,26 +76,23 @@ export function register(options: Options): void {
   const send = options.ports.receive.send;
 
   subscribe(async (defs) => {
+    const debouncedSend = debounce(send, debounceThreshold(defs));
+
     for (let i = 0; i < defs.length; i++) {
       const def = defs[i];
       if (!tasks[def.function]) {
-        console.error(`ERROR: ${def.function} is not a registered task`);
-        return send([
-          {
-            attemptId: def.attemptId,
-            taskId: def.taskId,
-            result: {
-              error: {
-                reason: "missing_function",
-                message: `${def.function} is not registered`,
-              },
+        return debouncedSend({
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: {
+            error: {
+              reason: "missing_function",
+              message: `${def.function} is not registered`,
             },
           },
-        ]);
+        });
       }
     }
-
-    const debouncedSend = debounce(send, debounceThreshold(defs));
 
     defs.map(async (def) => {
       try {

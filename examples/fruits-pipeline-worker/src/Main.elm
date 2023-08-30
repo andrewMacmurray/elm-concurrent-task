@@ -97,15 +97,24 @@ startTask { pool, task } =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnComplete _ ->
-            let
-                ( tasks, cmd ) =
-                    startTask
-                        { pool = model.tasks
-                        , task = processOrchards
-                        }
-            in
-            ( { model | tasks = tasks }, cmd )
+        OnComplete result ->
+            case result of
+                Task.RunnerError err ->
+                    let
+                        _ =
+                            Debug.log "runner error" err
+                    in
+                    ( model, Cmd.none )
+
+                _ ->
+                    let
+                        ( tasks, cmd ) =
+                            startTask
+                                { pool = model.tasks
+                                , task = processOrchards
+                                }
+                    in
+                    ( { model | tasks = tasks }, cmd )
 
         OnProgress ( tasks, cmd ) ->
             ( { model | tasks = tasks }, cmd )

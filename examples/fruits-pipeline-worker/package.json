@@ -1,15 +1,11 @@
 {
-  "name": "examples",
-  "version": "1.0.0",
-  "description": "",
+  "name": "fruits-pipeline-worker",
   "scripts": {
     "start": "node ./build.mjs",
     "infra": "docker-compose up",
     "send-message": "./scripts/send-message.sh",
     "receive-message": "./scripts/receive-message.sh"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.400.0",
     "@aws-sdk/client-sns": "^3.398.0",

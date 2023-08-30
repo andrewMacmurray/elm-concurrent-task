@@ -1,13 +1,9 @@
 {
-  "name": "examples",
-  "version": "1.0.0",
-  "description": "",
+  "name": "many-requests",
   "scripts": {
     "start": "node ./build.mjs",
     "server": "node ./scripts/server.mjs"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "pino": "^8.15.0",
     "pino-pretty": "^10.2.0"
