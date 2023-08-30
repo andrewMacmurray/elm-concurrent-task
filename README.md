@@ -10,7 +10,7 @@ This package is heavily inspired by [elm-pages](https://github.com/dillonkearns/
 
 See the [examples](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/examples) for more things you can do!
 
-Preview [the docs here](https://elm-doc-preview.netlify.app/?repo=andrewMacmurray/elm-concurrent-task).
+Preview [the docs here](https://elm-doc-preview.netlify.app/?repo=andrewMacmurray/elm-concurrent-task&version=main).
 
 ## Why?
 
@@ -20,10 +20,10 @@ Preview [the docs here](https://elm-doc-preview.netlify.app/?repo=andrewMacmurra
 
 Whilst it's possible to run these subtasks concurrently as separate `Cmd`s, it can be a lot of wiring and boilerplate, including:
 
-- Batching task commands together
-- Handling each task's success case
-- Handling each task's error case
-- Checking if all other tasks are completed every time an individual task finishes
+- Batching task commands together.
+- Handling each task's success case.
+- Handling each task's error case.
+- Checking if all other tasks are completed every time an individual task finishes.
 
 [Elm Task Parallel](https://github.com/0ui/elm-task-parallel) handles this nicely but only at the top level (sub tasks cannot be parallelised).
 

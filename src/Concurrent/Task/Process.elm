@@ -20,7 +20,7 @@ import Concurrent.Task as Task exposing (Task)
 import Json.Encode as Encode
 
 
-{-| Wait for a number of milliseconds before continuing with the next Task
+{-| Wait for a number of milliseconds before continuing with the next Task.
 -}
 sleep : Int -> Task x ()
 sleep ms =

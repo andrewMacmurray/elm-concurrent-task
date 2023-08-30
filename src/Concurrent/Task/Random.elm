@@ -24,7 +24,7 @@ import Json.Encode as Encode
 import Random
 
 
-{-| Generate a random value based on an [elm/random](https://package.elm-lang.org/packages/elm/random/latest/Random) `Generator`
+{-| Generate a random value based on an [elm/random](https://package.elm-lang.org/packages/elm/random/latest/Random) `Generator`.
 -}
 generate : Random.Generator a -> Task x a
 generate generator =
