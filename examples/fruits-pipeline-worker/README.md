@@ -12,20 +12,25 @@ export AWS_ACCESS_KEY_ID=ANY
 export AWS_SECRET_ACCESS_KEY=ANY_SECRET
 ```
 
+1. Install dependencies:
 
-1. Start local infrastructure (localstack):
+```
+npm install
+```
+
+2. Start local infrastructure (localstack):
 
 ```
 npm run infra
 ```
 
-2. Start the worker process:
+3. Start the worker process:
 
 ```
 npm start
 ```
 
-3. Send a message to SQS for the worker to pick up:
+4. Send a message to SQS for the worker to pick up:
 
 ```
 npm run send-message

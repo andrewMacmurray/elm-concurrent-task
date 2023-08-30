@@ -311,4 +311,22 @@ const tasks = {
 
 ## Develop Locally
 
-TODO: Cleanup local setup with examples
+Install Dependencies:
+
+```
+npm install
+```
+
+Run the tests with:
+
+```
+npm test
+```
+
+To preview any changes, try some of the examples in the [examples folder](./examples/).
+
+View the docs locally with:
+
+```
+npm run docs
+```
