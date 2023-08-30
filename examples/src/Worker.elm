@@ -139,7 +139,7 @@ type ProcessError
     | NotifyHarvestsFailed SNS.Error
 
 
-{-|
+{-| This is the main pipeline worker logic - a fruit picking process!
 
   - Extracts a list of fruit tree orchards stored in an S3 bucket.
   - Harvests the trees and saves the results in an output S3 bucket.
