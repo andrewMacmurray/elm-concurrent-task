@@ -26,3 +26,7 @@ Tasks.register({
   },
   debug: { taskStart: false },
 });
+
+ports.printError.subscribe((msg) => {
+  Logger.log({ level: "ERROR", message: msg });
+});

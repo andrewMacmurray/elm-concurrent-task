@@ -73,7 +73,7 @@ parse (Parser parse_) value =
 
 printError : Error -> String
 printError (Error errors) =
-    "There were the following problems parsing the given Env:\n\n"
+    "There were the following problems parsing the given Env:\n"
         ++ String.join "\n" (List.map printDetail errors)
 
 

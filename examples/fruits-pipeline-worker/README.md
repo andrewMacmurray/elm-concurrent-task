@@ -2,6 +2,17 @@
 
 To run the pipeline worker example:
 
+Add the env vars:
+
+```
+export IN_QUEUE=tasks-in
+export OUT_BUCKET=out-bucket
+export OUT_TOPIC=tasks-out
+export AWS_ACCESS_KEY_ID=ANY
+export AWS_SECRET_ACCESS_KEY=ANY_SECRET
+```
+
+
 1. Start local infrastructure (localstack):
 
 ```
