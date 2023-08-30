@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "elm-test",
-    "docs": "elm-doc-preview"
+    "docs": "elm-doc-preview",
+    "docs:out": "elm make --docs docs.json"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
