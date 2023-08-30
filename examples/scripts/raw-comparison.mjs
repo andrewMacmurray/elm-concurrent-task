@@ -1,5 +1,3 @@
-import axios from "axios";
-
 doBatch();
 // doSequence();
 
@@ -25,7 +23,7 @@ function doSequence() {
 
 function doRequest(i) {
   console.log(`STARTING - ${i}`);
-  return axios
-    .get("http://localhost:4000/wait-then-respond/0")
-    .then((x) => x.data.message);
+  return fetch("http://localhost:4000/wait-then-respond/0")
+    .then((x) => x.json())
+    .then((x) => x.message);
 }

@@ -1,11 +1,13 @@
 port module Main exposing (main)
 
+import Aws.S3 as S3
+import Aws.SQS as SQS
+import Common.Env as Env
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http
 import Concurrent.Task.Process
 import Concurrent.Task.Random
 import Concurrent.Task.Time
-import Env
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -48,7 +50,7 @@ type Msg
 type Error
     = HttpError Http.Error
     | EnvError Env.Error
-    | TaskError String
+    | SlowIntError String
 
 
 
@@ -216,7 +218,7 @@ batchAndSequence =
 bigBatch : Task Http.Error String
 bigBatch =
     timeExecution "bigBatch"
-        (List.repeat 1000 (longRequest_ 1000)
+        (List.repeat 10000 (longRequest_ 10)
             |> Task.batch
             |> Task.map String.concat
         )
@@ -370,8 +372,8 @@ manyEnvs =
             |> Env.required (Env.string "ONE")
             |> Env.required (Env.string "TWO")
             |> Env.required (Env.string "THREE")
-            |> Env.required (Env.string "HOME")
             |> Env.required (Env.string "USER")
+            |> Env.required (Env.string "HOME")
         )
 
 
@@ -478,7 +480,7 @@ slowInt id =
     Task.define
         { function = "slowInt"
         , expect = Task.expectJson (Decode.map String.fromInt Decode.int)
-        , errors = Task.expectThrows TaskError
+        , errors = Task.expectThrows SlowIntError
         , args = Encode.int id
         }
 
@@ -536,7 +538,8 @@ retry_ task =
         |> Task.onError
             (\( n, err ) ->
                 if n > 0 then
-                    task
+                    Concurrent.Task.Process.sleep (n * 100)
+                        |> Task.andThenDo task
                         |> Task.mapError (Tuple.mapFirst (\n_ -> n_ - 1))
                         |> retry_
 

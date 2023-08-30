@@ -1,12 +1,17 @@
-import { Elm } from "./Main.elm";
+import { Elm } from "./Worker.elm";
 import crypto from "node:crypto";
 import * as Tasks from "../../src/runner";
 import readline from "node:readline/promises";
+import * as S3 from "./Aws/s3";
+import * as SQS from "./Aws/sqs";
+import * as SNS from "./Aws/sns";
+import * as Logger from "./Common/logger";
 
 // Tasks
 
 const CustomTasks = {
   slowInt: (i) => waitRandom().then(() => i),
+  "uuid:generate": () => crypto.randomUUID(),
   "env:load": () => process.env,
   "console:time": (label) => console.time(label),
   "console:timeEnd": (label) => console.timeEnd(label),
@@ -24,29 +29,35 @@ function wait(ms) {
 
 // App
 
-const { ports } = Elm.Main.init({ flags: null });
+const { ports } = Elm.Worker.init({ flags: null });
 
 Tasks.register({
-  tasks: CustomTasks,
+  tasks: {
+    ...S3.tasks(),
+    ...SQS.tasks(),
+    ...SNS.tasks(),
+    ...Logger.tasks(),
+    ...CustomTasks,
+  },
   ports: {
     send: ports.send,
     receive: ports.receive,
   },
-  debug: { taskStart: true },
+  debug: { taskStart: false },
 });
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
+// const rl = readline.createInterface({
+//   input: process.stdin,
+//   output: process.stdout,
+// });
 
-ask();
+// ask();
 // fireMany();
 
-ports.sendResult.subscribe((result) => {
-  console.log(result);
-  ask();
-});
+// ports.sendResult.subscribe((result) => {
+//   console.log(result);
+//   ask();
+// });
 
 function fireMany() {
   for (let i = 0; i < 10; i++) {

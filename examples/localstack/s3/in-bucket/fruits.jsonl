@@ -1,0 +1,4 @@
+{ "fruit": "apple", "trees": 12, "yield": "HIGH" }
+{ "fruit": "orange", "trees": 8, "yield": "MEDIUM" }
+{ "fruit": "peach", "trees": 15, "yield": "HIGH" }
+{ "fruit": "pear", "trees": 20, "yield": "LOW" }
