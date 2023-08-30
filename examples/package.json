@@ -1,0 +1,28 @@
+{
+  "name": "examples",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "start": "node ./build.mjs",
+    "infra": "docker-compose up",
+    "server": "node ./scripts/test-server.js",
+    "raw-comparison": "node ./scripts/raw-comparison.js",
+    "send-message": "./scripts/send-message.sh",
+    "receive-message": "./scripts/receive-message.sh"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-sns": "^3.398.0",
+    "@aws-sdk/client-sqs": "^3.398.0",
+    "chalk": "^5.3.0"
+  },
+  "devDependencies": {
+    "@es-exec/esbuild-plugin-start": "^0.0.5",
+    "esbuild": "^0.19.2",
+    "esbuild-plugin-elm": "^0.0.12",
+    "express": "^4.18.2",
+    "morgan": "^1.10.0"
+  }
+}
