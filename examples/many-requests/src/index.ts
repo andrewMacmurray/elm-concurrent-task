@@ -1,10 +1,10 @@
-import { Elm } from "./Requests.elm";
-import * as Tasks from "../../src/runner";
+import { Elm } from "./Main.elm";
+import * as Tasks from "../../../src/runner";
 import * as Logger from "./Common/logger";
 
 // App
 
-const { ports } = Elm.Requests.init({ flags: null });
+const { ports } = Elm.Main.init({ flags: null });
 
 Tasks.register({
   tasks: {},

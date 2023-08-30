@@ -1,4 +1,4 @@
-port module Worker exposing (main)
+port module Main exposing (main)
 
 import Aws.S3 as S3
 import Aws.SNS as SNS

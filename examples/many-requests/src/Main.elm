@@ -1,4 +1,4 @@
-port module Requests exposing (main)
+port module Main exposing (main)
 
 import Concurrent.Task as Task exposing (Task)
 import Concurrent.Task.Http as Http

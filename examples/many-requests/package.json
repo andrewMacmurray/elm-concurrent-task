@@ -1,0 +1,22 @@
+{
+  "name": "examples",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "start": "node ./build.mjs",
+    "server": "node ./scripts/server.mjs"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pino": "^8.15.0",
+    "pino-pretty": "^10.2.0"
+  },
+  "devDependencies": {
+    "@es-exec/esbuild-plugin-start": "^0.0.5",
+    "esbuild": "^0.19.2",
+    "esbuild-plugin-elm": "^0.0.12",
+    "express": "^4.18.2",
+    "morgan": "^1.10.0"
+  }
+}

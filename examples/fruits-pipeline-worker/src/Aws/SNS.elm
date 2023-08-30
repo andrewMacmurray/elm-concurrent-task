@@ -1,5 +1,5 @@
 module Aws.SNS exposing
-    ( Error
+    ( Error(..)
     , Publish
     , publish
     )
