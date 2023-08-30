@@ -55,10 +55,26 @@ type alias Output =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    startTask (pollForMessages processOrchards)
-        ( { tasks = Task.pool }
-        , Cmd.none
-        )
+    let
+        ( tasks, cmd ) =
+            startTask
+                { pool = Task.pool
+                , task = processOrchards
+                }
+    in
+    ( { tasks = tasks }
+    , cmd
+    )
+
+
+startTask : { pool : Pool, task : SQS.Message -> Task ProcessError Output } -> ( Pool, Cmd Msg )
+startTask { pool, task } =
+    Task.attempt
+        { send = send
+        , onComplete = OnComplete
+        , pool = pool
+        }
+        (processMessagesWith task)
 
 
 
@@ -68,32 +84,18 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnComplete result ->
-            startTask (pollForMessages processOrchards) ( model, Cmd.none )
+        OnComplete _ ->
+            let
+                ( tasks, cmd ) =
+                    startTask
+                        { pool = model.tasks
+                        , task = processOrchards
+                        }
+            in
+            ( { model | tasks = tasks }, cmd )
 
-        OnProgress progress ->
-            updateProgress progress ( model, Cmd.none )
-
-
-startTask : Task Error Output -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-startTask task ( model, cmd ) =
-    updateProgress (attempt model.tasks task) ( model, cmd )
-
-
-updateProgress : ( Pool, Cmd Msg ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-updateProgress ( tasks, taskCmd ) ( model, cmd ) =
-    ( { model | tasks = tasks }
-    , Cmd.batch [ taskCmd, cmd ]
-    )
-
-
-attempt : Pool -> Task Error Output -> ( Pool, Cmd Msg )
-attempt pool =
-    Task.attempt
-        { send = send
-        , onComplete = OnComplete
-        , pool = pool
-        }
+        OnProgress ( tasks, cmd ) ->
+            ( { model | tasks = tasks }, cmd )
 
 
 
@@ -323,8 +325,8 @@ decodeYield =
 -- SQS
 
 
-pollForMessages : (SQS.Message -> Task ProcessError a) -> Task Error Output
-pollForMessages fn =
+processMessagesWith : (SQS.Message -> Task ProcessError a) -> Task Error Output
+processMessagesWith fn =
     Logger.info "polling for new messages.."
         |> Task.andThenDo
             (sqsReceiveMessages
