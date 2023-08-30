@@ -14,6 +14,19 @@ import Json.Encode as Encode
 import Time
 
 
+{-| Fruit Picking Worker 🍓🍑🍐
+
+This is an example pipeline worker that talks to AWS services.
+
+  - It listens for messages on an SQS queue (using SQS long polling).
+  - Each message batch is processed concurrently and the results stored for later in an S3 bucket.
+  - An SNS message is sent for each message processed.
+
+See the `processOrchards` function for more details.
+
+-}
+
+
 
 -- Model
 
@@ -137,7 +150,7 @@ type ProcessError
     | NotifyHarvestsFailed SNS.Error
 
 
-{-| This is the main pipeline worker logic - a fruit picking process!
+{-| This is the main pipeline logic - the fruit picking process!
 
   - Extracts a list of fruit tree orchards stored in an S3 bucket.
   - Harvests the trees and saves the results in an output S3 bucket.

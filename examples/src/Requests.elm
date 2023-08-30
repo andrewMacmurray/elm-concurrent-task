@@ -5,6 +5,14 @@ import Concurrent.Task.Http as Http
 import Json.Decode as Decode exposing (Decoder)
 
 
+{-| Many Requests
+
+  - This example fires off a long chain of http requests to a local server.
+  - Shows examples of batching requests and recovering from http errors.
+
+-}
+
+
 
 -- Model
 
