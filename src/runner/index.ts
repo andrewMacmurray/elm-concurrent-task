@@ -11,6 +11,8 @@ export interface ElmPorts {
 export interface Builtins {
   http?: (request: http.Request) => Promise<http.Response>;
   timeNow?: () => number;
+  timeZoneOffset?: () => number;
+  timeZoneName?: () => string | number;
   randomSeed?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -45,6 +47,8 @@ export interface Error {
 
 const BuiltInTasks = {
   "builtin:timeNow": () => Date.now(),
+  "builtin:timeZoneOffset": () => getTimezoneOffset(),
+  "builtin:timeZoneName": () => getTimeZoneName(),
   "builtin:sleep": (ms: number) => sleep(ms),
   "builtin:randomSeed": () => Date.now(),
   "builtin:http": (req) => fetchAdapter.http(req),
@@ -52,6 +56,18 @@ const BuiltInTasks = {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getTimezoneOffset() {
+  return -new Date().getTimezoneOffset();
+}
+
+function getTimeZoneName(): string | number {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (e) {
+    return new Date().getTimezoneOffset();
+  }
 }
 
 // Debug Options
@@ -185,6 +201,12 @@ function createTasks(options: Options): Tasks {
   }
   if (options.builtins?.timeNow) {
     tasks["builtin:timeNow"] = options.builtins.timeNow;
+  }
+  if (options.builtins?.timeZoneOffset) {
+    tasks["builtin:timeZoneOffset"] = options.builtins.timeZoneOffset;
+  }
+  if (options.builtins?.timeZoneName) {
+    tasks["builtin:timeZoneName"] = options.builtins.timeZoneName;
   }
   if (options.builtins?.randomSeed) {
     tasks["builtin:randomSeed"] = options.builtins.randomSeed;
