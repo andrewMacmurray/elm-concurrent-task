@@ -6,7 +6,7 @@ module Aws.S3 exposing
     , putObject
     )
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Encode as Encode
 
 
@@ -29,12 +29,12 @@ type alias GetObject =
     }
 
 
-getObject : GetObject -> Task Error String
+getObject : GetObject -> ConcurrentTask Error String
 getObject options =
-    Task.define
+    ConcurrentTask.define
         { function = "s3:getObject"
-        , expect = Task.expectString
-        , errors = Task.expectThrows GetError
+        , expect = ConcurrentTask.expectString
+        , errors = ConcurrentTask.expectThrows GetError
         , args =
             Encode.object
                 [ ( "bucket", Encode.string options.bucket )
@@ -53,12 +53,12 @@ type alias PutObject =
     }
 
 
-putObject : PutObject -> String -> Task Error ()
+putObject : PutObject -> String -> ConcurrentTask Error ()
 putObject options contents =
-    Task.define
+    ConcurrentTask.define
         { function = "s3:putObject"
-        , expect = Task.expectWhatever
-        , errors = Task.expectThrows PutError
+        , expect = ConcurrentTask.expectWhatever
+        , errors = ConcurrentTask.expectThrows PutError
         , args =
             Encode.object
                 [ ( "bucket", Encode.string options.bucket )

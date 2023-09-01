@@ -1,4 +1,4 @@
-module Concurrent.Task.Http exposing
+module ConcurrentTask.Http exposing
     ( request
     , Body, emptyBody, stringBody, jsonBody
     , Expect, expectJson, expectString, expectWhatever
@@ -25,7 +25,7 @@ See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurre
 
 **Note:**
 
-You're not required to use this module for http requests in `Concurrent.Task`, it's here for convenience.
+You're not required to use this module for http requests in `ConcurrentTask`, it's here for convenience.
 You could create entirely your own from scratch - maybe you want an http package with request caching or special retry logic built in on the JS side.
 
 
@@ -59,7 +59,7 @@ Describe what you expect to be returned in an http response body.
 
 -}
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -226,23 +226,23 @@ request :
     , expect : Expect a
     , timeout : Maybe Int
     }
-    -> Task Error a
+    -> ConcurrentTask Error a
 request r =
-    Task.define
+    ConcurrentTask.define
         { function = "builtin:http"
-        , expect = Task.expectJson (decodeExpect r.expect)
-        , errors = Task.expectErrors (decodeError r)
+        , expect = ConcurrentTask.expectJson (decodeExpect r.expect)
+        , errors = ConcurrentTask.expectErrors (decodeError r)
         , args = encode r
         }
-        |> Task.andThen Task.fromResult
-        |> Task.onResponseDecoderFailure wrapError
+        |> ConcurrentTask.andThen ConcurrentTask.fromResult
+        |> ConcurrentTask.onResponseDecoderFailure wrapError
 
 
-wrapError : Decode.Error -> Task Error a
+wrapError : Decode.Error -> ConcurrentTask Error a
 wrapError =
     Decode.errorToString
         >> BadBody
-        >> Task.fail
+        >> ConcurrentTask.fail
 
 
 decodeError : Request a -> Decoder Error

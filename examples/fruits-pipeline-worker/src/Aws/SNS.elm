@@ -4,7 +4,7 @@ module Aws.SNS exposing
     , publish
     )
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Encode as Encode
 
 
@@ -26,12 +26,12 @@ type alias Publish =
     }
 
 
-publish : Publish -> Task Error ()
+publish : Publish -> ConcurrentTask Error ()
 publish options =
-    Task.define
+    ConcurrentTask.define
         { function = "sns:publish"
-        , expect = Task.expectWhatever
-        , errors = Task.expectThrows PublishError
+        , expect = ConcurrentTask.expectWhatever
+        , errors = ConcurrentTask.expectThrows PublishError
         , args =
             Encode.object
                 [ ( "topicName", Encode.string options.topicName )

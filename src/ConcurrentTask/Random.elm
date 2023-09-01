@@ -1,4 +1,4 @@
-module Concurrent.Task.Random exposing (generate)
+module ConcurrentTask.Random exposing (generate)
 
 {-| Generate random values based on an [elm/random](https://package.elm-lang.org/packages/elm/random/latest/Random#Generator) `Generator`
 
@@ -18,7 +18,7 @@ If needed you can override the randomSeed task like so (e.g. use node or web cry
 
 -}
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
@@ -26,9 +26,9 @@ import Random
 
 {-| Generate a random value based on an [elm/random](https://package.elm-lang.org/packages/elm/random/latest/Random) `Generator`.
 -}
-generate : Random.Generator a -> Task x a
+generate : Random.Generator a -> ConcurrentTask x a
 generate generator =
-    Task.map
+    ConcurrentTask.map
         (Random.initialSeed
             >> Random.step generator
             >> Tuple.first
@@ -36,11 +36,11 @@ generate generator =
         randomSeed
 
 
-randomSeed : Task x Int
+randomSeed : ConcurrentTask x Int
 randomSeed =
-    Task.define
+    ConcurrentTask.define
         { function = "builtin:randomSeed"
-        , expect = Task.expectJson Decode.int
-        , errors = Task.catchAll 0
+        , expect = ConcurrentTask.expectJson Decode.int
+        , errors = ConcurrentTask.catchAll 0
         , args = Encode.null
         }

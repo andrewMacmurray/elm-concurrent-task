@@ -1,7 +1,7 @@
 module TaskTest exposing (suite)
 
 import Concurrent.Internal.Ids as Ids exposing (Ids)
-import Concurrent.Internal.Task as Task exposing (Task)
+import Concurrent.Internal.Task as Task exposing (ConcurrentTask)
 import Dict
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, intRange, string)
@@ -212,7 +212,7 @@ errors : Test
 errors =
     describe "Task Errors"
         (let
-            customErrorTask : Task Error String
+            customErrorTask : ConcurrentTask Error String
             customErrorTask =
                 Task.define
                     { function = "custom"
@@ -221,7 +221,7 @@ errors =
                     , args = Encode.null
                     }
 
-            catchTask : Task Error String
+            catchTask : ConcurrentTask Error String
             catchTask =
                 Task.define
                     { function = "catch"
@@ -230,7 +230,7 @@ errors =
                     , args = Encode.null
                     }
 
-            catchAllTask : Task x String
+            catchAllTask : ConcurrentTask x String
             catchAllTask =
                 Task.define
                     { function = "catchAll"
@@ -250,7 +250,7 @@ errors =
                             , ( 1, error "js_exception" "f threw an exception" )
                             ]
                         |> Expect.equal
-                            (Task.RunnerError
+                            (Task.UnexpectedError
                                 (Task.UnhandledJsException
                                     { function = "custom"
                                     , message = "f threw an exception"
@@ -268,7 +268,7 @@ errors =
                             , ( 1, success (Encode.string "b") )
                             , ( 2, error "js_exception" "f threw an exception" )
                             ]
-                        |> Expect.equal (Task.TaskError "f threw an exception")
+                        |> Expect.equal (Task.Error "f threw an exception")
             , test "Succeeds with fallback if task throws and has a catchAll handler" <|
                 \_ ->
                     Task.map3 join3
@@ -298,7 +298,7 @@ errors =
                             , ( 1, success (Encode.string "b") )
                             , ( 2, error "missing_function" "f is missing" )
                             ]
-                        |> Expect.equal (Task.RunnerError (Task.MissingFunction "f is missing"))
+                        |> Expect.equal (Task.UnexpectedError (Task.MissingFunction "f is missing"))
                 )
             ]
          , describe "Tasks with unexpected responses"
@@ -353,7 +353,7 @@ errors =
                                         Decode.fail ("Unrecognized Error: " ++ e)
                             )
 
-                task : Task CustomError String
+                task : ConcurrentTask CustomError String
                 task =
                     Task.define
                         { function = "custom"
@@ -371,7 +371,7 @@ errors =
                             [ ( 0, success (Encode.string "1") )
                             , ( 1, success (Encode.object [ ( "error", Encode.string "ERR_1" ) ]) )
                             ]
-                        |> Expect.equal (Task.TaskError Error1)
+                        |> Expect.equal (Task.Error Error1)
              , test "Errors with ErrorDecoderFailure if the task returns an error key with an unexpected value on it" <|
                 \_ ->
                     Task.map2 join2
@@ -393,7 +393,7 @@ errors =
                         [ ( 0, success (Encode.string "a") )
                         , ( 1, error "other_error" "..." )
                         ]
-                    |> Expect.equal (Task.RunnerError (Task.InternalError "Unknown runner error reason: other_error"))
+                    |> Expect.equal (Task.UnexpectedError (Task.InternalError "Unknown runner error reason: other_error"))
          ]
         )
 
@@ -432,7 +432,7 @@ hardcoded =
                     |> Task.andThenDo (Task.succeed 2)
                     |> Task.andThen (\_ -> Task.fail "hardcoded error")
                     |> runTask []
-                    |> Expect.equal (Task.TaskError "hardcoded error")
+                    |> Expect.equal (Task.Error "hardcoded error")
         , fuzz2 int int "tasks can recover from an error" <|
             \a b ->
                 Task.succeed a
@@ -447,17 +447,17 @@ hardcoded =
 -- Task Runner
 
 
-runTask : List ( Int, Encode.Value ) -> Task x a -> Task.Response x a
+runTask : List ( Int, Encode.Value ) -> ConcurrentTask x a -> Task.Response x a
 runTask results =
     runTaskWith (List.map (Tuple.mapSecond success) results)
 
 
-runTaskWith : List ( Int, Encode.Value ) -> Task x a -> Task.Response x a
+runTaskWith : List ( Int, Encode.Value ) -> ConcurrentTask x a -> Task.Response x a
 runTaskWith results task =
     Tuple.second (evalTask results task)
 
 
-evalTask : List ( Int, Encode.Value ) -> Task x a -> ( Ids, Task.Response x a )
+evalTask : List ( Int, Encode.Value ) -> ConcurrentTask x a -> ( Ids, Task.Response x a )
 evalTask results task =
     evalWith
         { maxDepth = 100000000
@@ -470,7 +470,7 @@ evalTask results task =
 type alias Eval x a =
     { maxDepth : Int
     , results : List ( Int, Encode.Value )
-    , task : Task x a
+    , task : ConcurrentTask x a
     , ids : Ids
     }
 
@@ -502,11 +502,11 @@ evalWith options =
                     }
 
             else
-                ( ids, Task.RunnerError (Task.InternalError "timeout") )
+                ( ids, Task.UnexpectedError (Task.InternalError "timeout") )
 
 
-stepTask : Task.Results -> ( Ids, Task x a ) -> ( Ids, Task.Task_ x a )
-stepTask res ( ids, Task.Task run ) =
+stepTask : Task.Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Task.ConcurrentTask_ x a )
+stepTask res ( ids, Task.ConcurrentTask run ) =
     run res ids
 
 
@@ -539,17 +539,17 @@ error reason message =
         ]
 
 
-withAnother : String -> Task Error String
+withAnother : String -> ConcurrentTask Error String
 withAnother x =
     Task.map (join2 x) createTask
 
 
-createTask : Task Error String
+createTask : ConcurrentTask Error String
 createTask =
     create Decode.string
 
 
-create : Decoder a -> Task Error a
+create : Decoder a -> ConcurrentTask Error a
 create decoder =
     Task.define
         { function = "aTask"
@@ -562,7 +562,7 @@ create decoder =
 expectResponseDecoderFailureFor : String -> String -> Task.Response x a -> Expectation
 expectResponseDecoderFailureFor function message res =
     case res of
-        Task.RunnerError (Task.ResponseDecoderFailure err) ->
+        Task.UnexpectedError (Task.ResponseDecoderFailure err) ->
             if err.function == function && String.contains message (Decode.errorToString err.error) then
                 Expect.pass
 
@@ -587,7 +587,7 @@ expectResponseDecoderFailureFor function message res =
 expectErrorDecoderFailureFor : String -> String -> Task.Response x a -> Expectation
 expectErrorDecoderFailureFor function message res =
     case res of
-        Task.RunnerError (Task.ErrorsDecoderFailure err) ->
+        Task.UnexpectedError (Task.ErrorsDecoderFailure err) ->
             if err.function == function && String.contains message (Decode.errorToString err.error) then
                 Expect.pass
 

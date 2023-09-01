@@ -5,11 +5,11 @@
     "license": "MIT",
     "version": "1.0.0",
     "exposed-modules": [
-        "Concurrent.Task",
-        "Concurrent.Task.Http",
-        "Concurrent.Task.Process",
-        "Concurrent.Task.Random",
-        "Concurrent.Task.Time"
+        "ConcurrentTask",
+        "ConcurrentTask.Http",
+        "ConcurrentTask.Process",
+        "ConcurrentTask.Random",
+        "ConcurrentTask.Time"
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {

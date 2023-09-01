@@ -7,7 +7,7 @@ module Common.Logger exposing
     , withInfo
     )
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Encode as Encode
 
 
@@ -15,19 +15,19 @@ import Json.Encode as Encode
 -- Inspect
 
 
-inspect : (x -> String) -> (a -> String) -> Task x a -> Task x a
+inspect : (x -> String) -> (a -> String) -> ConcurrentTask x a -> ConcurrentTask x a
 inspect onError onOk task_ =
     task_
-        |> Task.andThen
+        |> ConcurrentTask.andThen
             (\a ->
                 info (onOk a)
-                    |> Task.return a
+                    |> ConcurrentTask.return a
             )
-        |> Task.onError
+        |> ConcurrentTask.onError
             (\e ->
                 error (onError e)
-                    |> Task.return e
-                    |> Task.andThen (\_ -> Task.fail e)
+                    |> ConcurrentTask.return e
+                    |> ConcurrentTask.andThen (\_ -> ConcurrentTask.fail e)
             )
 
 
@@ -35,7 +35,7 @@ inspect onError onOk task_ =
 -- Debug
 
 
-debug : String -> Task x ()
+debug : String -> ConcurrentTask x ()
 debug =
     log_ "DEBUG"
 
@@ -44,21 +44,21 @@ debug =
 -- Info
 
 
-info : String -> Task x ()
+info : String -> ConcurrentTask x ()
 info =
     log_ "INFO"
 
 
-withInfo : String -> Task x a -> Task x a
+withInfo : String -> ConcurrentTask x a -> ConcurrentTask x a
 withInfo message task =
-    info message |> Task.andThenDo task
+    info message |> ConcurrentTask.andThenDo task
 
 
 
 -- Warn
 
 
-warn : String -> Task x ()
+warn : String -> ConcurrentTask x ()
 warn =
     log_ "WARN"
 
@@ -67,7 +67,7 @@ warn =
 -- Error
 
 
-error : String -> Task x ()
+error : String -> ConcurrentTask x ()
 error =
     log_ "ERROR"
 
@@ -76,12 +76,12 @@ error =
 -- Logger
 
 
-log_ : String -> String -> Task x ()
+log_ : String -> String -> ConcurrentTask x ()
 log_ level message =
-    Task.define
+    ConcurrentTask.define
         { function = "console:log"
-        , expect = Task.expectWhatever
-        , errors = Task.catchAll ()
+        , expect = ConcurrentTask.expectWhatever
+        , errors = ConcurrentTask.catchAll ()
         , args =
             Encode.object
                 [ ( "level", Encode.string level )

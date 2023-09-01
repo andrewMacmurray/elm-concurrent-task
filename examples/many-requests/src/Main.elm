@@ -1,7 +1,7 @@
 port module Main exposing (main)
 
-import Concurrent.Task as Task exposing (Task)
-import Concurrent.Task.Http as Http
+import ConcurrentTask exposing (ConcurrentTask)
+import ConcurrentTask.Http as Http
 import Json.Decode as Decode exposing (Decoder)
 
 
@@ -28,7 +28,7 @@ type alias Model =
 
 type Msg
     = OnProgress ( Pool, Cmd Msg )
-    | OnComplete (Task.Response Error Output)
+    | OnComplete (ConcurrentTask.Response Error Output)
 
 
 
@@ -36,7 +36,7 @@ type Msg
 
 
 type alias Pool =
-    Task.Pool Msg Error Output
+    ConcurrentTask.Pool Msg Error Output
 
 
 type alias Error =
@@ -55,10 +55,10 @@ init : Flags -> ( Model, Cmd Msg )
 init _ =
     let
         ( tasks, cmd ) =
-            Task.attempt
+            ConcurrentTask.attempt
                 { send = send
                 , onComplete = OnComplete
-                , pool = Task.pool
+                , pool = ConcurrentTask.pool
                 }
                 longRequestChain
     in
@@ -69,42 +69,42 @@ init _ =
 -- Requests
 
 
-longRequestChain : Task Error Output
+longRequestChain : ConcurrentTask Error Output
 longRequestChain =
-    Task.map3 join3
+    ConcurrentTask.map3 join3
         (longRequest 100)
         (longRequest 100)
         (httpError
-            |> Task.onError (\_ -> longRequest 100)
-            |> Task.andThenDo (longRequest 100)
+            |> ConcurrentTask.onError (\_ -> longRequest 100)
+            |> ConcurrentTask.andThenDo (longRequest 100)
         )
-        |> Task.andThenDo (longRequest 100)
-        |> Task.andThenDo (longRequest 100)
-        |> Task.andThenDo (longRequest 100)
-        |> Task.andThenDo httpError
-        |> Task.onError (\_ -> httpError)
-        |> Task.onError (\_ -> httpError)
-        |> Task.onError (\_ -> httpError)
-        |> Task.onError (\_ -> httpError)
-        |> Task.onError (\_ -> httpError)
-        |> Task.onError (\_ -> longRequest 100)
-        |> Task.andThenDo (longRequest 100)
-        |> Task.andThenDo (longRequest 100)
-        |> Task.onError (\_ -> httpError)
-        |> Task.onError (\_ -> httpError)
-        |> Task.onError (\_ -> longRequest 1000)
-        |> Task.andThenDo
+        |> ConcurrentTask.andThenDo (longRequest 100)
+        |> ConcurrentTask.andThenDo (longRequest 100)
+        |> ConcurrentTask.andThenDo (longRequest 100)
+        |> ConcurrentTask.andThenDo httpError
+        |> ConcurrentTask.onError (\_ -> httpError)
+        |> ConcurrentTask.onError (\_ -> httpError)
+        |> ConcurrentTask.onError (\_ -> httpError)
+        |> ConcurrentTask.onError (\_ -> httpError)
+        |> ConcurrentTask.onError (\_ -> httpError)
+        |> ConcurrentTask.onError (\_ -> longRequest 100)
+        |> ConcurrentTask.andThenDo (longRequest 100)
+        |> ConcurrentTask.andThenDo (longRequest 100)
+        |> ConcurrentTask.onError (\_ -> httpError)
+        |> ConcurrentTask.onError (\_ -> httpError)
+        |> ConcurrentTask.onError (\_ -> longRequest 1000)
+        |> ConcurrentTask.andThenDo
             (httpError
-                |> Task.onError (\_ -> httpError)
-                |> Task.onError (\_ -> httpError)
-                |> Task.onError (\_ -> longRequest 500)
-                |> Task.andThenDo (longRequest 500)
+                |> ConcurrentTask.onError (\_ -> httpError)
+                |> ConcurrentTask.onError (\_ -> httpError)
+                |> ConcurrentTask.onError (\_ -> longRequest 500)
+                |> ConcurrentTask.andThenDo (longRequest 500)
             )
-        |> Task.andThenDo (longRequest 300)
-        |> Task.return "Completed Http Requests"
+        |> ConcurrentTask.andThenDo (longRequest 300)
+        |> ConcurrentTask.return "Completed Http Requests"
 
 
-longRequest : Int -> Task Http.Error String
+longRequest : Int -> ConcurrentTask Http.Error String
 longRequest ms =
     Http.request
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
@@ -116,7 +116,7 @@ longRequest ms =
         }
 
 
-httpError : Task Http.Error String
+httpError : ConcurrentTask Http.Error String
 httpError =
     Http.request
         { url = "http://localhost:4000/boom"
@@ -142,7 +142,7 @@ update msg model =
     case msg of
         OnComplete result ->
             case result of
-                Task.TaskError Http.NetworkError ->
+                ConcurrentTask.Error Http.NetworkError ->
                     ( model, printResult "NetworkError: make sure the local dev server is running - `npm run server`" )
 
                 _ ->
@@ -158,7 +158,7 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Task.onProgress
+    ConcurrentTask.onProgress
         { send = send
         , receive = receive
         , onProgress = OnProgress

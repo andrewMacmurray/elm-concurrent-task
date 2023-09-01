@@ -7,7 +7,7 @@ module Aws.SQS exposing
     , receiveMessage
     )
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
@@ -38,12 +38,12 @@ type alias DeleteMessage =
     }
 
 
-deleteMessage : DeleteMessage -> Task Error ()
+deleteMessage : DeleteMessage -> ConcurrentTask Error ()
 deleteMessage options =
-    Task.define
+    ConcurrentTask.define
         { function = "sqs:deleteMessage"
-        , expect = Task.expectWhatever
-        , errors = Task.expectThrows DeleteError
+        , expect = ConcurrentTask.expectWhatever
+        , errors = ConcurrentTask.expectThrows DeleteError
         , args =
             Encode.object
                 [ ( "queueName", Encode.string options.queueName )
@@ -64,12 +64,12 @@ type alias ReceiveMessage =
     }
 
 
-receiveMessage : ReceiveMessage -> Task Error (List Message)
+receiveMessage : ReceiveMessage -> ConcurrentTask Error (List Message)
 receiveMessage options =
-    Task.define
+    ConcurrentTask.define
         { function = "sqs:receiveMessage"
-        , expect = Task.expectJson (Decode.list decodeMessage)
-        , errors = Task.expectThrows ReceiveError
+        , expect = ConcurrentTask.expectJson (Decode.list decodeMessage)
+        , errors = ConcurrentTask.expectThrows ReceiveError
         , args =
             Encode.object
                 [ ( "queueName", Encode.string options.queueName )

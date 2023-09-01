@@ -1,4 +1,4 @@
-module Concurrent.Internal.List exposing (chunk)
+module Internal.List exposing (chunk)
 
 import Array exposing (Array)
 

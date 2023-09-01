@@ -3,7 +3,7 @@ module Common.Uuid exposing
     , generate
     )
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Encode as Encode
 
 
@@ -11,11 +11,11 @@ type alias Uuid =
     String
 
 
-generate : Task x Uuid
+generate : ConcurrentTask x Uuid
 generate =
-    Task.define
+    ConcurrentTask.define
         { function = "uuid:generate"
-        , expect = Task.expectString
-        , errors = Task.catchAll "THIS_SHOULD_NOT_HAPPEN"
+        , expect = ConcurrentTask.expectString
+        , errors = ConcurrentTask.catchAll "THIS_SHOULD_NOT_HAPPEN"
         , args = Encode.null
         }
