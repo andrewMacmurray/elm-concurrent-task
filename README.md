@@ -123,10 +123,10 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-- [`Http.request`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Http)
-- [`Process.sleep`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Process)
-- [`Random.generate`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Random)
-- [`Time.now`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Time)
+- [`Http.request`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Http/)
+- [`Process.sleep`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Process/)
+- [`Random.generate`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Random/)
+- [`Time.now`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Time/)
 
 ## How?
 
@@ -355,7 +355,7 @@ Run the tests with:
 npm test
 ```
 
-To preview any changes, try some of the examples in the [examples folder](./examples/).
+To preview any changes, try some of the examples in the [examples folder](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/examples).
 
 View the docs locally with:
 

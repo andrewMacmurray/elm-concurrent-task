@@ -155,6 +155,7 @@ define def =
     ConcurrentTask
         (\results ids ->
             let
+                taskId : TaskId
                 taskId =
                     Ids.get ids
             in
@@ -628,6 +629,7 @@ updateAttempt options pool_ ( attemptId, results ) progress =
     case stepTask results progress.task of
         ( ids_, Pending _ next_ ) ->
             let
+                nextProgress : ( Ids, ConcurrentTask x a )
                 nextProgress =
                     ( ids_, next_ )
             in
@@ -653,7 +655,7 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                         |> options.send
                     )
 
-        ( _, _ ) ->
+        _ ->
             ( pool_, Cmd.none )
 
 

@@ -32,16 +32,10 @@ Check out the built-ins for more details:
 
 # Concurrent Tasks
 
-A `ConcurrentTask` represents an asynchronous unit of work with the possibility of failure.
-
-Underneath, each task represents a call to a JavaScript function and the runner handles batching and sequencing the calls.
-
 @docs ConcurrentTask, define
 
 
 # Expectations
-
-Decode the response of a JS function into an Elm value.
 
 @docs Expect, expectJson, expectString, expectWhatever
 
@@ -233,10 +227,14 @@ import Json.Encode as Encode
 
 
 
--- Tasks
+-- Concurrent Tasks
 
 
-{-| -}
+{-| A `ConcurrentTask` represents an asynchronous unit of work with the possibility of failure.
+
+Underneath, each task represents a call to a JavaScript function and the runner handles batching and sequencing the calls.
+
+-}
 type alias ConcurrentTask x a =
     Internal.ConcurrentTask x a
 
@@ -313,7 +311,8 @@ define =
 -- Expectations
 
 
-{-| -}
+{-| Decode the response of a JS function into an Elm value.
+-}
 type alias Expect a =
     Internal.Expect a
 
@@ -943,14 +942,14 @@ onProgress =
     Internal.onProgress
 
 
-{-| -}
+{-| A Pool keeps track of each task's progress,
+and allows multiple Task attempts to be in-flight at the same time.
+-}
 type alias Pool msg x a =
     Internal.Pool msg x a
 
 
 {-| Create an empty ConcurrentTask Pool.
-
-This is used to keep track of each task's progress.
 
 Right now it doesn't expose any functionality, but it could be used in the future to do things like:
 

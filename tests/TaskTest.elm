@@ -1,13 +1,13 @@
 module TaskTest exposing (suite)
 
-import Concurrent.Internal.Ids as Ids exposing (Ids)
-import Concurrent.Internal.Task as Task exposing (ConcurrentTask)
 import Dict
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, intRange, string)
+import Internal.ConcurrentTask as Task exposing (ConcurrentTask)
+import Internal.Ids as Ids exposing (Ids)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Test exposing (..)
+import Test exposing (Test, describe, fuzz, fuzz2, fuzz3, test)
 
 
 
@@ -166,6 +166,7 @@ successResponses =
         , test "handles large sequences" <|
             \_ ->
                 let
+                    n : Int
                     n =
                         100000
                 in
@@ -185,8 +186,9 @@ successResponses =
         , test "handles large batches" <|
             \_ ->
                 let
+                    n : Int
                     n =
-                        1000
+                        2000
                 in
                 List.repeat n (create Decode.int)
                     |> Task.batch

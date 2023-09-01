@@ -29,26 +29,22 @@ You're not required to use this module for http requests in `ConcurrentTask`, it
 You could create entirely your own from scratch - maybe you want an http package with request caching or special retry logic built in on the JS side.
 
 
-# Request
+# Requests
 
 @docs request
 
 
 # Body
 
-Send data in your http request.
-
 @docs Body, emptyBody, stringBody, jsonBody
 
 
 # Expect
 
-Describe what you expect to be returned in an http response body.
-
 @docs Expect, expectJson, expectString, expectWhatever
 
 
-# Header
+# Headers
 
 @docs Header, header
 
@@ -69,13 +65,15 @@ import Json.Encode as Encode
 -- Http Task
 
 
-{-| -}
+{-| Send data in your http request.
+-}
 type Body
     = EmptyBody
     | StringBody String String
 
 
-{-| -}
+{-| Describe what you expect to be returned in an http response body.
+-}
 type Expect a
     = ExpectJson (Decoder a)
     | ExpectString (Decoder a)

@@ -6,12 +6,15 @@
   "scripts": {
     "test": "elm-test",
     "docs": "elm-doc-preview",
+    "review": "elm-review --fix",
+    "review:watch": "elm-review --watch",
     "docs:out": "elm make --docs docs.json"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
   "devDependencies": {
     "elm-doc-preview": "^1.0.7",
+    "elm-review": "^2.10.2",
     "elm-test": "^0.19.1-revision12"
   }
 }
