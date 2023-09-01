@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import ConcurrentTask exposing (ConcurrentTask)
+import ConcurrentTask as Task exposing (ConcurrentTask)
 import ConcurrentTask.Http as Http
 import Json.Decode as Decode exposing (Decoder)
 
@@ -28,7 +28,7 @@ type alias Model =
 
 type Msg
     = OnProgress ( Pool, Cmd Msg )
-    | OnComplete (ConcurrentTask.Response Error Output)
+    | OnComplete (Task.Response Error Output)
 
 
 
@@ -36,7 +36,7 @@ type Msg
 
 
 type alias Pool =
-    ConcurrentTask.Pool Msg Error Output
+    Task.Pool Msg Error Output
 
 
 type alias Error =
@@ -55,10 +55,10 @@ init : Flags -> ( Model, Cmd Msg )
 init _ =
     let
         ( tasks, cmd ) =
-            ConcurrentTask.attempt
+            Task.attempt
                 { send = send
                 , onComplete = OnComplete
-                , pool = ConcurrentTask.pool
+                , pool = Task.pool
                 }
                 longRequestChain
     in
@@ -71,37 +71,37 @@ init _ =
 
 longRequestChain : ConcurrentTask Error Output
 longRequestChain =
-    ConcurrentTask.map3 join3
+    Task.map3 join3
         (longRequest 100)
         (longRequest 100)
         (httpError
-            |> ConcurrentTask.onError (\_ -> longRequest 100)
-            |> ConcurrentTask.andThenDo (longRequest 100)
+            |> Task.onError (\_ -> longRequest 100)
+            |> Task.andThenDo (longRequest 100)
         )
-        |> ConcurrentTask.andThenDo (longRequest 100)
-        |> ConcurrentTask.andThenDo (longRequest 100)
-        |> ConcurrentTask.andThenDo (longRequest 100)
-        |> ConcurrentTask.andThenDo httpError
-        |> ConcurrentTask.onError (\_ -> httpError)
-        |> ConcurrentTask.onError (\_ -> httpError)
-        |> ConcurrentTask.onError (\_ -> httpError)
-        |> ConcurrentTask.onError (\_ -> httpError)
-        |> ConcurrentTask.onError (\_ -> httpError)
-        |> ConcurrentTask.onError (\_ -> longRequest 100)
-        |> ConcurrentTask.andThenDo (longRequest 100)
-        |> ConcurrentTask.andThenDo (longRequest 100)
-        |> ConcurrentTask.onError (\_ -> httpError)
-        |> ConcurrentTask.onError (\_ -> httpError)
-        |> ConcurrentTask.onError (\_ -> longRequest 1000)
-        |> ConcurrentTask.andThenDo
+        |> Task.andThenDo (longRequest 100)
+        |> Task.andThenDo (longRequest 100)
+        |> Task.andThenDo (longRequest 100)
+        |> Task.andThenDo httpError
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> longRequest 100)
+        |> Task.andThenDo (longRequest 100)
+        |> Task.andThenDo (longRequest 100)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> httpError)
+        |> Task.onError (\_ -> longRequest 1000)
+        |> Task.andThenDo
             (httpError
-                |> ConcurrentTask.onError (\_ -> httpError)
-                |> ConcurrentTask.onError (\_ -> httpError)
-                |> ConcurrentTask.onError (\_ -> longRequest 500)
-                |> ConcurrentTask.andThenDo (longRequest 500)
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> httpError)
+                |> Task.onError (\_ -> longRequest 500)
+                |> Task.andThenDo (longRequest 500)
             )
-        |> ConcurrentTask.andThenDo (longRequest 300)
-        |> ConcurrentTask.return "Completed Http Requests"
+        |> Task.andThenDo (longRequest 300)
+        |> Task.return "Completed Http Requests"
 
 
 longRequest : Int -> ConcurrentTask Http.Error String
@@ -142,7 +142,7 @@ update msg model =
     case msg of
         OnComplete result ->
             case result of
-                ConcurrentTask.Error Http.NetworkError ->
+                Task.Error Http.NetworkError ->
                     ( model, printResult "NetworkError: make sure the local dev server is running - `npm run server`" )
 
                 _ ->
@@ -158,7 +158,7 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    ConcurrentTask.onProgress
+    Task.onProgress
         { send = send
         , receive = receive
         , onProgress = OnProgress
