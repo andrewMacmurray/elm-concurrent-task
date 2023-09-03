@@ -1,13 +1,13 @@
-module Internal.ConcurrentTask exposing
+module ConcurrentTask.Internal.Task exposing
     ( Attempt
     , ConcurrentTask(..)
-    , ConcurrentTask_(..)
     , Errors
     , Expect
     , OnProgress
     , Pool
     , Response(..)
     , Results
+    , Task_(..)
     , UnexpectedError(..)
     , andMap
     , andThen
@@ -39,9 +39,9 @@ module Internal.ConcurrentTask exposing
     )
 
 import Array exposing (Array)
+import ConcurrentTask.Internal.Ids as Ids exposing (Ids)
+import ConcurrentTask.Internal.List
 import Dict exposing (Dict)
-import Internal.Ids as Ids exposing (Ids)
-import Internal.List as List
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -53,10 +53,10 @@ import Task as CoreTask
 
 
 type ConcurrentTask x a
-    = ConcurrentTask (Results -> Ids -> ( Ids, ConcurrentTask_ x a ))
+    = Task (Results -> Ids -> ( Ids, Task_ x a ))
 
 
-type ConcurrentTask_ x a
+type Task_ x a
     = Pending (Array Todo) (ConcurrentTask x a)
     | Done (Response x a)
 
@@ -152,7 +152,7 @@ type alias Definition x a =
 
 define : Definition x a -> ConcurrentTask x a
 define def =
-    ConcurrentTask
+    Task
         (\results ids ->
             let
                 taskId : TaskId
@@ -180,13 +180,13 @@ define def =
 
 
 runWith : Ids -> ConcurrentTask x a -> ConcurrentTask x a
-runWith s (ConcurrentTask run) =
-    ConcurrentTask (\res _ -> run res s)
+runWith s (Task run) =
+    Task (\res _ -> run res s)
 
 
 wrap : Response x a -> ConcurrentTask x a
 wrap res =
-    ConcurrentTask (\_ ids -> ( ids, Done res ))
+    Task (\_ ids -> ( ids, Done res ))
 
 
 
@@ -194,8 +194,8 @@ wrap res =
 
 
 map : (a -> b) -> ConcurrentTask x a -> ConcurrentTask x b
-map f (ConcurrentTask run) =
-    ConcurrentTask
+map f (Task run) =
+    Task
         (\result ids ->
             let
                 ( ids_, task ) =
@@ -213,8 +213,8 @@ map f (ConcurrentTask run) =
 
 
 andMap : ConcurrentTask x a -> ConcurrentTask x (a -> b) -> ConcurrentTask x b
-andMap ((ConcurrentTask run1) as task1) ((ConcurrentTask run2) as task2) =
-    ConcurrentTask
+andMap ((Task run1) as task1) ((Task run2) as task2) =
+    Task
         (\res ids ->
             let
                 ( ids_, task2_ ) =
@@ -240,7 +240,7 @@ andMap ((ConcurrentTask run1) as task1) ((ConcurrentTask run2) as task2) =
         )
 
 
-haltOnError : Response x a -> ConcurrentTask_ x b -> ConcurrentTask_ x b
+haltOnError : Response x a -> Task_ x b -> Task_ x b
 haltOnError res task =
     case res of
         Success _ ->
@@ -332,7 +332,7 @@ batch tasks =
 
 miniBatchesOf : Int -> List (ConcurrentTask x a) -> List (ConcurrentTask x (List a))
 miniBatchesOf n =
-    List.chunk n >> List.map doBatch
+    ConcurrentTask.Internal.List.chunk n >> List.map doBatch
 
 
 doBatch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
@@ -356,7 +356,7 @@ fail x =
 
 fromResult : Result x a -> ConcurrentTask x a
 fromResult res =
-    ConcurrentTask
+    Task
         (\_ ids ->
             ( ids
             , Done
@@ -372,8 +372,8 @@ fromResult res =
 
 
 andThen : (a -> ConcurrentTask x b) -> ConcurrentTask x a -> ConcurrentTask x b
-andThen f (ConcurrentTask run) =
-    ConcurrentTask
+andThen f (Task run) =
+    Task
         (\res ids ->
             let
                 ( ids_, task ) =
@@ -383,7 +383,7 @@ andThen f (ConcurrentTask run) =
                 Done a ->
                     case a of
                         Success a_ ->
-                            unwrap res ids_ (f a_)
+                            stepTask res ( ids_, f a_ )
 
                         Error e ->
                             ( ids_, Done (Error e) )
@@ -394,11 +394,6 @@ andThen f (ConcurrentTask run) =
                 Pending defs next ->
                     ( ids_, Pending defs (andThen f next) )
         )
-
-
-unwrap : Results -> Ids -> ConcurrentTask x a -> ( Ids, ConcurrentTask_ x a )
-unwrap res ids (ConcurrentTask run) =
-    run res ids
 
 
 andThenDo : ConcurrentTask x b -> ConcurrentTask x a -> ConcurrentTask x b
@@ -416,8 +411,8 @@ return a =
 
 
 onError : (x -> ConcurrentTask y a) -> ConcurrentTask x a -> ConcurrentTask y a
-onError f (ConcurrentTask run) =
-    ConcurrentTask
+onError f (Task run) =
+    Task
         (\res ids ->
             let
                 ( ids_, task ) =
@@ -430,7 +425,7 @@ onError f (ConcurrentTask run) =
                             ( ids_, Done (Success a_) )
 
                         Error e ->
-                            unwrap res ids_ (f e)
+                            stepTask res ( ids_, f e )
 
                         UnexpectedError e ->
                             ( ids_, Done (UnexpectedError e) )
@@ -441,8 +436,8 @@ onError f (ConcurrentTask run) =
 
 
 mapError : (x -> y) -> ConcurrentTask x a -> ConcurrentTask y a
-mapError f (ConcurrentTask run) =
-    ConcurrentTask
+mapError f (Task run) =
+    Task
         (\res ids ->
             let
                 ( ids_, task ) =
@@ -460,8 +455,8 @@ mapError f (ConcurrentTask run) =
 
 
 onResponseDecoderFailure : (Decode.Error -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
-onResponseDecoderFailure f (ConcurrentTask run) =
-    ConcurrentTask
+onResponseDecoderFailure f (Task run) =
+    Task
         (\res ids ->
             let
                 ( ids_, task ) =
@@ -469,7 +464,7 @@ onResponseDecoderFailure f (ConcurrentTask run) =
             in
             case task of
                 Done (UnexpectedError (ResponseDecoderFailure e_)) ->
-                    unwrap res ids_ (f e_.error)
+                    stepTask res ( ids_, f e_.error )
 
                 Done _ ->
                     ( ids, task )
@@ -477,6 +472,11 @@ onResponseDecoderFailure f (ConcurrentTask run) =
                 Pending defs next ->
                     ( ids_, Pending defs (onResponseDecoderFailure f next) )
         )
+
+
+stepTask : Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Task_ x a )
+stepTask res ( ids, Task run ) =
+    run res ids
 
 
 
@@ -657,11 +657,6 @@ updateAttempt options pool_ ( attemptId, results ) progress =
 
         _ ->
             ( pool_, Cmd.none )
-
-
-stepTask : Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, ConcurrentTask_ x a )
-stepTask res ( ids, ConcurrentTask run ) =
-    run res ids
 
 
 recordSent : Array Todo -> Set TaskId -> Set TaskId

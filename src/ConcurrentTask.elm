@@ -221,7 +221,7 @@ Here's a minimal complete example:
 
 -}
 
-import Internal.ConcurrentTask as Internal
+import ConcurrentTask.Internal.Task as Internal
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 

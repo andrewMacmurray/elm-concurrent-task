@@ -1,4 +1,4 @@
-module Internal.Ids exposing
+module ConcurrentTask.Internal.Ids exposing
     ( Id
     , Ids
     , combine

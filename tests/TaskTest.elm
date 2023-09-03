@@ -1,10 +1,10 @@
 module TaskTest exposing (suite)
 
+import ConcurrentTask.Internal.Ids as Ids exposing (Ids)
+import ConcurrentTask.Internal.Task as Task exposing (ConcurrentTask)
 import Dict
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, intRange, string)
-import Internal.ConcurrentTask as Task exposing (ConcurrentTask)
-import Internal.Ids as Ids exposing (Ids)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Test exposing (Test, describe, fuzz, fuzz2, fuzz3, test)
@@ -507,8 +507,8 @@ evalWith options =
                 ( ids, Task.UnexpectedError (Task.InternalError "timeout") )
 
 
-stepTask : Task.Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Task.ConcurrentTask_ x a )
-stepTask res ( ids, Task.ConcurrentTask run ) =
+stepTask : Task.Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Task.Task_ x a )
+stepTask res ( ids, Task.Task run ) =
     run res ids
 
 
