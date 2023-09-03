@@ -1,5 +1,5 @@
 module ConcurrentTask.Http exposing
-    ( request
+    ( request, get, post
     , Body, emptyBody, stringBody, jsonBody
     , Expect, expectJson, expectString, expectWhatever
     , Header, header
@@ -31,7 +31,7 @@ You could create entirely your own from scratch - maybe you want an http package
 
 # Requests
 
-@docs request
+@docs request, get, post
 
 
 # Body
@@ -236,6 +236,47 @@ request r =
         |> ConcurrentTask.onResponseDecoderFailure wrapError
 
 
+{-| Send an Http `GET` request
+-}
+get :
+    { url : String
+    , headers : List Header
+    , expect : Expect a
+    , timeout : Maybe Int
+    }
+    -> ConcurrentTask Error a
+get options =
+    request
+        { url = options.url
+        , method = "GET"
+        , headers = options.headers
+        , body = emptyBody
+        , expect = options.expect
+        , timeout = options.timeout
+        }
+
+
+{-| Send an Http `POST` request
+-}
+post :
+    { url : String
+    , headers : List Header
+    , body : Body
+    , expect : Expect a
+    , timeout : Maybe Int
+    }
+    -> ConcurrentTask Error a
+post options =
+    request
+        { url = options.url
+        , method = "POST"
+        , headers = options.headers
+        , body = options.body
+        , expect = options.expect
+        , timeout = options.timeout
+        }
+
+
 wrapError : Decode.Error -> ConcurrentTask Error a
 wrapError =
     Decode.errorToString
@@ -311,7 +352,7 @@ encode : Request a -> Encode.Value
 encode r =
     Encode.object
         [ ( "url", Encode.string r.url )
-        , ( "method", Encode.string r.method )
+        , ( "method", Encode.string (String.toUpper r.method) )
         , ( "headers", encodeHeaders r.body r.headers )
         , ( "expect", encodeExpect r.expect )
         , ( "body", encodeBody r.body )

@@ -106,11 +106,9 @@ longRequestChain =
 
 longRequest : Int -> ConcurrentTask Http.Error String
 longRequest ms =
-    Http.request
+    Http.get
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
-        , method = "GET"
         , headers = []
-        , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
@@ -118,11 +116,9 @@ longRequest ms =
 
 httpError : ConcurrentTask Http.Error String
 httpError =
-    Http.request
+    Http.get
         { url = "http://localhost:4000/boom"
-        , method = "GET"
         , headers = []
-        , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
