@@ -55,6 +55,19 @@ export function getViewportOf(id: string): Viewport | Error {
   }));
 }
 
+export interface SetViewport {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export function setViewportOf(options: SetViewport): void | Error {
+  return withDomNode(options.id, (el) => {
+    el.scrollLeft = options.x;
+    el.scrollTop = options.y;
+  });
+}
+
 export function getElement(id: string): DomElement | Error {
   return withDomNode(id, (el) => {
     const rect = el.getBoundingClientRect();
@@ -77,6 +90,8 @@ export function getElement(id: string): DomElement | Error {
     };
   });
 }
+
+// Helpers
 
 function withDomNode<a>(id: string, callback: (HTMLElement) => a): a | Error {
   const el = document.getElementById(id);

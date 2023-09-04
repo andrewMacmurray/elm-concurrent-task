@@ -16,3 +16,10 @@ body {
     color: white;
     height: 50px;
 }
+
+.scrolly-box {
+    width: 100px;
+    height: 100px;
+    background-color: cornflowerblue;
+    overflow-y: scroll;
+}

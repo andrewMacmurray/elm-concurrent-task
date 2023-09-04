@@ -19,6 +19,7 @@ export interface Builtins {
   domFocus?: (id: string) => void | dom.Error;
   domBlur?: (id: string) => void | dom.Error;
   domGetViewportOf?: (id: string) => dom.Viewport | dom.Error;
+  domSetViewportOf?: (args: dom.SetViewport) => void | dom.Error;
   domGetElement?: (id: string) => dom.DomElement | dom.Error;
 }
 
@@ -54,13 +55,14 @@ const BuiltInTasks = {
   "builtin:timeNow": () => Date.now(),
   "builtin:timeZoneOffset": () => getTimezoneOffset(),
   "builtin:timeZoneName": () => getTimeZoneName(),
-  "builtin:sleep": (ms: number) => sleep(ms),
   "builtin:randomSeed": () => Date.now(),
-  "builtin:http": (req) => fetchAdapter.http(req),
-  "builtin:domFocus": (id: string) => dom.focus(id),
-  "builtin:domBlur": (id: string) => dom.blur(id),
-  "builtin:domGetViewportOf": (id: string) => dom.getViewportOf(id),
-  "builtin:domGetElement": (id: string) => dom.getElement(id),
+  "builtin:sleep": sleep,
+  "builtin:http": fetchAdapter.http,
+  "builtin:domFocus": dom.focus,
+  "builtin:domBlur": dom.blur,
+  "builtin:domGetViewportOf": dom.getViewportOf,
+  "builtin:domSetViewportOf": dom.setViewportOf,
+  "builtin:domGetElement": dom.getElement,
 };
 
 function sleep(ms) {

@@ -4,7 +4,7 @@ import Browser
 import Browser.Dom as Dom
 import ConcurrentTask
 import ConcurrentTask.Browser.Dom
-import Html exposing (Html, button, div, input, text)
+import Html exposing (Html, button, div, input, p, text)
 import Html.Attributes exposing (class, id)
 import Html.Events exposing (onClick)
 import Json.Decode as Decode
@@ -40,6 +40,7 @@ type Msg
     | BlurClicked
     | FindTheViewportClicked
     | FindTheElementClicked
+    | SetViewportOfElementClicked
     | OnComplete (ConcurrentTask.Response Error Output)
     | OnProgress ( Pool, Cmd Msg )
 
@@ -87,6 +88,20 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SetViewportOfElementClicked ->
+            let
+                ( tasks, cmd ) =
+                    ConcurrentTask.attempt
+                        { send = send
+                        , pool = model.tasks
+                        , onComplete = OnComplete
+                        }
+                        (ConcurrentTask.Browser.Dom.setViewportOf "scrolly-box" 0 0
+                            |> ConcurrentTask.map DomNodeOperation
+                        )
+            in
+            ( { model | tasks = tasks }, cmd )
+
         FindTheElementClicked ->
             let
                 ( tasks, cmd ) =
@@ -193,6 +208,15 @@ view model =
     div [ class "row" ]
         [ input [ id "input" ] []
         , div [ class "box", id "box" ] [ text "What size am i?" ]
+        , div [ class "scrolly-box", id "scrolly-box" ]
+            [ text "Scroll mee!!"
+            , p [] [ text "..." ]
+            , p [] [ text "..." ]
+            , p [] [ text "..." ]
+            , p [] [ text "..." ]
+            , p [] [ text "..." ]
+            , p [] [ text "..." ]
+            ]
         , showViewport model
         , showElement model
         , div []
@@ -200,6 +224,7 @@ view model =
             , button [ onClick BlurClicked ] [ text "Blur the Input!" ]
             , button [ onClick FindTheViewportClicked ] [ text "Find the Viewport of the blue box!" ]
             , button [ onClick FindTheElementClicked ] [ text "Find the Element size of the blue box!" ]
+            , button [ onClick SetViewportOfElementClicked ] [ text "Set the viewport of the Element" ]
             ]
         ]
 
