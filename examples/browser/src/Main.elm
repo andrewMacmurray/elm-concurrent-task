@@ -31,13 +31,15 @@ main =
 type alias Model =
     { tasks : Pool
     , foundViewport : Maybe Dom.Viewport
+    , foundElement : Maybe Dom.Element
     }
 
 
 type Msg
     = FocusClicked
     | BlurClicked
-    | FindTheSizeClicked
+    | FindTheViewportClicked
+    | FindTheElementClicked
     | OnComplete (ConcurrentTask.Response Error Output)
     | OnProgress ( Pool, Cmd Msg )
 
@@ -61,6 +63,7 @@ type alias Error =
 type Output
     = DomNodeOperation ()
     | ViewportOperation Dom.Viewport
+    | ElementOperation Dom.Element
 
 
 
@@ -71,6 +74,7 @@ init : Flags -> ( Model, Cmd Msg )
 init _ =
     ( { tasks = ConcurrentTask.pool
       , foundViewport = Nothing
+      , foundElement = Nothing
       }
     , Cmd.none
     )
@@ -83,7 +87,21 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FindTheSizeClicked ->
+        FindTheElementClicked ->
+            let
+                ( tasks, cmd ) =
+                    ConcurrentTask.attempt
+                        { send = send
+                        , pool = model.tasks
+                        , onComplete = OnComplete
+                        }
+                        (ConcurrentTask.Browser.Dom.getElement "box"
+                            |> ConcurrentTask.map ElementOperation
+                        )
+            in
+            ( { model | tasks = tasks }, cmd )
+
+        FindTheViewportClicked ->
             let
                 ( tasks, cmd ) =
                     ConcurrentTask.attempt
@@ -128,6 +146,9 @@ update msg model =
         OnComplete (ConcurrentTask.Success (ViewportOperation vp)) ->
             ( { model | foundViewport = Just vp }, Cmd.none )
 
+        OnComplete (ConcurrentTask.Success (ElementOperation el)) ->
+            ( { model | foundElement = Just el }, Cmd.none )
+
         OnComplete res ->
             let
                 _ =
@@ -171,16 +192,14 @@ view : Model -> Html Msg
 view model =
     div [ class "row" ]
         [ input [ id "input" ] []
-        , div
-            [ class "box"
-            , id "box"
-            , onClick FindTheSizeClicked
-            ]
-            [ text "What size am i?" ]
+        , div [ class "box", id "box" ] [ text "What size am i?" ]
         , showViewport model
+        , showElement model
         , div []
             [ button [ onClick FocusClicked ] [ text "Focus the Input!" ]
             , button [ onClick BlurClicked ] [ text "Blur the Input!" ]
+            , button [ onClick FindTheViewportClicked ] [ text "Find the Viewport of the blue box!" ]
+            , button [ onClick FindTheElementClicked ] [ text "Find the Element size of the blue box!" ]
             ]
         ]
 
@@ -194,5 +213,18 @@ showViewport model =
         Just vp ->
             div []
                 [ div [] [ text "Found viewport!" ]
+                , div [] [ text (Debug.toString vp) ]
+                ]
+
+
+showElement : Model -> Html msg
+showElement model =
+    case model.foundElement of
+        Nothing ->
+            text ""
+
+        Just vp ->
+            div []
+                [ div [] [ text "Found element!" ]
                 , div [] [ text (Debug.toString vp) ]
                 ]

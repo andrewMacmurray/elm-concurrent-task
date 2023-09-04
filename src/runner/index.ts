@@ -19,6 +19,7 @@ export interface Builtins {
   domFocus?: (id: string) => void | dom.Error;
   domBlur?: (id: string) => void | dom.Error;
   domGetViewportOf?: (id: string) => dom.Viewport | dom.Error;
+  domGetElement?: (id: string) => dom.DomElement | dom.Error;
 }
 
 export type Tasks = { [fn: string]: (any) => any };
@@ -59,6 +60,7 @@ const BuiltInTasks = {
   "builtin:domFocus": (id: string) => dom.focus(id),
   "builtin:domBlur": (id: string) => dom.blur(id),
   "builtin:domGetViewportOf": (id: string) => dom.getViewportOf(id),
+  "builtin:domGetElement": (id: string) => dom.getElement(id),
 };
 
 function sleep(ms) {
