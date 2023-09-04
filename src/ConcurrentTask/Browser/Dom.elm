@@ -103,8 +103,8 @@ decodeScene_ =
             , height = h
             }
         )
-        (Decode.field "scene" (Decode.field "width" Decode.float))
-        (Decode.field "scene" (Decode.field "height" Decode.float))
+        (Decode.at [ "scene", "width" ] Decode.float)
+        (Decode.at [ "scene", "height" ] Decode.float)
 
 
 decodeViewport_ : Decoder { x : Float, y : Float, width : Float, height : Float }
@@ -117,10 +117,10 @@ decodeViewport_ =
             , height = h
             }
         )
-        (Decode.field "viewport" (Decode.field "x" Decode.float))
-        (Decode.field "viewport" (Decode.field "y" Decode.float))
-        (Decode.field "viewport" (Decode.field "width" Decode.float))
-        (Decode.field "viewport" (Decode.field "height" Decode.float))
+        (Decode.at [ "viewport", "x" ] Decode.float)
+        (Decode.at [ "viewport", "y" ] Decode.float)
+        (Decode.at [ "viewport", "width" ] Decode.float)
+        (Decode.at [ "viewport", "height" ] Decode.float)
 
 
 decodeElement_ : Decoder { x : Float, y : Float, width : Float, height : Float }
@@ -133,7 +133,7 @@ decodeElement_ =
             , height = h
             }
         )
-        (Decode.field "element" (Decode.field "x" Decode.float))
-        (Decode.field "element" (Decode.field "y" Decode.float))
-        (Decode.field "element" (Decode.field "width" Decode.float))
-        (Decode.field "element" (Decode.field "height" Decode.float))
+        (Decode.at [ "element", "x" ] Decode.float)
+        (Decode.at [ "element", "y" ] Decode.float)
+        (Decode.at [ "element", "width" ] Decode.float)
+        (Decode.at [ "element", "height" ] Decode.float)

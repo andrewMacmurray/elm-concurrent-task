@@ -32,46 +32,31 @@ export interface DomElement {
   };
 }
 
-const domNodeError = { error: null };
-
 export function focus(id: string): void | Error {
-  const el = document.getElementById(id);
-  if (el) {
-    return el.focus();
-  }
-  return domNodeError;
+  return withDomNode(id, (el) => el.focus());
 }
 
 export function blur(id: string): void | Error {
-  const el = document.getElementById(id);
-  if (el) {
-    return el.blur();
-  }
-  return domNodeError;
+  return withDomNode(id, (el) => el.blur());
 }
 
 export function getViewportOf(id: string): Viewport | Error {
-  const el = document.getElementById(id);
-  if (el) {
-    return {
-      scene: {
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-      },
-      viewport: {
-        x: el.scrollLeft,
-        y: el.scrollTop,
-        width: el.clientWidth,
-        height: el.clientHeight,
-      },
-    };
-  }
-  return domNodeError;
+  return withDomNode(id, (el) => ({
+    scene: {
+      width: el.scrollWidth,
+      height: el.scrollHeight,
+    },
+    viewport: {
+      x: el.scrollLeft,
+      y: el.scrollTop,
+      width: el.clientWidth,
+      height: el.clientHeight,
+    },
+  }));
 }
 
 export function getElement(id: string): DomElement | Error {
-  const el = document.getElementById(id);
-  if (el) {
+  return withDomNode(id, (el) => {
     const rect = el.getBoundingClientRect();
     const x = window.scrollX;
     const y = window.scrollY;
@@ -90,8 +75,15 @@ export function getElement(id: string): DomElement | Error {
         height: rect.height,
       },
     };
+  });
+}
+
+function withDomNode<a>(id: string, callback: (HTMLElement) => a): a | Error {
+  const el = document.getElementById(id);
+  if (el) {
+    return callback(el);
   }
-  return domNodeError;
+  return { error: null };
 }
 
 function getBrowserScene(): { width: number; height: number } {
