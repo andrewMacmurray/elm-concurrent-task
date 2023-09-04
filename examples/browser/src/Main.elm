@@ -41,6 +41,7 @@ type Msg
     | FindTheViewportClicked
     | FindTheElementClicked
     | SetViewportOfElementClicked
+    | ScrollTopClicked
     | OnComplete (ConcurrentTask.Response Error Output)
     | OnProgress ( Pool, Cmd Msg )
 
@@ -88,6 +89,20 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        ScrollTopClicked ->
+            let
+                ( tasks, cmd ) =
+                    ConcurrentTask.attempt
+                        { send = send
+                        , pool = model.tasks
+                        , onComplete = OnComplete
+                        }
+                        (ConcurrentTask.Browser.Dom.setViewport 0 0
+                            |> ConcurrentTask.map DomNodeOperation
+                        )
+            in
+            ( { model | tasks = tasks }, cmd )
+
         SetViewportOfElementClicked ->
             let
                 ( tasks, cmd ) =
@@ -225,6 +240,7 @@ view model =
             , button [ onClick FindTheViewportClicked ] [ text "Find the Viewport of the blue box!" ]
             , button [ onClick FindTheElementClicked ] [ text "Find the Element size of the blue box!" ]
             , button [ onClick SetViewportOfElementClicked ] [ text "Set the viewport of the Element" ]
+            , button [ onClick ScrollTopClicked ] [ text "Scroll Top" ]
             ]
         ]
 

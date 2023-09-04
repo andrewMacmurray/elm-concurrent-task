@@ -56,12 +56,21 @@ export function getViewportOf(id: string): Viewport | Error {
 }
 
 export interface SetViewport {
+  x: number;
+  y: number;
+}
+
+export function setViewport(options: SetViewport): void {
+  window.scroll(options.y, options.y);
+}
+
+export interface SetViewportOf {
   id: string;
   x: number;
   y: number;
 }
 
-export function setViewportOf(options: SetViewport): void | Error {
+export function setViewportOf(options: SetViewportOf): void | Error {
   return withDomNode(options.id, (el) => {
     el.scrollLeft = options.x;
     el.scrollTop = options.y;

@@ -1,6 +1,6 @@
 module ConcurrentTask.Browser.Dom exposing
     ( focus, blur
-    , getViewportOf, setViewportOf
+    , setViewport, getViewportOf, setViewportOf
     , getElement
     )
 
@@ -8,7 +8,7 @@ module ConcurrentTask.Browser.Dom exposing
 
 @docs focus, blur
 
-@docs getViewportOf, setViewportOf
+@docs setViewport, getViewportOf, setViewportOf
 
 @docs getElement
 
@@ -39,6 +39,21 @@ blur id =
         , expect = ConcurrentTask.expectWhatever
         , errors = expectDomError id
         , args = Encode.string id
+        }
+
+
+{-| -}
+setViewport : Float -> Float -> ConcurrentTask x ()
+setViewport x y =
+    ConcurrentTask.define
+        { function = "builtin:domSetViewport"
+        , expect = ConcurrentTask.expectWhatever
+        , errors = ConcurrentTask.catchAll ()
+        , args =
+            Encode.object
+                [ ( "x", Encode.float x )
+                , ( "y", Encode.float y )
+                ]
         }
 
 
