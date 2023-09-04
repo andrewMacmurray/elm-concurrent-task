@@ -1,4 +1,5 @@
 import * as http from "./http";
+import * as dom from "./browser/dom";
 import * as fetchAdapter from "./http/fetch";
 
 export interface ElmPorts {
@@ -15,6 +16,8 @@ export interface Builtins {
   timeZoneName?: () => string | number;
   randomSeed?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  domFocus?: (id: string) => void | { error: string };
+  domBlur?: (id: string) => void | { error: string };
 }
 
 export type Tasks = { [fn: string]: (any) => any };
@@ -52,6 +55,8 @@ const BuiltInTasks = {
   "builtin:sleep": (ms: number) => sleep(ms),
   "builtin:randomSeed": () => Date.now(),
   "builtin:http": (req) => fetchAdapter.http(req),
+  "builtin:domFocus": (id: string) => dom.focus(id),
+  "builtin:domBlur": (id: string) => dom.blur(id),
 };
 
 function sleep(ms) {
@@ -196,23 +201,10 @@ function debounce(send: (res: TaskResult[]) => void, wait: number) {
 
 function createTasks(options: Options): Tasks {
   const tasks = { ...BuiltInTasks, ...options.tasks };
-  if (options.builtins?.http) {
-    tasks["builtin:http"] = options.builtins.http;
-  }
-  if (options.builtins?.timeNow) {
-    tasks["builtin:timeNow"] = options.builtins.timeNow;
-  }
-  if (options.builtins?.timeZoneOffset) {
-    tasks["builtin:timeZoneOffset"] = options.builtins.timeZoneOffset;
-  }
-  if (options.builtins?.timeZoneName) {
-    tasks["builtin:timeZoneName"] = options.builtins.timeZoneName;
-  }
-  if (options.builtins?.randomSeed) {
-    tasks["builtin:randomSeed"] = options.builtins.randomSeed;
-  }
-  if (options.builtins?.sleep) {
-    tasks["builtin:sleep"] = options.builtins.sleep;
-  }
+
+  Object.entries(options.builtins || {}).forEach(([name, override]) => {
+    tasks[`builtin:${name}`] = override;
+  });
+
   return tasks;
 }

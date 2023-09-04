@@ -6,6 +6,7 @@
     "version": "1.0.0",
     "exposed-modules": [
         "ConcurrentTask",
+        "ConcurrentTask.Browser.Dom",
         "ConcurrentTask.Http",
         "ConcurrentTask.Process",
         "ConcurrentTask.Random",
@@ -13,6 +14,7 @@
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {
+        "elm/browser": "1.0.2 <= v < 2.0.0",
         "elm/core": "1.0.5 <= v < 2.0.0",
         "elm/json": "1.1.3 <= v < 2.0.0",
         "elm/random": "1.0.0 <= v < 2.0.0",
