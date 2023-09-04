@@ -16,8 +16,9 @@ export interface Builtins {
   timeZoneName?: () => string | number;
   randomSeed?: () => number;
   sleep?: (ms: number) => Promise<void>;
-  domFocus?: (id: string) => void | { error: string };
-  domBlur?: (id: string) => void | { error: string };
+  domFocus?: (id: string) => void | dom.Error;
+  domBlur?: (id: string) => void | dom.Error;
+  domGetViewportOf?: (id: string) => dom.Viewport | dom.Error;
 }
 
 export type Tasks = { [fn: string]: (any) => any };
@@ -57,6 +58,7 @@ const BuiltInTasks = {
   "builtin:http": (req) => fetchAdapter.http(req),
   "builtin:domFocus": (id: string) => dom.focus(id),
   "builtin:domBlur": (id: string) => dom.blur(id),
+  "builtin:domGetViewportOf": (id: string) => dom.getViewportOf(id),
 };
 
 function sleep(ms) {
