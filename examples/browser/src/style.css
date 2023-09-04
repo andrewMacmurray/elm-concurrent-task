@@ -23,3 +23,9 @@ body {
     background-color: cornflowerblue;
     overflow-y: scroll;
 }
+
+.buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}

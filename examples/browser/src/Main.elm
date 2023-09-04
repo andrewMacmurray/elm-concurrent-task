@@ -2,7 +2,7 @@ port module Main exposing (main)
 
 import Browser
 import Browser.Dom as Dom
-import ConcurrentTask
+import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Browser.Dom
 import Html exposing (Html, button, div, input, p, text)
 import Html.Attributes exposing (class, id)
@@ -92,11 +92,7 @@ update msg model =
         ScrollTopClicked ->
             let
                 ( tasks, cmd ) =
-                    ConcurrentTask.attempt
-                        { send = send
-                        , pool = model.tasks
-                        , onComplete = OnComplete
-                        }
+                    startTask model.tasks
                         (ConcurrentTask.Browser.Dom.setViewport 0 0
                             |> ConcurrentTask.map DomNodeOperation
                         )
@@ -106,11 +102,7 @@ update msg model =
         SetViewportOfElementClicked ->
             let
                 ( tasks, cmd ) =
-                    ConcurrentTask.attempt
-                        { send = send
-                        , pool = model.tasks
-                        , onComplete = OnComplete
-                        }
+                    startTask model.tasks
                         (ConcurrentTask.Browser.Dom.setViewportOf "scrolly-box" 0 0
                             |> ConcurrentTask.map DomNodeOperation
                         )
@@ -120,11 +112,7 @@ update msg model =
         FindTheElementClicked ->
             let
                 ( tasks, cmd ) =
-                    ConcurrentTask.attempt
-                        { send = send
-                        , pool = model.tasks
-                        , onComplete = OnComplete
-                        }
+                    startTask model.tasks
                         (ConcurrentTask.Browser.Dom.getElement "box"
                             |> ConcurrentTask.map ElementOperation
                         )
@@ -134,11 +122,7 @@ update msg model =
         FindTheViewportClicked ->
             let
                 ( tasks, cmd ) =
-                    ConcurrentTask.attempt
-                        { send = send
-                        , pool = model.tasks
-                        , onComplete = OnComplete
-                        }
+                    startTask model.tasks
                         (ConcurrentTask.Browser.Dom.getViewportOf "box"
                             |> ConcurrentTask.map ViewportOperation
                         )
@@ -148,11 +132,7 @@ update msg model =
         BlurClicked ->
             let
                 ( tasks, cmd ) =
-                    ConcurrentTask.attempt
-                        { send = send
-                        , pool = model.tasks
-                        , onComplete = OnComplete
-                        }
+                    startTask model.tasks
                         (ConcurrentTask.Browser.Dom.blur "input"
                             |> ConcurrentTask.map DomNodeOperation
                         )
@@ -162,11 +142,7 @@ update msg model =
         FocusClicked ->
             let
                 ( tasks, cmd ) =
-                    ConcurrentTask.attempt
-                        { send = send
-                        , pool = model.tasks
-                        , onComplete = OnComplete
-                        }
+                    startTask model.tasks
                         (ConcurrentTask.Browser.Dom.focus "input"
                             |> ConcurrentTask.map DomNodeOperation
                         )
@@ -188,6 +164,15 @@ update msg model =
 
         OnProgress ( pool, cmd ) ->
             ( { model | tasks = pool }, cmd )
+
+
+startTask : Pool -> ConcurrentTask Error Output -> ( Pool, Cmd Msg )
+startTask pool =
+    ConcurrentTask.attempt
+        { send = send
+        , onComplete = OnComplete
+        , pool = pool
+        }
 
 
 
@@ -234,7 +219,7 @@ view model =
             ]
         , showViewport model
         , showElement model
-        , div []
+        , div [ class "buttons" ]
             [ button [ onClick FocusClicked ] [ text "Focus the Input!" ]
             , button [ onClick BlurClicked ] [ text "Blur the Input!" ]
             , button [ onClick FindTheViewportClicked ] [ text "Find the Viewport of the blue box!" ]
