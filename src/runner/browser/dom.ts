@@ -40,6 +40,18 @@ export function blur(id: string): void | Error {
   return withDomNode(id, (el) => el.blur());
 }
 
+export function getViewport(): Viewport {
+  return {
+    scene: getBrowserScene(),
+    viewport: {
+      x: window.scrollX,
+      y: window.scrollY,
+      width: document.documentElement.clientWidth,
+      height: document.documentElement.clientHeight,
+    },
+  };
+}
+
 export function getViewportOf(id: string): Viewport | Error {
   return withDomNode(id, (el) => ({
     scene: {

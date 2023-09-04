@@ -1,6 +1,7 @@
 module ConcurrentTask.Browser.Dom exposing
     ( focus, blur
-    , setViewport, getViewportOf, setViewportOf
+    , getViewport, getViewportOf
+    , setViewport, setViewportOf
     , getElement
     )
 
@@ -8,7 +9,9 @@ module ConcurrentTask.Browser.Dom exposing
 
 @docs focus, blur
 
-@docs setViewport, getViewportOf, setViewportOf
+@docs getViewport, getViewportOf
+
+@docs setViewport, setViewportOf
 
 @docs getElement
 
@@ -43,6 +46,43 @@ blur id =
 
 
 {-| -}
+getViewport : ConcurrentTask x Dom.Viewport
+getViewport =
+    ConcurrentTask.define
+        { function = "builtin:domGetViewport"
+        , expect = ConcurrentTask.expectJson decodeViewport
+        , errors = ConcurrentTask.catchAll fallbackViewport
+        , args = Encode.null
+        }
+
+
+fallbackViewport : Dom.Viewport
+fallbackViewport =
+    { scene =
+        { width = 0
+        , height = 0
+        }
+    , viewport =
+        { x = 0
+        , y = 0
+        , width = 0
+        , height = 0
+        }
+    }
+
+
+{-| -}
+getViewportOf : String -> ConcurrentTask Dom.Error Dom.Viewport
+getViewportOf id =
+    ConcurrentTask.define
+        { function = "builtin:domGetViewportOf"
+        , expect = ConcurrentTask.expectJson decodeViewport
+        , errors = expectDomError id
+        , args = Encode.string id
+        }
+
+
+{-| -}
 setViewport : Float -> Float -> ConcurrentTask x ()
 setViewport x y =
     ConcurrentTask.define
@@ -54,17 +94,6 @@ setViewport x y =
                 [ ( "x", Encode.float x )
                 , ( "y", Encode.float y )
                 ]
-        }
-
-
-{-| -}
-getViewportOf : String -> ConcurrentTask Dom.Error Dom.Viewport
-getViewportOf id =
-    ConcurrentTask.define
-        { function = "builtin:domGetViewportOf"
-        , expect = ConcurrentTask.expectJson decodeViewport
-        , errors = expectDomError id
-        , args = Encode.string id
         }
 
 

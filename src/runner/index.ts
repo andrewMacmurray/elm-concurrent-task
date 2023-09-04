@@ -18,9 +18,10 @@ export interface Builtins {
   sleep?: (ms: number) => Promise<void>;
   domFocus?: (id: string) => void | dom.Error;
   domBlur?: (id: string) => void | dom.Error;
+  domGetViewport?: () => dom.Viewport;
   domGetViewportOf?: (id: string) => dom.Viewport | dom.Error;
-  domSetViewportOf?: (args: dom.SetViewportOf) => void | dom.Error;
   domSetViewport?: (args: dom.SetViewport) => void;
+  domSetViewportOf?: (args: dom.SetViewportOf) => void | dom.Error;
   domGetElement?: (id: string) => dom.DomElement | dom.Error;
 }
 
@@ -61,9 +62,10 @@ const BuiltInTasks = {
   "builtin:http": fetchAdapter.http,
   "builtin:domFocus": dom.focus,
   "builtin:domBlur": dom.blur,
+  "builtin:domGetViewport": dom.getViewport,
   "builtin:domGetViewportOf": dom.getViewportOf,
-  "builtin:domSetViewportOf": dom.setViewportOf,
   "builtin:domSetViewport": dom.setViewport,
+  "builtin:domSetViewportOf": dom.setViewportOf,
   "builtin:domGetElement": dom.getElement,
 };
 

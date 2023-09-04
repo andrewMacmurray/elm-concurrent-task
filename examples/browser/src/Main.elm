@@ -32,16 +32,18 @@ type alias Model =
     { tasks : Pool
     , foundViewport : Maybe Dom.Viewport
     , foundElement : Maybe Dom.Element
+    , foundWindowViewport : Maybe Dom.Viewport
     }
 
 
 type Msg
     = FocusClicked
     | BlurClicked
-    | FindTheViewportClicked
-    | FindTheElementClicked
+    | GetBoxViewportClicked
+    | GetElementClicked
     | SetViewportOfElementClicked
     | ScrollTopClicked
+    | GetWindowViewportClicked
     | OnComplete (ConcurrentTask.Response Error Output)
     | OnProgress ( Pool, Cmd Msg )
 
@@ -64,7 +66,8 @@ type alias Error =
 
 type Output
     = DomNodeOperation ()
-    | ViewportOperation Dom.Viewport
+    | ElementViewportOperation Dom.Viewport
+    | WindowViewportOperation Dom.Viewport
     | ElementOperation Dom.Element
 
 
@@ -77,6 +80,7 @@ init _ =
     ( { tasks = ConcurrentTask.pool
       , foundViewport = Nothing
       , foundElement = Nothing
+      , foundWindowViewport = Nothing
       }
     , Cmd.none
     )
@@ -89,6 +93,16 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        GetWindowViewportClicked ->
+            let
+                ( tasks, cmd ) =
+                    startTask model.tasks
+                        (ConcurrentTask.Browser.Dom.getViewport
+                            |> ConcurrentTask.map WindowViewportOperation
+                        )
+            in
+            ( { model | tasks = tasks }, cmd )
+
         ScrollTopClicked ->
             let
                 ( tasks, cmd ) =
@@ -109,7 +123,7 @@ update msg model =
             in
             ( { model | tasks = tasks }, cmd )
 
-        FindTheElementClicked ->
+        GetElementClicked ->
             let
                 ( tasks, cmd ) =
                     startTask model.tasks
@@ -119,12 +133,12 @@ update msg model =
             in
             ( { model | tasks = tasks }, cmd )
 
-        FindTheViewportClicked ->
+        GetBoxViewportClicked ->
             let
                 ( tasks, cmd ) =
                     startTask model.tasks
                         (ConcurrentTask.Browser.Dom.getViewportOf "box"
-                            |> ConcurrentTask.map ViewportOperation
+                            |> ConcurrentTask.map ElementViewportOperation
                         )
             in
             ( { model | tasks = tasks }, cmd )
@@ -149,8 +163,11 @@ update msg model =
             in
             ( { model | tasks = tasks }, cmd )
 
-        OnComplete (ConcurrentTask.Success (ViewportOperation vp)) ->
+        OnComplete (ConcurrentTask.Success (ElementViewportOperation vp)) ->
             ( { model | foundViewport = Just vp }, Cmd.none )
+
+        OnComplete (ConcurrentTask.Success (WindowViewportOperation vp)) ->
+            ( { model | foundWindowViewport = Just vp }, Cmd.none )
 
         OnComplete (ConcurrentTask.Success (ElementOperation el)) ->
             ( { model | foundElement = Just el }, Cmd.none )
@@ -218,14 +235,20 @@ view model =
             , p [] [ text "..." ]
             ]
         , showViewport model
+        , showWindowViewport model
         , showElement model
         , div [ class "buttons" ]
-            [ button [ onClick FocusClicked ] [ text "Focus the Input!" ]
-            , button [ onClick BlurClicked ] [ text "Blur the Input!" ]
-            , button [ onClick FindTheViewportClicked ] [ text "Find the Viewport of the blue box!" ]
-            , button [ onClick FindTheElementClicked ] [ text "Find the Element size of the blue box!" ]
-            , button [ onClick SetViewportOfElementClicked ] [ text "Set the viewport of the Element" ]
-            , button [ onClick ScrollTopClicked ] [ text "Scroll Top" ]
+            [ button [ onClick FocusClicked ] [ text "Focus the Input" ]
+            , button [ onClick BlurClicked ] [ text "Blur the Input" ]
+            ]
+        , div [ class "buttons" ]
+            [ button [ onClick SetViewportOfElementClicked ] [ text "Scroll top of the scroll box" ]
+            , button [ onClick ScrollTopClicked ] [ text "Scroll Window to Top" ]
+            ]
+        , div [ class "buttons" ]
+            [ button [ onClick GetBoxViewportClicked ] [ text "Get Viewport of the blue box" ]
+            , button [ onClick GetWindowViewportClicked ] [ text "Get Window Viewport" ]
+            , button [ onClick GetElementClicked ] [ text "Get Element size of the blue box" ]
             ]
         ]
 
@@ -238,7 +261,20 @@ showViewport model =
 
         Just vp ->
             div []
-                [ div [] [ text "Found viewport!" ]
+                [ div [] [ text "Found blue box viewport!" ]
+                , div [] [ text (Debug.toString vp) ]
+                ]
+
+
+showWindowViewport : Model -> Html msg
+showWindowViewport model =
+    case model.foundWindowViewport of
+        Nothing ->
+            text ""
+
+        Just vp ->
+            div []
+                [ div [] [ text "Found window viewport!" ]
                 , div [] [ text (Debug.toString vp) ]
                 ]
 
@@ -251,6 +287,6 @@ showElement model =
 
         Just vp ->
             div []
-                [ div [] [ text "Found element!" ]
+                [ div [] [ text "Found blue box element size!" ]
                 , div [] [ text (Debug.toString vp) ]
                 ]
