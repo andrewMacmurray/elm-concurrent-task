@@ -3,6 +3,7 @@ module Integration.Spec exposing
     , Expect
     , Spec
     , assertAll
+    , assertErrors
     , assertSuccess
     , describe
     , duration
@@ -58,6 +59,13 @@ assertSuccess f task =
     task
         |> Task.map f
         |> Task.mapError (\e -> Fail ("The Task returned an error: " ++ Debug.toString e))
+
+
+assertErrors : (x -> Expect) -> ConcurrentTask x a -> ConcurrentTask Expect Expect
+assertErrors f task =
+    task
+        |> Task.mapError f
+        |> Task.map (\a -> Fail ("The Task was expected to fail but didn't, got: " ++ Debug.toString a))
 
 
 assertAll : List Expect -> Expect

@@ -12,7 +12,25 @@ specs =
     [ batchAndSequenceSpeedTest
     , responseTest
     , largeBatchSpec
+    , httpTimeoutSpec
     ]
+
+
+httpTimeoutSpec : Spec
+httpTimeoutSpec =
+    Spec.describe
+        "http timeout"
+        "handles http timeouts"
+        (Http.get
+            { url = waitThenRespond 10000
+            , headers = []
+            , expect = Http.expectWhatever
+            , timeout = Just 100
+            }
+        )
+        (Spec.assertErrors
+            (Spec.shouldEqual Http.Timeout)
+        )
 
 
 largeBatchSpec : Spec
@@ -153,8 +171,18 @@ join5 a b c d e =
 longRequest : Int -> ConcurrentTask Http.Error String
 longRequest ms =
     Http.get
-        { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
+        { url = waitThenRespond ms
         , headers = []
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
+
+
+waitThenRespond : Int -> String
+waitThenRespond ms =
+    baseUrl ++ "/wait-then-respond/" ++ String.fromInt ms
+
+
+baseUrl : String
+baseUrl =
+    "http://localhost:4000"
