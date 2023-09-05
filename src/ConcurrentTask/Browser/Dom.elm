@@ -28,22 +28,22 @@ The JavaScript runner has these tasks builtin by default. There shouldn't be muc
     });
 
 
-# Focus
+# Focus Tasks
 
 @docs focus, blur
 
 
-# Get Viewport
+# Get Viewport Tasks
 
 @docs getViewport, getViewportOf
 
 
-# Set Viewport
+# Set Viewport Tasks
 
 @docs setViewport, setViewportOf
 
 
-# Position
+# Position Tasks
 
 @docs getElement
 
