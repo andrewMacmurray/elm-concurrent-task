@@ -1,5 +1,5 @@
-module Concurrent.Task.Http exposing
-    ( request
+module ConcurrentTask.Http exposing
+    ( request, get, post
     , Body, emptyBody, stringBody, jsonBody
     , Expect, expectJson, expectString, expectWhatever
     , Header, header
@@ -13,42 +13,45 @@ Internally It uses the [fetch api](https://developer.mozilla.org/en-US/docs/Web/
 
 If needed you can supply a custom implementation like so:
 
-    Tasks.register({
+    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
+    import { HttpRequest, HttpResponse } from "@andrewMacmurray/elm-concurrent-task"
+
+    ConcurrentTask.register({
       tasks: {},
       ports: app.ports,
       builtins: {
-        http: (request) => customHttp(request),
+        http: customRequest
       },
     });
 
-See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/fetch.ts) to see how to create your own.
+    function customRequest(req: HttpRequest): Promise<HttpResponse> {
+      return ...<Your Custom Http Request>
+    }
+
+See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/http/fetch.ts) to see how to create your own.
 
 **Note:**
 
-You're not required to use this module for http requests in `Concurrent.Task`, it's here for convenience.
+You're not required to use this module for http requests in `ConcurrentTask`, it's here for convenience.
 You could create entirely your own from scratch - maybe you want an http package with request caching or special retry logic built in on the JS side.
 
 
-# Request
+# Requests
 
-@docs request
+@docs request, get, post
 
 
 # Body
-
-Send data in your http request.
 
 @docs Body, emptyBody, stringBody, jsonBody
 
 
 # Expect
 
-Describe what you expect to be returned in an http response body.
-
 @docs Expect, expectJson, expectString, expectWhatever
 
 
-# Header
+# Headers
 
 @docs Header, header
 
@@ -59,7 +62,7 @@ Describe what you expect to be returned in an http response body.
 
 -}
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -69,13 +72,15 @@ import Json.Encode as Encode
 -- Http Task
 
 
-{-| -}
+{-| Send data in your http request.
+-}
 type Body
     = EmptyBody
     | StringBody String String
 
 
-{-| -}
+{-| Describe what you expect to be returned in an http response body.
+-}
 type Expect a
     = ExpectJson (Decoder a)
     | ExpectString (Decoder a)
@@ -93,9 +98,13 @@ type alias Header =
   - `BadUrl` means you did not provide a valid URL.
   - `Timeout` means it took too long to get a response.
   - `NetworkError` means the user turned off their wifi, went in a cave, etc.
-  - `BadStatus` means you got a response back, but the status code indicates failure.
-  - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected.
-    The String in this case is a debugging message that explains what went wrong with your JSON decoder or whatever.
+  - `BadStatus` means you got a response back, but the status code indicates failure. Contains:
+      - The response `Metadata`.
+      - The raw response body as a `Json.Decode.Value`.
+  - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected. Contains:
+      - The response `Metadata`.
+      - The raw response body as a `Json.Decode.Value`.
+      - The `Json.Decode.Error` that caused the error.
 
 -}
 type Error
@@ -103,7 +112,7 @@ type Error
     | Timeout
     | NetworkError
     | BadStatus Metadata Decode.Value
-    | BadBody String
+    | BadBody Metadata Decode.Value Decode.Error
 
 
 {-| Extra information about the response:
@@ -226,23 +235,56 @@ request :
     , expect : Expect a
     , timeout : Maybe Int
     }
-    -> Task Error a
+    -> ConcurrentTask Error a
 request r =
-    Task.define
+    ConcurrentTask.define
         { function = "builtin:http"
-        , expect = Task.expectJson (decodeExpect r.expect)
-        , errors = Task.expectErrors (decodeError r)
+        , expect = ConcurrentTask.expectJson (decodeExpect r.expect)
+        , errors = ConcurrentTask.expectErrors (decodeError r)
         , args = encode r
         }
-        |> Task.andThen Task.fromResult
-        |> Task.onResponseDecoderFailure wrapError
+        |> ConcurrentTask.andThen ConcurrentTask.fromResult
 
 
-wrapError : Decode.Error -> Task Error a
-wrapError =
-    Decode.errorToString
-        >> BadBody
-        >> Task.fail
+{-| Send an Http `GET` request
+-}
+get :
+    { url : String
+    , headers : List Header
+    , expect : Expect a
+    , timeout : Maybe Int
+    }
+    -> ConcurrentTask Error a
+get options =
+    request
+        { url = options.url
+        , method = "GET"
+        , headers = options.headers
+        , body = emptyBody
+        , expect = options.expect
+        , timeout = options.timeout
+        }
+
+
+{-| Send an Http `POST` request
+-}
+post :
+    { url : String
+    , headers : List Header
+    , body : Body
+    , expect : Expect a
+    , timeout : Maybe Int
+    }
+    -> ConcurrentTask Error a
+post options =
+    request
+        { url = options.url
+        , method = "POST"
+        , headers = options.headers
+        , body = options.body
+        , expect = options.expect
+        , timeout = options.timeout
+        }
 
 
 decodeError : Request a -> Decoder Error
@@ -260,10 +302,6 @@ decodeError r =
                     "BAD_URL" ->
                         Decode.succeed (BadUrl r.url)
 
-                    "BAD_BODY" ->
-                        Decode.field "message" Decode.string
-                            |> Decode.map BadBody
-
                     _ ->
                         Decode.fail ("Unknown error code: " ++ code)
             )
@@ -271,13 +309,13 @@ decodeError r =
 
 decodeExpect : Expect a -> Decoder (Result Error a)
 decodeExpect expect =
-    Decode.field "status" Decode.int
+    decodeMetadata
         |> Decode.andThen
-            (\code ->
-                if code >= 200 && code < 300 then
+            (\meta ->
+                if meta.statusCode >= 200 && meta.statusCode < 300 then
                     case expect of
                         ExpectJson decoder ->
-                            Decode.field "body" (Decode.map Ok decoder)
+                            Decode.field "body" (decodeJsonBody decoder meta)
 
                         ExpectString decoder ->
                             Decode.field "body" (Decode.map Ok decoder)
@@ -286,23 +324,36 @@ decodeExpect expect =
                             Decode.field "body" (Decode.map Ok decoder)
 
                 else
-                    Decode.map4
-                        (\url text body headers ->
-                            Err
-                                (BadStatus
-                                    { url = url
-                                    , statusCode = code
-                                    , statusText = text
-                                    , headers = headers
-                                    }
-                                    body
-                                )
-                        )
-                        (Decode.field "url" Decode.string)
-                        (Decode.field "statusText" Decode.string)
-                        (Decode.field "body" Decode.value)
-                        (Decode.field "headers" (Decode.dict Decode.string))
+                    withBodyValue (\body -> Err (BadStatus meta body))
             )
+
+
+decodeMetadata : Decoder Metadata
+decodeMetadata =
+    Decode.map4 Metadata
+        (Decode.field "url" Decode.string)
+        (Decode.field "statusCode" Decode.int)
+        (Decode.field "statusText" Decode.string)
+        (Decode.field "headers" (Decode.dict Decode.string))
+
+
+decodeJsonBody : Decoder a -> Metadata -> Decoder (Result Error a)
+decodeJsonBody decoder meta =
+    Decode.string
+        |> Decode.andThen
+            (\res ->
+                case Decode.decodeString decoder res of
+                    Ok a ->
+                        Decode.succeed (Ok a)
+
+                    Err e ->
+                        withBodyValue (\body -> Err (BadBody meta body e))
+            )
+
+
+withBodyValue : (Decode.Value -> a) -> Decoder a
+withBodyValue decode =
+    Decode.map decode (Decode.field "body" Decode.value)
 
 
 
@@ -313,7 +364,7 @@ encode : Request a -> Encode.Value
 encode r =
     Encode.object
         [ ( "url", Encode.string r.url )
-        , ( "method", Encode.string r.method )
+        , ( "method", Encode.string (String.toUpper r.method) )
         , ( "headers", encodeHeaders r.body r.headers )
         , ( "expect", encodeExpect r.expect )
         , ( "body", encodeBody r.body )

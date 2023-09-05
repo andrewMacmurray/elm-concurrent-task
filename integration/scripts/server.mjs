@@ -13,9 +13,18 @@ app.get("/wait-then-respond/:time", (req, res) => {
   }, parseInt(req.params.time));
 });
 
-app.get("/boom", (req, res) => {
+app.post("/echo", (req, res) => {
+  console.log(req.body, req.headers);
+  res.send(req.body);
+});
+
+app.get("/boom", (_, res) => {
   res.status(400);
   res.send({ message: "error" });
+});
+
+app.get("/malformed", (_, res) => {
+  res.send("{ 'invalid': 'json");
 });
 
 app.listen(PORT, () => {

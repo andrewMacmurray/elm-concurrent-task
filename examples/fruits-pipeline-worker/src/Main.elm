@@ -8,8 +8,8 @@ import Common.Encode as Encode
 import Common.Env as Env
 import Common.Logger as Logger
 import Common.Uuid as Uuid exposing (Uuid)
-import Concurrent.Task as Task exposing (Task)
-import Concurrent.Task.Time
+import ConcurrentTask as Task exposing (ConcurrentTask)
+import ConcurrentTask.Time
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Time
@@ -75,7 +75,7 @@ type alias Env =
     }
 
 
-withEnv : (Env -> Task Error a) -> Task Error a
+withEnv : (Env -> ConcurrentTask Error a) -> ConcurrentTask Error a
 withEnv f =
     Env.load envParser
         |> Task.mapError EnvError
@@ -108,7 +108,7 @@ init _ =
     )
 
 
-startTask : { pool : Pool, task : Env -> SQS.Message -> Task ProcessError Output } -> ( Pool, Cmd Msg )
+startTask : { pool : Pool, task : Env -> SQS.Message -> ConcurrentTask ProcessError Output } -> ( Pool, Cmd Msg )
 startTask { pool, task } =
     Task.attempt
         { send = send
@@ -127,10 +127,10 @@ update msg model =
     case msg of
         OnComplete result ->
             case result of
-                Task.RunnerError err ->
-                    ( model, printError ("Runner Error " ++ Debug.toString err) )
+                Task.UnexpectedError err ->
+                    ( model, printError ("Unexpected Error " ++ Debug.toString err) )
 
-                Task.TaskError (EnvError e) ->
+                Task.Error (EnvError e) ->
                     ( model, printError (Env.printError e) )
 
                 _ ->
@@ -193,7 +193,7 @@ type ProcessError
   - Notifies saved harvests via SNS.
 
 -}
-processOrchards : Env -> SQS.Message -> Task ProcessError ()
+processOrchards : Env -> SQS.Message -> ConcurrentTask ProcessError ()
 processOrchards env message =
     decodeMessage message.body
         |> Task.andThen (Logger.withInfo "getting orchards from bucket.." << getFromBucket)
@@ -209,7 +209,7 @@ successMessage harvests =
     "success! harvested " ++ numberOf harvests ++ " orchards."
 
 
-notifySavedHarvests : Env -> List String -> Task ProcessError (List String)
+notifySavedHarvests : Env -> List String -> ConcurrentTask ProcessError (List String)
 notifySavedHarvests env harvests =
     SNS.publish
         { topicName = env.outTopic
@@ -229,21 +229,21 @@ encodeSavedHarvestMessage harvests =
         )
 
 
-saveHarvests : Env -> ( Time.Posix, List Harvest ) -> Task ProcessError (List String)
+saveHarvests : Env -> ( Time.Posix, List Harvest ) -> ConcurrentTask ProcessError (List String)
 saveHarvests env ( time, harvests ) =
     harvests
         |> List.map (saveHarvest env time)
         |> Task.batch
 
 
-saveHarvest : Env -> Time.Posix -> Harvest -> Task ProcessError String
+saveHarvest : Env -> Time.Posix -> Harvest -> ConcurrentTask ProcessError String
 saveHarvest env time harvest =
     Uuid.generate
         |> Task.andThen (saveHarvest_ env time harvest)
         |> Task.mapError SaveHarvestFailed
 
 
-saveHarvest_ : Env -> Time.Posix -> Harvest -> Uuid -> Task S3.Error String
+saveHarvest_ : Env -> Time.Posix -> Harvest -> Uuid -> ConcurrentTask S3.Error String
 saveHarvest_ env time harvest id =
     let
         key : String
@@ -265,9 +265,9 @@ harvestFilePath id time harvest =
         ]
 
 
-harvestOrchards : List Orchard -> Task x ( Time.Posix, List Harvest )
+harvestOrchards : List Orchard -> ConcurrentTask x ( Time.Posix, List Harvest )
 harvestOrchards orchards =
-    Concurrent.Task.Time.now
+    ConcurrentTask.Time.now
         |> Task.map (toHarvests orchards)
 
 
@@ -301,14 +301,14 @@ harvestOrchard time orchard =
             }
 
 
-decodeOrchards : String -> Task ProcessError (List Orchard)
+decodeOrchards : String -> ConcurrentTask ProcessError (List Orchard)
 decodeOrchards =
     Decode.decodeJsonl decodeTodo
         >> Result.mapError DecodeOrchardsFailed
         >> Task.fromResult
 
 
-getFromBucket : MessageBody -> Task ProcessError String
+getFromBucket : MessageBody -> ConcurrentTask ProcessError String
 getFromBucket body =
     Task.mapError GetFromBucketFailed
         (S3.getObject
@@ -318,7 +318,7 @@ getFromBucket body =
         )
 
 
-decodeMessage : String -> Task ProcessError MessageBody
+decodeMessage : String -> ConcurrentTask ProcessError MessageBody
 decodeMessage =
     Decode.decodeString decodeMessageBody
         >> Result.mapError DecodeMessageFailed
@@ -374,12 +374,12 @@ decodeYield =
 -- SQS
 
 
-processMessagesWith : (Env -> SQS.Message -> Task ProcessError a) -> Task Error Output
+processMessagesWith : (Env -> SQS.Message -> ConcurrentTask ProcessError a) -> ConcurrentTask Error Output
 processMessagesWith fn =
     withEnv (processMessagesWith_ fn)
 
 
-processMessagesWith_ : (Env -> SQS.Message -> Task ProcessError a) -> Env -> Task Error Output
+processMessagesWith_ : (Env -> SQS.Message -> ConcurrentTask ProcessError a) -> Env -> ConcurrentTask Error Output
 processMessagesWith_ fn env =
     Logger.info "polling for new messages.."
         |> Task.andThenDo
@@ -395,7 +395,7 @@ processMessagesWith_ fn env =
         |> Task.return ()
 
 
-processMessage : (Env -> SQS.Message -> Task ProcessError a) -> Env -> SQS.Message -> Task Error ()
+processMessage : (Env -> SQS.Message -> ConcurrentTask ProcessError a) -> Env -> SQS.Message -> ConcurrentTask Error ()
 processMessage processFn env msg =
     processFn env msg
         |> Task.mapError ProcessingError
@@ -412,12 +412,12 @@ processedMessage xs =
     "poll complete - processed " ++ numberOf xs ++ " messages"
 
 
-sqsReceiveMessages : SQS.ReceiveMessage -> Task Error (List SQS.Message)
+sqsReceiveMessages : SQS.ReceiveMessage -> ConcurrentTask Error (List SQS.Message)
 sqsReceiveMessages =
     SQS.receiveMessage >> Task.mapError SQSPollingError
 
 
-sqsDeleteMessage : SQS.DeleteMessage -> Task Error ()
+sqsDeleteMessage : SQS.DeleteMessage -> ConcurrentTask Error ()
 sqsDeleteMessage =
     SQS.deleteMessage >> Task.mapError SQSPollingError
 

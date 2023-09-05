@@ -1,7 +1,7 @@
 port module Main exposing (main)
 
-import Concurrent.Task as Task exposing (Task)
-import Concurrent.Task.Http as Http
+import ConcurrentTask as Task exposing (ConcurrentTask)
+import ConcurrentTask.Http as Http
 import Json.Decode as Decode exposing (Decoder)
 
 
@@ -69,7 +69,7 @@ init _ =
 -- Requests
 
 
-longRequestChain : Task Error Output
+longRequestChain : ConcurrentTask Error Output
 longRequestChain =
     Task.map3 join3
         (longRequest 100)
@@ -104,25 +104,21 @@ longRequestChain =
         |> Task.return "Completed Http Requests"
 
 
-longRequest : Int -> Task Http.Error String
+longRequest : Int -> ConcurrentTask Http.Error String
 longRequest ms =
-    Http.request
+    Http.get
         { url = "http://localhost:4000/wait-then-respond/" ++ String.fromInt ms
-        , method = "GET"
         , headers = []
-        , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
 
 
-httpError : Task Http.Error String
+httpError : ConcurrentTask Http.Error String
 httpError =
-    Http.request
+    Http.get
         { url = "http://localhost:4000/boom"
-        , method = "GET"
         , headers = []
-        , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
@@ -142,7 +138,7 @@ update msg model =
     case msg of
         OnComplete result ->
             case result of
-                Task.TaskError Http.NetworkError ->
+                Task.Error Http.NetworkError ->
                     ( model, printResult "NetworkError: make sure the local dev server is running - `npm run server`" )
 
                 _ ->

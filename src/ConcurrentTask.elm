@@ -1,13 +1,14 @@
-module Concurrent.Task exposing
-    ( Task, define
+module ConcurrentTask exposing
+    ( ConcurrentTask, define
     , Expect, expectJson, expectString, expectWhatever
-    , Errors, expectThrows, expectErrors, catchAll, onResponseDecoderFailure
+    , Errors, expectThrows, expectErrors, catchAll
+    , onResponseDecoderFailure, onJsException
     , mapError, onError
     , succeed, fail, andThen
     , fromResult, andThenDo, return
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , attempt, Response(..), RunnerError(..), onProgress, Pool, pool
+    , attempt, Response(..), UnexpectedError(..), onProgress, Pool, pool
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -24,24 +25,19 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-  - [`Http.request`](Concurrent-Task-Http)
-  - [`Process.sleep`](Concurrent-Task-Process)
-  - [`Random.generate`](Concurrent-Task-Random)
-  - [`Time.now`](Concurrent-Task-Time)
+  - [`Browser.Dom`](ConcurrentTask-Browser-Dom)
+  - [`Http`](ConcurrentTask-Http)
+  - [`Process`](ConcurrentTask-Process)
+  - [`Random`](ConcurrentTask-Random)
+  - [`Time`](ConcurrentTask-Time)
 
 
-# Tasks
+# Concurrent Tasks
 
-A `Task` represents an asynchronous unit of work with the possibility of failure.
-
-Underneath, each task represents a call to a JavaScript function and the runner handles batching and sequencing the calls.
-
-@docs Task, define
+@docs ConcurrentTask, define
 
 
 # Expectations
-
-Decode the response of a JS function into an Elm value.
 
 @docs Expect, expectJson, expectString, expectWhatever
 
@@ -53,42 +49,52 @@ Decode the response of a JS function into an Elm value.
 
 ## Understanding Errors
 
-`Concurrent.Task` has two main kinds of `Errors`:
+`ConcurrentTask` has two main kinds of `Errors`:
 
 
-## TaskError
+## Error
 
-This is the `x` in the `Task x a` and represents an **expected error** as part of your task flow.
-You can handle these with [mapError](Concurrent-Task#mapError) and [onError](Concurrent-Task#onError).
+This is the `x` in the `ConcurrentTask x a` and represents an **expected error** as part of your task flow.
+You can handle these with [mapError](ConcurrentTask#mapError) and [onError](ConcurrentTask#onError).
 
 
-## RunnerError
+## UnexpectedError
 
 You can think of these as **unhandled** errors that are not a normal part of your task flow.
 
-The idea behind `RunnerError` is to keep your task flow types `Task x a` clean and meaningful,
-and optionally lift some of them into your `TaskError` type where it makes sense
+The idea behind `UnexpectedError` is to keep your task flow types `ConcurrentTask x a` clean and meaningful,
+and optionally lift some of them into your `Error` type where it makes sense
 
-See the section on [RunnerError](Concurrent-Task#RunnerError)s for more details.
-
-
-## Handling Runner Errors
-
-Some of these can be captured as regular `TaskErrors` (The `x` in `Task x a`) using handlers:
-
-  - `UnhandledJsException` - can be converted into a regular `TaskError` with [expectThrows](Concurrent-Task#expectThrows).
-  - `UnhandledJsException` - can be converted into a `Success` with [catchAll](Concurrent-Task#catchAll).
-  - `ResponseDecoderFailure` - can be lifted into regular task flow with [onResponseDecoderFailure](Concurrent-Task#onResponseDecoderFailure).
+See the section on [UnexpectedError](ConcurrentTask#UnexpectedError)s for more details.
 
 
-## Fatal Errors
+## Handling Unexpected Errors
 
-Some `RunnerError`s cannot be caught, these are assumed to have no meaningful way to recover from:
+Some of these can be captured as regular `Errors` (The `x` in `ConcurrentTask x a`) using handlers and hooks:
+
+  - `UnhandledJsException` can be:
+      - converted into a regular `Error` with [expectThrows](ConcurrentTask#expectThrows).
+      - converted into a `Success` with [catchAll](ConcurrentTask#catchAll).
+      - lifted into regular task flow with [onJsException](ConcurrentTask#onJsException).
+  - `ResponseDecoderFailure` can be:
+      - lifted into regular task flow with [onResponseDecoderFailure](ConcurrentTask#onResponseDecoderFailure).
+
+
+## Un-catchable Errors
+
+Some `UnexpectedError`s cannot be caught, these are assumed to have no meaningful way to recover from:
 
   - `MissingFunction` will always be thrown if there is a mismatch between JS and Elm function names.
-  - `ErrorsDecoderFailure` will always be thrown if a returned error didn't match a provided [expectErrors](Concurrent-Task#expectErrors) decoder.
+  - `ErrorsDecoderFailure` will always be thrown if a returned error didn't match a provided [expectErrors](ConcurrentTask#expectErrors) decoder.
 
-@docs Errors, expectThrows, expectErrors, catchAll, onResponseDecoderFailure
+@docs Errors, expectThrows, expectErrors, catchAll
+
+
+# Error Hooks
+
+Lift `UnexpectedError`s into regular task flow.
+
+@docs onResponseDecoderFailure, onJsException
 
 
 # Transforming Errors
@@ -108,7 +114,7 @@ These are some general helpers that can make chaining and combining tasks more c
 @docs fromResult, andThenDo, return
 
 
-# Bulk Helpers
+# Batch Helpers
 
 When you need to combine many tasks together.
 
@@ -142,14 +148,14 @@ Here's a minimal complete example:
         , album : String
         }
 
-    getAllTitles : Task Http.Error Titles
+    getAllTitles : ConcurrentTask Http.Error Titles
     getAllTitles =
         Task.map3 Titles
             (getTitle "/todos/1")
             (getTitle "/posts/1")
             (getTitle "/albums/1")
 
-    getTitle : String -> Task Http.Error String
+    getTitle : String -> ConcurrentTask Http.Error String
     getTitle path =
         Http.request
             { url = "https://jsonplaceholder.typicode.com" ++ path
@@ -164,23 +170,23 @@ Here's a minimal complete example:
 
     port module Example exposing (main)
 
-    import Concurrent.Task as Task exposing (Task)
-    import Concurrent.Task.Http as Http
+    import ConcurrentTask exposing (ConcurrentTask)
+    import ConcurrentTask.Http as Http
     import Json.Decode as Decode
 
     type alias Model =
-        { tasks : Task.Pool Msg Http.Error Titles
+        { tasks : ConcurrentTask.Pool Msg Http.Error Titles
         }
 
     type Msg
-        = OnProgress ( Task.Pool Msg Http.Error Titles, Cmd Msg )
-        | OnComplete (Task.Response Http.Error Titles)
+        = OnProgress ( ConcurrentTask.Pool Msg Http.Error Titles, Cmd Msg )
+        | OnComplete (ConcurrentTask.Response Http.Error Titles)
 
     init : ( Model, Cmd Msg )
     init =
         let
             ( tasks, cmd ) =
-                Task.attempt
+                ConcurrentTask.attempt
                     { send = send
                     , pool = Task.pool
                     , onComplete = OnComplete
@@ -204,7 +210,7 @@ Here's a minimal complete example:
 
     subscriptions : Model -> Sub Msg
     subscriptions model =
-        Task.onProgress
+        ConcurrentTask.onProgress
             { send = send
             , receive = receive
             , onProgress = OnProgress
@@ -223,25 +229,29 @@ Here's a minimal complete example:
             , subscriptions = subscriptions
             }
 
-@docs attempt, Response, RunnerError, onProgress, Pool, pool
+@docs attempt, Response, UnexpectedError, onProgress, Pool, pool
 
 -}
 
-import Concurrent.Internal.Task as Internal
+import ConcurrentTask.Internal.Task as Internal
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
 
--- Tasks
+-- Concurrent Tasks
 
 
-{-| -}
-type alias Task x a =
-    Internal.Task x a
+{-| A `ConcurrentTask` represents an asynchronous unit of work with the possibility of failure.
+
+Underneath, each task represents a call to a JavaScript function and the runner handles batching and sequencing the calls.
+
+-}
+type alias ConcurrentTask x a =
+    Internal.ConcurrentTask x a
 
 
-{-| Define a `Task` from an external JavaScript function with:
+{-| Define a `ConcurrentTask` from an external JavaScript function with:
 
   - The `name` of the registered function you want to call.
   - What you `expect` to come back from the function when it returns.
@@ -252,30 +262,30 @@ Say you wanted to interact with the node filesystem:
 
 Define your task in `Elm`:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
     import Json.Encode as Encode
 
     type Error
         = Error String
 
-    readFile : String -> Task Error String
+    readFile : String -> ConcurrentTask Error String
     readFile path =
-        Task.define
+        ConcurrentTask.define
             { function = "fs:readFile"
-            , expect = Task.expectString
-            , errors = Task.expectThrows Error
+            , expect = ConcurrentTask.expectString
+            , errors = ConcurrentTask.expectThrows Error
             , args = Encode.object [ ( "path", Encode.string path ) ]
             }
 
 And in your `JavaScript` runner:
 
     import * as fs from "node:fs/promises"
-    import * as Tasks from "@andrewMacmurray/elm-concurrent-task";
+    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task";
 
 
     const app = Elm.Main.init({});
 
-    Tasks.register({
+    ConcurrentTask.register({
       tasks: {
         "fs:readFile": (args) => fs.readFile(args.path),
       },
@@ -304,7 +314,7 @@ define :
     , errors : Errors x a
     , args : Encode.Value
     }
-    -> Task x a
+    -> ConcurrentTask x a
 define =
     Internal.define
 
@@ -313,7 +323,8 @@ define =
 -- Expectations
 
 
-{-| -}
+{-| Decode the response of a JS function into an Elm value.
+-}
 type alias Expect a =
     Internal.Expect a
 
@@ -343,7 +354,7 @@ expectWhatever =
 -- Errors
 
 
-{-| A handler passed to `Task.define`.
+{-| A handler passed to `ConcurrentTask.define`.
 -}
 type alias Errors x a =
     Internal.Errors x a
@@ -353,17 +364,17 @@ type alias Errors x a =
 
 Maybe your JS function throws an `AccessError`:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
 
     type Error
         = MyError String
 
-    example : Task Error String
+    example : ConcurrentTask Error String
     example =
-        Task.define
+        ConcurrentTask.define
             { function = "functionThatThrows"
-            , expect = Task.expectString
-            , errors = Task.expectThrows MyError
+            , expect = ConcurrentTask.expectString
+            , errors = ConcurrentTask.expectThrows MyError
             , args = Encode.null
             }
 
@@ -402,7 +413,7 @@ This will decode the value from an `error` key returned by a JS function, e.g.:
 
 Maybe you want to handle different kinds of errors when writing to `localStorage`:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
     import Json.Decode as Decode
     import Json.Encode as Encode
 
@@ -412,10 +423,10 @@ Maybe you want to handle different kinds of errors when writing to `localStorage
 
     set : String -> String -> Task WriteError ()
     set key value =
-        Task.define
+        ConcurrentTask.define
             { function = "storage:set"
-            , expect = Task.expectWhatever
-            , errors = Task.expectErrors decodeWriteError
+            , expect = ConcurrentTask.expectWhatever
+            , errors = ConcurrentTask.expectErrors decodeWriteError
             , args =
                 Encode.object
                     [ ( "key", Encode.string key )
@@ -441,7 +452,7 @@ Maybe you want to handle different kinds of errors when writing to `localStorage
 
 And on the JS side:
 
-    Tasks.register({
+    ConcurrentTask.register({
       tasks: {
         "storage:set": (args) => setItem(args),
       },
@@ -480,20 +491,20 @@ Only use this handler for functions that can't fail.
 
 e.g. logging to the console:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
 
-    log : String -> Task x ()
+    log : String -> ConcurrentTask x ()
     log msg =
-        Task.define
+        ConcurrentTask.define
             { function = "console:log"
-            , expect = Task.expectWhatever ()
-            , errors = Task.catchAll ()
+            , expect = ConcurrentTask.expectWhatever ()
+            , errors = ConcurrentTask.catchAll ()
             , args = Encode.string msg
             }
 
 On the JS side:
 
-    Tasks.register({
+    ConcurrentTask.register({
       tasks: {
         "console:log": (msg) => console.log(msg),
       },
@@ -513,7 +524,7 @@ catchAll =
 
 Maybe you want to represent an unexpected response as a `BadBody` error for a http request:
 
-    import Concurrent.Task as Task
+    import ConcurrentTask exposing (ConcurrentTask)
 
     type Error
         = Timeout
@@ -522,20 +533,30 @@ Maybe you want to represent an unexpected response as a `BadBody` error for a ht
         | BadUrl String
         | BadBody Decode.Error
 
-    request : Request a -> Task Error a
+    request : Request a -> ConcurrentTask Error a
     request options =
-        Task.define
+        ConcurrentTask.define
             { function = "http:request"
-            , expect = Task.expectJson options.expect
-            , errors = Task.expectErrors decodeHttpErrors
+            , expect = ConcurrentTask.expectJson options.expect
+            , errors = ConcurrentTask.expectErrors decodeHttpErrors
             , args = encodeArgs options
             }
-            |> Task.onResponseDecoderFailure (BadBody >> Task.fail)
+            |> ConcurrentTask.onResponseDecoderFailure (BadBody >> Task.fail)
 
 -}
-onResponseDecoderFailure : (Decode.Error -> Task x a) -> Task x a -> Task x a
+onResponseDecoderFailure : (Decode.Error -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
 onResponseDecoderFailure =
     Internal.onResponseDecoderFailure
+
+
+{-| Use this hook if you want access to the raw JsException to lift it into the task flow
+-}
+onJsException :
+    ({ message : String, raw : Decode.Value } -> ConcurrentTask x a)
+    -> ConcurrentTask x a
+    -> ConcurrentTask x a
+onJsException =
+    Internal.onJsException
 
 
 
@@ -544,14 +565,14 @@ onResponseDecoderFailure =
 
 {-| A Task that succeeds immediately when it's run.
 -}
-succeed : a -> Task x a
+succeed : a -> ConcurrentTask x a
 succeed =
     Internal.succeed
 
 
 {-| A Task that fails immediately when it's run.
 -}
-fail : x -> Task x a
+fail : x -> ConcurrentTask x a
 fail =
     Internal.fail
 
@@ -560,17 +581,17 @@ fail =
 
 Maybe you want to do a timestamped Http request
 
-    import Concurrent.Task as Task exposing (Task)
-    import Concurrent.Task.Http as Http
-    import Concurrent.Task.Time
+    import ConcurrentTask exposing (ConcurrentTask)
+    import ConcurrentTask.Http as Http
+    import ConcurrentTask.Time
     import Time
 
-    task : Task Http.Error String
+    task : ConcurrentTask Http.Error String
     task =
-        Concurrent.Task.Time.now
+        ConcurrentTask.Time.now
             |> Task.andThen (createArticle "my article")
 
-    createArticle : String -> Time.Posix -> Task Http.Error String
+    createArticle : String -> Time.Posix -> ConcurrentTask Http.Error String
     createArticle title time =
         Http.request
             { url = "http://blog.com/articles"
@@ -581,7 +602,7 @@ Maybe you want to do a timestamped Http request
             }
 
 -}
-andThen : (a -> Task x b) -> Task x a -> Task x b
+andThen : (a -> ConcurrentTask x b) -> ConcurrentTask x a -> ConcurrentTask x b
 andThen =
     Internal.andThen
 
@@ -594,21 +615,21 @@ andThen =
 
 Maybe you want to chain together tasks with CSV parsing:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
     import Csv
 
-    task : Task Error CsvData
+    task : ConcurrentTask Error CsvData
     task =
-        readFile |> Task.andThen parseCsv
+        readFile |> ConcurrentTask.andThen parseCsv
 
-    parseCsv : String -> Task Error CsvData
+    parseCsv : String -> ConcurrentTask Error CsvData
     parseCsv raw =
         Csv.decode decoder raw
-            |> Task.fromResult
-            |> Task.mapError CsvError
+            |> ConcurrentTask.fromResult
+            |> ConcurrentTask.mapError CsvError
 
 -}
-fromResult : Result x a -> Task x a
+fromResult : Result x a -> ConcurrentTask x a
 fromResult =
     Internal.fromResult
 
@@ -617,14 +638,14 @@ fromResult =
 
 Maybe you want to save a file then log a message to the console:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
 
-    task : Task Error ()
+    task : ConcurrentTask Error ()
     task =
-        saveFile |> Task.andThenDo (log "file saved")
+        saveFile |> ConcurrentTask.andThenDo (log "file saved")
 
 -}
-andThenDo : Task x b -> Task x a -> Task x b
+andThenDo : ConcurrentTask x b -> ConcurrentTask x a -> ConcurrentTask x b
 andThenDo =
     Internal.andThenDo
 
@@ -633,40 +654,40 @@ andThenDo =
 
 Maybe you want to do some Tasks on a User but allow it to be chained onwards:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
 
-    saveUser : User -> Task Error User
+    saveUser : User -> ConcurrentTask Error User
     saveUser user =
         saveToDatabase user
-            |> Task.andThenDo (log "user saved")
-            |> Task.return user
+            |> ConcurrentTask.andThenDo (log "user saved")
+            |> ConcurrentTask.return user
 
 -}
-return : b -> Task x a -> Task x b
+return : b -> ConcurrentTask x a -> ConcurrentTask x b
 return =
     Internal.return
 
 
 
--- Bulk Helpers
+-- Batch Helpers
 
 
 {-| Perform a List of tasks concurrently (similar to `Promise.all()` in JavaScript) and return the results in a List.
 
-If any of the subtasks fail the whole Task will fail.
+If any of the subtasks fail the whole ConcurrentTask will fail.
 
 -}
-batch : List (Task x a) -> Task x (List a)
+batch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
 batch =
     Internal.batch
 
 
 {-| Perform a List of tasks one after the other and return the results in a List.
 
-If any of the subtasks fail the whole Task will fail.
+If any of the subtasks fail the whole ConcurrentTask will fail.
 
 -}
-sequence : List (Task x a) -> Task x (List a)
+sequence : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
 sequence =
     Internal.sequence
 
@@ -679,20 +700,20 @@ sequence =
 
 Maybe you want to find what time it is in one hour.
 
-    import Concurrent.Task as Task
-    import Concurrent.Task.Time
+    import ConcurrentTask as exposing (ConcurrentTask)
+    import ConcurrentTask.Time
     import Time
 
-    timeInOneHour : Task x Time.Posix
+    timeInOneHour : ConcurrentTask x Time.Posix
     timeInOneHour =
-        Task.map addOneHour Concurrent.Task.Time.now
+        ConcurrentTask.map addOneHour ConcurrentTask.Time.now
 
     addOneHour : Time.Posix -> Time.Posix
     addOneHour time =
         Time.millisToPosix (Time.posixToMillis time + 60 * 60 * 1000)
 
 -}
-map : (a -> b) -> Task x a -> Task x b
+map : (a -> b) -> ConcurrentTask x a -> ConcurrentTask x b
 map =
     Internal.map
 
@@ -701,7 +722,7 @@ map =
 
 Maybe you want to load multiple pieces of config into a record:
 
-    import Concurrent.Task as Task exposing (Task)
+    import ConcurrentTask exposing (ConcurrentTask)
 
     type alias Config =
         { dbConfig : DbConfig
@@ -709,31 +730,31 @@ Maybe you want to load multiple pieces of config into a record:
         , envFile : EnvFile
         }
 
-     loadConfig : Task Error Config
+     loadConfig : ConcurrentTask Error Config
      loadConfig =
-        Task.succeed Config
-            |> Task.andMap loadDbConfig
-            |> Task.andMap loadYamlConfig
-            |> Task.andMap loadEnvFile
+        ConcurrentTask.succeed Config
+            |> ConcurrentTask.andMap loadDbConfig
+            |> ConcurrentTask.andMap loadYamlConfig
+            |> ConcurrentTask.andMap loadEnvFile
 
 -}
-andMap : Task x a -> Task x (a -> b) -> Task x b
+andMap : ConcurrentTask x a -> ConcurrentTask x (a -> b) -> ConcurrentTask x b
 andMap =
     Internal.andMap
 
 
 {-| Run two tasks concurrently and combine their results.
 
-    import Concurrent.Task as Task exposing (Task)
-    import Concurrent.Task.Time
+    import ConcurrentTask exposing (ConcurrentTask)
+    import ConcurrentTask.Time
     import Time
 
-    loadUserAndTime : Task Error ( User, Time.Posix )
+    loadUserAndTime : ConcurrentTask Error ( User, Time.Posix )
     loadUserAndTime =
-        Task.map2 Tuple.pair loadUser Concurrent.Task.Time.now
+        ConcurrentTask.map2 Tuple.pair loadUser ConcurrentTask.Time.now
 
 -}
-map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
+map2 : (a -> b -> c) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c
 map2 =
     Internal.map2
 
@@ -742,10 +763,10 @@ map2 =
 -}
 map3 :
     (a -> b -> c -> d)
-    -> Task x a
-    -> Task x b
-    -> Task x c
-    -> Task x d
+    -> ConcurrentTask x a
+    -> ConcurrentTask x b
+    -> ConcurrentTask x c
+    -> ConcurrentTask x d
 map3 =
     Internal.map3
 
@@ -754,11 +775,11 @@ map3 =
 -}
 map4 :
     (a -> b -> c -> d -> e)
-    -> Task x a
-    -> Task x b
-    -> Task x c
-    -> Task x d
-    -> Task x e
+    -> ConcurrentTask x a
+    -> ConcurrentTask x b
+    -> ConcurrentTask x c
+    -> ConcurrentTask x d
+    -> ConcurrentTask x e
 map4 =
     Internal.map4
 
@@ -767,12 +788,12 @@ map4 =
 -}
 map5 :
     (a -> b -> c -> d -> e -> f)
-    -> Task x a
-    -> Task x b
-    -> Task x c
-    -> Task x d
-    -> Task x e
-    -> Task x f
+    -> ConcurrentTask x a
+    -> ConcurrentTask x b
+    -> ConcurrentTask x c
+    -> ConcurrentTask x d
+    -> ConcurrentTask x e
+    -> ConcurrentTask x f
 map5 =
     Internal.map5
 
@@ -783,14 +804,14 @@ map5 =
 
 {-| Transform the value of an Error (like `map` but for errors).
 -}
-mapError : (x -> y) -> Task x a -> Task y a
+mapError : (x -> y) -> ConcurrentTask x a -> ConcurrentTask y a
 mapError =
     Internal.mapError
 
 
 {-| If the previous Task fails, catch that error and return a new Task (like `andThen` but for errors).
 -}
-onError : (x -> Task y a) -> Task x a -> Task y a
+onError : (x -> ConcurrentTask y a) -> ConcurrentTask x a -> ConcurrentTask y a
 onError =
     Internal.onError
 
@@ -806,13 +827,13 @@ This needs:
   - A task `Pool` (The internal model to keep track of task progress).
   - The `send` port.
   - The `Msg` to be called when the task completes.
-  - Your `Task` to be run.
+  - Your `ConcurrentTask` to be run.
 
 Make sure to update your `Model` and pass in the `Cmd` returned from `attempt`. e.g. in a branch of `update`:
 
     let
         ( tasks, cmd ) =
-            Task.attempt
+            ConcurrentTask.attempt
                 { send = send
                 , pool = model.pool
                 , onComplete = OnComplete
@@ -827,7 +848,7 @@ attempt :
     , send : Decode.Value -> Cmd msg
     , onComplete : Response x a -> msg
     }
-    -> Task x a
+    -> ConcurrentTask x a
     -> ( Pool msg x a, Cmd msg )
 attempt options =
     Internal.attempt
@@ -842,22 +863,22 @@ attempt options =
 Can be either:
 
   - `Success a` - the task succeeded with no errors, woo!
-  - `TaskError x` - the task failed with an expected error.
-  - `RunnerError` - the task failed with an unexpected error (see the section on `Error Handling` for more details).
+  - `Error x` - the task failed with an expected error.
+  - `UnexpectedError` - the task failed with an unexpected error (see the section on `Error Handling` for more details).
 
 -}
 type Response x a
     = Success a
-    | TaskError x
-    | RunnerError RunnerError
+    | Error x
+    | UnexpectedError UnexpectedError
 
 
-{-| An error returned from the runner if something **unexpected** has happened during the task flow.
+{-| This error will surface if something **unexpected** has happened during the task flow.
 
 These errors will be returned **if not handled** during task flow:
 
   - `UnhandledJsException` - a task threw an exception and was not caught with an error handler (can be caught with `expectThrows` and `catchAll`).
-  - `ResponseDecoderFailure` - a task returned an unexpected response (can be caught with `onResponseDecoderFailure`).
+  - `ResponseDecoderFailure` - a task returned an unexpected response (can be caught with [onResponseDecoderFailure](ConcurrentTask#onResponseDecoderFailure)).
 
 These errors will **always surface**, as they are assumed to have no meaningful way to recover from during regular task flow:
 
@@ -866,8 +887,8 @@ These errors will **always surface**, as they are assumed to have no meaningful 
   - `InternalError` - something went wrong with the runner internals - this should not happen, but if you see this error [please leave details and an issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues/new).
 
 -}
-type RunnerError
-    = UnhandledJsException { function : String, message : String }
+type UnexpectedError
+    = UnhandledJsException { function : String, message : String, raw : Decode.Value }
     | ResponseDecoderFailure { function : String, error : Decode.Error }
     | ErrorsDecoderFailure { function : String, error : Decode.Error }
     | MissingFunction String
@@ -880,15 +901,15 @@ toResponse res =
         Internal.Success a ->
             Success a
 
-        Internal.TaskError x ->
-            TaskError x
+        Internal.Error x ->
+            Error x
 
-        Internal.RunnerError e ->
-            RunnerError (toRunnerError e)
+        Internal.UnexpectedError e ->
+            UnexpectedError (toUnexpectedError e)
 
 
-toRunnerError : Internal.RunnerError -> RunnerError
-toRunnerError err =
+toUnexpectedError : Internal.UnexpectedError -> UnexpectedError
+toUnexpectedError err =
     case err of
         Internal.UnhandledJsException e ->
             UnhandledJsException e
@@ -919,7 +940,7 @@ You can wire this in like so:
 
     subscriptions : Model -> Sub Msg
     subscriptions model =
-        Task.onProgress
+        ConcurrentTask.onProgress
             { send = send
             , receive = receive
             , onProgress = OnProgress
@@ -943,14 +964,14 @@ onProgress =
     Internal.onProgress
 
 
-{-| -}
+{-| A Pool keeps track of each task's progress,
+and allows multiple Task attempts to be in-flight at the same time.
+-}
 type alias Pool msg x a =
     Internal.Pool msg x a
 
 
-{-| Create an empty Task Pool.
-
-This is used to keep track of each Task's progress.
+{-| Create an empty ConcurrentTask Pool.
 
 Right now it doesn't expose any functionality, but it could be used in the future to do things like:
 

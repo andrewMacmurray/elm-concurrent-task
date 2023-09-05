@@ -1,5 +1,6 @@
-import * as http from "./http";
+import { HttpRequest, HttpResponse } from "./http";
 import * as fetchAdapter from "./http/fetch";
+import * as dom from "./browser/dom";
 
 export interface ElmPorts {
   send: {
@@ -8,19 +9,12 @@ export interface ElmPorts {
   receive: { send: (result: TaskResult[]) => void };
 }
 
-export interface Builtins {
-  http?: (request: http.Request) => Promise<http.Response>;
-  timeNow?: () => number;
-  randomSeed?: () => number;
-  sleep?: (ms: number) => Promise<void>;
-}
-
-export type Tasks = { [fn: string]: (any) => any };
+export type Tasks = { [fn: string]: (arg: any) => any };
 
 export interface TaskDefinition {
+  function: string;
   attemptId: string;
   taskId: string;
-  function: string;
   args: any;
 }
 
@@ -38,20 +32,58 @@ export interface Error {
   error: {
     reason: string;
     message: string;
+    raw?: any;
   };
 }
 
 // Built In Tasks
 
-const BuiltInTasks = {
-  "builtin:timeNow": () => Date.now(),
-  "builtin:sleep": (ms: number) => sleep(ms),
-  "builtin:randomSeed": () => Date.now(),
-  "builtin:http": (req) => fetchAdapter.http(req),
+export interface Builtins {
+  http?: (request: HttpRequest) => Promise<HttpResponse>;
+  timeNow?: () => number;
+  timeZoneOffset?: () => number;
+  timeZoneName?: () => string | number;
+  randomSeed?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+  domFocus?: (id: string) => void | dom.Error;
+  domBlur?: (id: string) => void | dom.Error;
+  domGetViewport?: () => dom.Viewport;
+  domGetViewportOf?: (id: string) => dom.Viewport | dom.Error;
+  domSetViewport?: (args: dom.SetViewport) => void;
+  domSetViewportOf?: (args: dom.SetViewportOf) => void | dom.Error;
+  domGetElement?: (id: string) => dom.DomElement | dom.Error;
+}
+
+const BuiltInTasks: Builtins = {
+  http: fetchAdapter.http,
+  timeNow: () => Date.now(),
+  timeZoneOffset: () => getTimezoneOffset(),
+  timeZoneName: () => getTimeZoneName(),
+  randomSeed: () => Date.now(),
+  sleep: sleep,
+  domFocus: dom.focus,
+  domBlur: dom.blur,
+  domGetViewport: dom.getViewport,
+  domGetViewportOf: dom.getViewportOf,
+  domSetViewport: dom.setViewport,
+  domSetViewportOf: dom.setViewportOf,
+  domGetElement: dom.getElement,
 };
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getTimezoneOffset(): number {
+  return -new Date().getTimezoneOffset();
+}
+
+function getTimeZoneName(): string | number {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (e) {
+    return new Date().getTimezoneOffset();
+  }
 }
 
 // Debug Options
@@ -78,10 +110,9 @@ export function register(options: Options): void {
   subscribe(async (defs) => {
     const debouncedSend = debounce(send, debounceThreshold(defs));
 
-    for (let i = 0; i < defs.length; i++) {
-      const def = defs[i];
+    for (const def of defs) {
       if (!tasks[def.function]) {
-        return debouncedSend({
+        debouncedSend({
           attemptId: def.attemptId,
           taskId: def.taskId,
           result: {
@@ -91,13 +122,14 @@ export function register(options: Options): void {
             },
           },
         });
+        break;
       }
     }
 
     defs.map(async (def) => {
       try {
         logTaskStart(def, options);
-        const result = await tasks[def.function](def.args);
+        const result = await tasks[def.function]?.(def.args);
         logTaskFinish(def, options);
         debouncedSend({
           attemptId: def.attemptId,
@@ -112,6 +144,7 @@ export function register(options: Options): void {
             error: {
               reason: "js_exception",
               message: `${e.name}: ${e.message}`,
+              raw: e,
             },
           },
         });
@@ -151,7 +184,7 @@ function debounceThreshold(defs: TaskDefinition[]): number {
 }
 
 function debounce(send: (res: TaskResult[]) => void, wait: number) {
-  let timeout;
+  let timeout: ReturnType<typeof setTimeout>;
   let results: TaskResult[] = [];
 
   return function enqueueResult(taskResult: TaskResult) {
@@ -179,18 +212,19 @@ function debounce(send: (res: TaskResult[]) => void, wait: number) {
 }
 
 function createTasks(options: Options): Tasks {
-  const tasks = { ...BuiltInTasks, ...options.tasks };
-  if (options.builtins?.http) {
-    tasks["builtin:http"] = options.builtins.http;
-  }
-  if (options.builtins?.timeNow) {
-    tasks["builtin:timeNow"] = options.builtins.timeNow;
-  }
-  if (options.builtins?.randomSeed) {
-    tasks["builtin:randomSeed"] = options.builtins.randomSeed;
-  }
-  if (options.builtins?.sleep) {
-    tasks["builtin:sleep"] = options.builtins.sleep;
-  }
-  return tasks;
+  const builtins = {
+    ...BuiltInTasks,
+    ...(options.builtins || {}),
+  };
+
+  return {
+    ...prefixWith("builtin:", builtins),
+    ...options.tasks,
+  };
+}
+
+function prefixWith(prefix: string, tasks: Tasks): Tasks {
+  return Object.fromEntries(
+    Object.entries(tasks).map(([key, fn]) => [`${prefix}${key}`, fn])
+  );
 }

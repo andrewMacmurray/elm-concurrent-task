@@ -1,5 +1,5 @@
 import { Elm } from "./Main.elm";
-import * as Tasks from "../../../src/runner";
+import * as Tasks from "../../../src-ts";
 import * as S3 from "./Aws/s3";
 import * as SQS from "./Aws/sqs";
 import * as SNS from "./Aws/sns";
@@ -27,6 +27,6 @@ Tasks.register({
   debug: { taskStart: false },
 });
 
-ports.printError.subscribe((msg) => {
+ports.printError.subscribe((msg: string) => {
   Logger.log({ level: "ERROR", message: msg });
 });

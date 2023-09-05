@@ -17,7 +17,7 @@ module Common.Env exposing
     , withDefault
     )
 
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Decode as Decode
 import Json.Encode as Encode
 
@@ -26,16 +26,16 @@ import Json.Encode as Encode
 -- Load Env
 
 
-load : Parser a -> Task Error a
+load : Parser a -> ConcurrentTask Error a
 load parser =
-    Task.define
+    ConcurrentTask.define
         { function = "env:load"
-        , expect = Task.expectJson Decode.value
-        , errors = Task.catchAll Encode.null
+        , expect = ConcurrentTask.expectJson Decode.value
+        , errors = ConcurrentTask.catchAll Encode.null
         , args = Encode.null
         }
-        |> Task.map (parse parser)
-        |> Task.andThen Task.fromResult
+        |> ConcurrentTask.map (parse parser)
+        |> ConcurrentTask.andThen ConcurrentTask.fromResult
 
 
 

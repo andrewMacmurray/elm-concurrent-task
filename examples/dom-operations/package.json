@@ -1,0 +1,15 @@
+{
+  "name": "browser",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "vite"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vite": "^4.4.9",
+    "vite-plugin-elm": "^2.8.0"
+  }
+}

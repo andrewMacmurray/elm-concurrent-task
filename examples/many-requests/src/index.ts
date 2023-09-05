@@ -1,7 +1,5 @@
 import { Elm } from "./Main.elm";
-import * as Tasks from "../../../src/runner";
-
-// App
+import * as Tasks from "../../../src-ts";
 
 const { ports } = Elm.Main.init({ flags: null });
 
@@ -14,6 +12,6 @@ Tasks.register({
   debug: { taskStart: true },
 });
 
-ports.printResult.subscribe((res) => {
-  console.log(res)
+ports.printResult.subscribe((res: string) => {
+  console.log(res);
 });

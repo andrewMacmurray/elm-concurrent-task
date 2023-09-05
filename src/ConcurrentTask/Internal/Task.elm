@@ -1,14 +1,14 @@
-module Concurrent.Internal.Task exposing
+module ConcurrentTask.Internal.Task exposing
     ( Attempt
+    , ConcurrentTask(..)
     , Errors
     , Expect
     , OnProgress
     , Pool
     , Response(..)
     , Results
-    , RunnerError(..)
-    , Task(..)
     , Task_(..)
+    , UnexpectedError(..)
     , andMap
     , andThen
     , andThenDo
@@ -30,6 +30,7 @@ module Concurrent.Internal.Task exposing
     , map5
     , mapError
     , onError
+    , onJsException
     , onProgress
     , onResponseDecoderFailure
     , pool
@@ -39,8 +40,8 @@ module Concurrent.Internal.Task exposing
     )
 
 import Array exposing (Array)
-import Concurrent.Internal.Ids as Ids exposing (Ids)
-import Concurrent.Internal.List as List
+import ConcurrentTask.Internal.Ids as Ids exposing (Ids)
+import ConcurrentTask.Internal.List
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -49,26 +50,26 @@ import Task as CoreTask
 
 
 
--- Task
+-- Concurrent Task
 
 
-type Task x a
+type ConcurrentTask x a
     = Task (Results -> Ids -> ( Ids, Task_ x a ))
 
 
 type Task_ x a
-    = Pending (Array Todo) (Task x a)
+    = Pending (Array Todo) (ConcurrentTask x a)
     | Done (Response x a)
 
 
 type Response x a
     = Success a
-    | TaskError x
-    | RunnerError RunnerError
+    | Error x
+    | UnexpectedError UnexpectedError
 
 
-type RunnerError
-    = UnhandledJsException { function : String, message : String }
+type UnexpectedError
+    = UnhandledJsException { function : String, message : String, raw : Decode.Value }
     | ResponseDecoderFailure { function : String, error : Decode.Error }
     | ErrorsDecoderFailure { function : String, error : Decode.Error }
     | MissingFunction String
@@ -150,11 +151,12 @@ type alias Definition x a =
     }
 
 
-define : Definition x a -> Task x a
+define : Definition x a -> ConcurrentTask x a
 define def =
     Task
         (\results ids ->
             let
+                taskId : TaskId
                 taskId =
                     Ids.get ids
             in
@@ -178,12 +180,12 @@ define def =
         )
 
 
-runWith : Ids -> Task x a -> Task x a
+runWith : Ids -> ConcurrentTask x a -> ConcurrentTask x a
 runWith s (Task run) =
     Task (\res _ -> run res s)
 
 
-wrap : Response x a -> Task x a
+wrap : Response x a -> ConcurrentTask x a
 wrap res =
     Task (\_ ids -> ( ids, Done res ))
 
@@ -192,7 +194,7 @@ wrap res =
 -- Maps
 
 
-map : (a -> b) -> Task x a -> Task x b
+map : (a -> b) -> ConcurrentTask x a -> ConcurrentTask x b
 map f (Task run) =
     Task
         (\result ids ->
@@ -211,7 +213,7 @@ map f (Task run) =
         )
 
 
-andMap : Task x a -> Task x (a -> b) -> Task x b
+andMap : ConcurrentTask x a -> ConcurrentTask x (a -> b) -> ConcurrentTask x b
 andMap ((Task run1) as task1) ((Task run2) as task2) =
     Task
         (\res ids ->
@@ -245,21 +247,21 @@ haltOnError res task =
         Success _ ->
             task
 
-        TaskError e ->
-            Done (TaskError e)
+        Error e ->
+            Done (Error e)
 
-        RunnerError e ->
-            Done (RunnerError e)
+        UnexpectedError e ->
+            Done (UnexpectedError e)
 
 
-map2 : (a -> b -> c) -> Task x a -> Task x b -> Task x c
+map2 : (a -> b -> c) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c
 map2 f t1 t2 =
     succeed f
         |> andMap t1
         |> andMap t2
 
 
-map3 : (a -> b -> c -> d) -> Task x a -> Task x b -> Task x c -> Task x d
+map3 : (a -> b -> c -> d) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c -> ConcurrentTask x d
 map3 f t1 t2 t3 =
     succeed f
         |> andMap t1
@@ -267,7 +269,7 @@ map3 f t1 t2 t3 =
         |> andMap t3
 
 
-map4 : (a -> b -> c -> d -> e) -> Task x a -> Task x b -> Task x c -> Task x d -> Task x e
+map4 : (a -> b -> c -> d -> e) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c -> ConcurrentTask x d -> ConcurrentTask x e
 map4 f t1 t2 t3 t4 =
     succeed f
         |> andMap t1
@@ -276,7 +278,7 @@ map4 f t1 t2 t3 t4 =
         |> andMap t4
 
 
-map5 : (a -> b -> c -> d -> e -> f) -> Task x a -> Task x b -> Task x c -> Task x d -> Task x e -> Task x f
+map5 : (a -> b -> c -> d -> e -> f) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c -> ConcurrentTask x d -> ConcurrentTask x e -> ConcurrentTask x f
 map5 f t1 t2 t3 t4 t5 =
     succeed f
         |> andMap t1
@@ -290,12 +292,12 @@ map5 f t1 t2 t3 t4 t5 =
 -- Sequence
 
 
-sequence : List (Task x a) -> Task x (List a)
+sequence : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
 sequence tasks =
     sequenceHelp tasks (succeed []) |> map List.reverse
 
 
-sequenceHelp : List (Task x a) -> Task x (List a) -> Task x (List a)
+sequenceHelp : List (ConcurrentTask x a) -> ConcurrentTask x (List a) -> ConcurrentTask x (List a)
 sequenceHelp tasks combined =
     case tasks of
         task :: rest ->
@@ -309,7 +311,7 @@ sequenceHelp tasks combined =
 -- Batch
 
 
-batch : List (Task x a) -> Task x (List a)
+batch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
 batch tasks =
     tasks
         |> miniBatchesOf 10
@@ -329,12 +331,12 @@ batch tasks =
             )
 
 
-miniBatchesOf : Int -> List (Task x a) -> List (Task x (List a))
+miniBatchesOf : Int -> List (ConcurrentTask x a) -> List (ConcurrentTask x (List a))
 miniBatchesOf n =
-    List.chunk n >> List.map doBatch
+    ConcurrentTask.Internal.List.chunk n >> List.map doBatch
 
 
-doBatch : List (Task x a) -> Task x (List a)
+doBatch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
 doBatch =
     List.foldr (map2 (::)) (succeed [])
 
@@ -343,17 +345,17 @@ doBatch =
 -- Chain Tasks
 
 
-succeed : a -> Task x a
+succeed : a -> ConcurrentTask x a
 succeed a =
     wrap (Success a)
 
 
-fail : x -> Task x a
+fail : x -> ConcurrentTask x a
 fail x =
-    wrap (TaskError x)
+    wrap (Error x)
 
 
-fromResult : Result x a -> Task x a
+fromResult : Result x a -> ConcurrentTask x a
 fromResult res =
     Task
         (\_ ids ->
@@ -364,13 +366,13 @@ fromResult res =
                         Success a
 
                     Err e ->
-                        TaskError e
+                        Error e
                 )
             )
         )
 
 
-andThen : (a -> Task x b) -> Task x a -> Task x b
+andThen : (a -> ConcurrentTask x b) -> ConcurrentTask x a -> ConcurrentTask x b
 andThen f (Task run) =
     Task
         (\res ids ->
@@ -382,30 +384,25 @@ andThen f (Task run) =
                 Done a ->
                     case a of
                         Success a_ ->
-                            unwrap res ids_ (f a_)
+                            stepTask res ( ids_, f a_ )
 
-                        TaskError e ->
-                            ( ids_, Done (TaskError e) )
+                        Error e ->
+                            ( ids_, Done (Error e) )
 
-                        RunnerError e ->
-                            ( ids, Done (RunnerError e) )
+                        UnexpectedError e ->
+                            ( ids, Done (UnexpectedError e) )
 
                 Pending defs next ->
                     ( ids_, Pending defs (andThen f next) )
         )
 
 
-unwrap : Results -> Ids -> Task x a -> ( Ids, Task_ x a )
-unwrap res ids (Task run) =
-    run res ids
-
-
-andThenDo : Task x b -> Task x a -> Task x b
+andThenDo : ConcurrentTask x b -> ConcurrentTask x a -> ConcurrentTask x b
 andThenDo t2 t1 =
     t1 |> andThen (\_ -> t2)
 
 
-return : a -> Task x b -> Task x a
+return : a -> ConcurrentTask x b -> ConcurrentTask x a
 return a =
     map (\_ -> a)
 
@@ -414,7 +411,7 @@ return a =
 -- Task Errors
 
 
-onError : (x -> Task y a) -> Task x a -> Task y a
+onError : (x -> ConcurrentTask y a) -> ConcurrentTask x a -> ConcurrentTask y a
 onError f (Task run) =
     Task
         (\res ids ->
@@ -428,18 +425,18 @@ onError f (Task run) =
                         Success a_ ->
                             ( ids_, Done (Success a_) )
 
-                        TaskError e ->
-                            unwrap res ids_ (f e)
+                        Error e ->
+                            stepTask res ( ids_, f e )
 
-                        RunnerError e ->
-                            ( ids_, Done (RunnerError e) )
+                        UnexpectedError e ->
+                            ( ids_, Done (UnexpectedError e) )
 
                 Pending defs next ->
                     ( ids_, Pending defs (onError f next) )
         )
 
 
-mapError : (x -> y) -> Task x a -> Task y a
+mapError : (x -> y) -> ConcurrentTask x a -> ConcurrentTask y a
 mapError f (Task run) =
     Task
         (\res ids ->
@@ -458,7 +455,7 @@ mapError f (Task run) =
         )
 
 
-onResponseDecoderFailure : (Decode.Error -> Task x a) -> Task x a -> Task x a
+onResponseDecoderFailure : (Decode.Error -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
 onResponseDecoderFailure f (Task run) =
     Task
         (\res ids ->
@@ -467,8 +464,8 @@ onResponseDecoderFailure f (Task run) =
                     run res ids
             in
             case task of
-                Done (RunnerError (ResponseDecoderFailure e_)) ->
-                    unwrap res ids_ (f e_.error)
+                Done (UnexpectedError (ResponseDecoderFailure e_)) ->
+                    stepTask res ( ids_, f e_.error )
 
                 Done _ ->
                     ( ids, task )
@@ -476,6 +473,31 @@ onResponseDecoderFailure f (Task run) =
                 Pending defs next ->
                     ( ids_, Pending defs (onResponseDecoderFailure f next) )
         )
+
+
+onJsException : ({ message : String, raw : Decode.Value } -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
+onJsException f (Task run) =
+    Task
+        (\res ids ->
+            let
+                ( ids_, task ) =
+                    run res ids
+            in
+            case task of
+                Done (UnexpectedError (UnhandledJsException e_)) ->
+                    stepTask res ( ids_, f { message = e_.message, raw = e_.raw } )
+
+                Done _ ->
+                    ( ids, task )
+
+                Pending defs next ->
+                    ( ids_, Pending defs (onJsException f next) )
+        )
+
+
+stepTask : Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Task_ x a )
+stepTask res ( ids, Task run ) =
+    run res ids
 
 
 
@@ -488,11 +510,11 @@ mapResponse f res =
         Success a ->
             Success (f a)
 
-        TaskError e ->
-            TaskError e
+        Error e ->
+            Error e
 
-        RunnerError e ->
-            RunnerError e
+        UnexpectedError e ->
+            UnexpectedError e
 
 
 map2Response : (a -> b -> c) -> Response x a -> Response x b -> Response x c
@@ -501,17 +523,17 @@ map2Response f res1 res2 =
         ( Success a, Success b ) ->
             Success (f a b)
 
-        ( RunnerError e, _ ) ->
-            RunnerError e
+        ( UnexpectedError e, _ ) ->
+            UnexpectedError e
 
-        ( _, RunnerError e ) ->
-            RunnerError e
+        ( _, UnexpectedError e ) ->
+            UnexpectedError e
 
-        ( TaskError e, _ ) ->
-            TaskError e
+        ( Error e, _ ) ->
+            Error e
 
-        ( _, TaskError e ) ->
-            TaskError e
+        ( _, Error e ) ->
+            Error e
 
 
 mapResponseError : (x -> y) -> Response x a -> Response y a
@@ -520,11 +542,11 @@ mapResponseError f res =
         Success a ->
             Success a
 
-        TaskError e ->
-            TaskError (f e)
+        Error e ->
+            Error (f e)
 
-        RunnerError e ->
-            RunnerError e
+        UnexpectedError e ->
+            UnexpectedError e
 
 
 
@@ -543,7 +565,7 @@ type alias Pool_ msg x a =
 
 type alias Progress msg x a =
     { inFlight : Set TaskId
-    , task : ( Ids, Task x a )
+    , task : ( Ids, ConcurrentTask x a )
     , onComplete : Response x a -> msg
     }
 
@@ -577,7 +599,7 @@ type alias OnProgress msg x a =
     }
 
 
-attempt : Attempt msg x a -> Task x a -> ( Pool msg x a, Cmd msg )
+attempt : Attempt msg x a -> ConcurrentTask x a -> ( Pool msg x a, Cmd msg )
 attempt attempt_ task =
     case stepTask Dict.empty ( Ids.init, task ) of
         ( _, Done res ) ->
@@ -628,6 +650,7 @@ updateAttempt options pool_ ( attemptId, results ) progress =
     case stepTask results progress.task of
         ( ids_, Pending _ next_ ) ->
             let
+                nextProgress : ( Ids, ConcurrentTask x a )
                 nextProgress =
                     ( ids_, next_ )
             in
@@ -653,13 +676,8 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                         |> options.send
                     )
 
-        ( _, _ ) ->
+        _ ->
             ( pool_, Cmd.none )
-
-
-stepTask : Results -> ( Ids, Task x a ) -> ( Ids, Task_ x a )
-stepTask res ( ids, Task run ) =
-    run res ids
 
 
 recordSent : Array Todo -> Set TaskId -> Set TaskId
@@ -751,7 +769,7 @@ decodeCatchAll fallback def val =
                     Success fallback
 
                 _ ->
-                    RunnerError err
+                    UnexpectedError err
 
         Err _ ->
             case Decode.decodeValue (decodeRunnerSuccess def) val of
@@ -768,10 +786,10 @@ decodeExpectThrows catch def val =
         Ok err ->
             case err of
                 UnhandledJsException e ->
-                    TaskError (catch e.message)
+                    Error (catch e.message)
 
                 _ ->
-                    RunnerError err
+                    UnexpectedError err
 
         Err _ ->
             case Decode.decodeValue (decodeRunnerSuccess def) val of
@@ -779,7 +797,7 @@ decodeExpectThrows catch def val =
                     Success a
 
                 Err e ->
-                    RunnerError
+                    UnexpectedError
                         (ResponseDecoderFailure
                             { function = def.function
                             , error = e
@@ -791,17 +809,17 @@ decodeExpectErrors : Decoder x -> Definition a b -> Decode.Value -> Response x b
 decodeExpectErrors expect def val =
     case Decode.decodeValue (decodeRunnerError def) val of
         Ok err ->
-            RunnerError err
+            UnexpectedError err
 
         Err _ ->
             case Decode.decodeValue (decodeExpectErrorField Decode.value) val of
                 Ok _ ->
                     case Decode.decodeValue (decodeExpectErrorField expect) val of
                         Ok err_ ->
-                            TaskError err_
+                            Error err_
 
                         Err e_ ->
-                            RunnerError
+                            UnexpectedError
                                 (ErrorsDecoderFailure
                                     { function = def.function
                                     , error = e_
@@ -814,7 +832,7 @@ decodeExpectErrors expect def val =
                             Success a
 
                         Err e_ ->
-                            RunnerError
+                            UnexpectedError
                                 (ResponseDecoderFailure
                                     { function = def.function
                                     , error = e_
@@ -834,7 +852,7 @@ decodeRunnerSuccess def =
             Decode.field "value" expect
 
 
-decodeRunnerError : Definition x a -> Decoder RunnerError
+decodeRunnerError : Definition x a -> Decoder UnexpectedError
 decodeRunnerError def =
     Decode.field "error"
         (Decode.field "reason" Decode.string
@@ -842,16 +860,16 @@ decodeRunnerError def =
                 (\reason ->
                     case reason of
                         "js_exception" ->
-                            Decode.field "message"
-                                (Decode.map
-                                    (\msg ->
-                                        UnhandledJsException
-                                            { function = def.function
-                                            , message = msg
-                                            }
-                                    )
-                                    Decode.string
+                            Decode.map2
+                                (\msg raw ->
+                                    UnhandledJsException
+                                        { function = def.function
+                                        , message = msg
+                                        , raw = raw
+                                        }
                                 )
+                                (Decode.field "message" Decode.string)
+                                (Decode.field "raw" Decode.value)
 
                         "missing_function" ->
                             Decode.field "message" (Decode.map MissingFunction Decode.string)

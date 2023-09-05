@@ -59,7 +59,7 @@ Sometimes you want to call JavaScript from elm in order.
 For example sequencing updates to localstorage:
 
 ```elm
-import Concurrent.Task as Task exposing (Task)
+import ConcurrentTask exposing (ConcurrentTask)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
@@ -68,19 +68,19 @@ type Error
     = Error String
 
 
-updateTheme : Theme -> Task Error ()
+updateTheme : Theme -> ConcurrentTask Error ()
 updateTheme theme =
     getItem "preferences" decodePreferences
-        |> Task.map (setTheme theme >> encodePreferences)
-        |> Task.andThen (setItem "preferences")
+        |> ConcurrentTask.map (setTheme theme >> encodePreferences)
+        |> ConcurrentTask.andThen (setItem "preferences")
 
 
-setItem : String -> Encode.Value -> Task Error ()
+setItem : String -> Encode.Value -> ConcurrentTask Error ()
 setItem key item =
-    Task.define
+    ConcurrentTask.define
         { function = "storage:setItem"
-        , expect = Task.expectWhatever
-        , errors = Task.expectThrows Error
+        , expect = ConcurrentTask.expectWhatever
+        , errors = ConcurrentTask.expectThrows Error
         , args =
             Encode.object
                 [ ( "key", Encode.string key )
@@ -89,15 +89,15 @@ setItem key item =
         }
 
 
-getItem : String -> Decoder a -> Task Error a
+getItem : String -> Decoder a -> ConcurrentTask Error a
 getItem key decoder =
-    Task.define
+    ConcurrentTask.define
         { function = "storage:getItem"
-        , expect = Task.expectString
-        , errors = Task.expectThrows Error
+        , expect = ConcurrentTask.expectString
+        , errors = ConcurrentTask.expectThrows Error
         , args = Encode.object [ ( "key", Encode.string key ) ]
         }
-        |> Task.andThen (decodeItem decoder)
+        |> ConcurrentTask.andThen (decodeItem decoder)
 ```
 
 ## Hack Free you say?
@@ -123,10 +123,11 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-- [`Http.request`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Http)
-- [`Process.sleep`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Process)
-- [`Random.generate`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Random)
-- [`Time.now`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/Concurrent-Task-Time)
+- [`Browser.Dom`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Browser-Dom/)
+- [`Http`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Http/)
+- [`Process`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Process/)
+- [`Random`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Random/)
+- [`Time`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Time/)
 
 ## How?
 
@@ -177,11 +178,11 @@ npm install @andrewMacmurray/elm-concurrent-task
 
 Your Elm program needs
 
-- A `Task.Pool` in your `Model` to keep track of each task attempt:
+- A `ConcurrentTask.Pool` in your `Model` to keep track of each task attempt:
 
   ```elm
   type alias Model =
-      { tasks : Task.Pool Msg Error Success
+      { tasks : ConcurrentTask.Pool Msg Error Success
       }
   ```
 
@@ -189,8 +190,8 @@ Your Elm program needs
 
   ```elm
   type Msg
-      = OnProgress ( Task.Pool Msg Error Success, Cmd Msg ) -- updates task progress
-      | OnComplete (Task.Response Error Success) -- called when a task completes
+      = OnProgress ( ConcurrentTask.Pool Msg Error Success, Cmd Msg ) -- updates task progress
+      | OnComplete (ConcurrentTask.Response Error Success) -- called when a task completes
   ```
 
 - 2 ports with the following signatures:
@@ -205,19 +206,19 @@ Here's a simple complete program that fetches 3 resources concurrently:
 ```elm
 port module Example exposing (main)
 
-import Concurrent.Task as Task exposing (Task)
-import Concurrent.Task.Http as Http
+import ConcurrentTask exposing (ConcurrentTask)
+import ConcurrentTask.Http as Http
 import Json.Decode as Decode
 
 
 type alias Model =
-    { tasks : Task.Pool Msg Error Titles
+    { tasks : ConcurrentTask.Pool Msg Error Titles
     }
 
 
 type Msg
-    = OnProgress ( Task.Pool Msg Error Titles, Cmd Msg )
-    | OnComplete (Task.Response Error Titles)
+    = OnProgress ( ConcurrentTask.Pool Msg Error Titles, Cmd Msg )
+    | OnComplete (ConcurrentTask.Response Error Titles)
 
 
 type alias Error =
@@ -235,22 +236,21 @@ type alias Titles =
     }
 
 
-getAllTitles : Task Error Titles
+getAllTitles : ConcurrentTask Error Titles
 getAllTitles =
-    Task.succeed Titles
-        |> Task.andMap (getTitle "/todos/1")
-        |> Task.andMap (getTitle "/posts/1")
-        |> Task.andMap (getTitle "/albums/1")
+    ConcurrentTask.succeed Titles
+        |> ConcurrentTask.andMap (getTitle "/todos/1")
+        |> ConcurrentTask.andMap (getTitle "/posts/1")
+        |> ConcurrentTask.andMap (getTitle "/albums/1")
 
 
-getTitle : String -> Task Error String
+getTitle : String -> ConcurrentTask Error String
 getTitle path =
-    Http.request
+    Http.get
         { url = "https://jsonplaceholder.typicode.com" ++ path
-        , method = "GET"
         , headers = []
-        , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "title" Decode.string)
+        , timeout = Nothing
         }
 
 
@@ -262,9 +262,9 @@ init : ( Model, Cmd Msg )
 init =
     let
         ( tasks, cmd ) =
-            Task.attempt
+            ConcurrentTask.attempt
                 { send = send
-                , pool = Task.pool
+                , pool = ConcurrentTask.pool
                 , onComplete = OnComplete
                 }
                 getAllTitles
@@ -288,7 +288,7 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Task.onProgress
+    ConcurrentTask.onProgress
         { send = send
         , receive = receive
         , onProgress = OnProgress
@@ -316,12 +316,12 @@ main =
 Connect the runner to your Elm app:
 
 ```ts
-import * as Tasks from "@andrewMacmurray/elm-concurrent-task";
-// if you're beta testing this lib: import * as Tasks from "./elm-concurrent-task/src/runner"
+import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task";
+// if you're beta testing this lib: import * as ConcurrentTask from "./elm-concurrent-task/src-ts"
 
 const app = Elm.Main.init({});
 
-Tasks.register({
+ConcurrentTask.register({
   tasks: {},
   ports: {
     send: app.ports.send,
@@ -355,7 +355,7 @@ Run the tests with:
 npm test
 ```
 
-To preview any changes, try some of the examples in the [examples folder](./examples/).
+To preview any changes, try some of the examples in the [examples folder](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/examples).
 
 View the docs locally with:
 
