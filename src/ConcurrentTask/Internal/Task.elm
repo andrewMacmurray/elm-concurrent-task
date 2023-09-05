@@ -30,6 +30,7 @@ module ConcurrentTask.Internal.Task exposing
     , map5
     , mapError
     , onError
+    , onJsException
     , onProgress
     , onResponseDecoderFailure
     , pool
@@ -68,7 +69,7 @@ type Response x a
 
 
 type UnexpectedError
-    = UnhandledJsException { function : String, message : String }
+    = UnhandledJsException { function : String, message : String, raw : Decode.Value }
     | ResponseDecoderFailure { function : String, error : Decode.Error }
     | ErrorsDecoderFailure { function : String, error : Decode.Error }
     | MissingFunction String
@@ -474,6 +475,26 @@ onResponseDecoderFailure f (Task run) =
         )
 
 
+onJsException : ({ message : String, raw : Decode.Value } -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
+onJsException f (Task run) =
+    Task
+        (\res ids ->
+            let
+                ( ids_, task ) =
+                    run res ids
+            in
+            case task of
+                Done (UnexpectedError (UnhandledJsException e_)) ->
+                    stepTask res ( ids_, f { message = e_.message, raw = e_.raw } )
+
+                Done _ ->
+                    ( ids, task )
+
+                Pending defs next ->
+                    ( ids_, Pending defs (onJsException f next) )
+        )
+
+
 stepTask : Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Task_ x a )
 stepTask res ( ids, Task run ) =
     run res ids
@@ -839,16 +860,16 @@ decodeRunnerError def =
                 (\reason ->
                     case reason of
                         "js_exception" ->
-                            Decode.field "message"
-                                (Decode.map
-                                    (\msg ->
-                                        UnhandledJsException
-                                            { function = def.function
-                                            , message = msg
-                                            }
-                                    )
-                                    Decode.string
+                            Decode.map2
+                                (\msg raw ->
+                                    UnhandledJsException
+                                        { function = def.function
+                                        , message = msg
+                                        , raw = raw
+                                        }
                                 )
+                                (Decode.field "message" Decode.string)
+                                (Decode.field "raw" Decode.value)
 
                         "missing_function" ->
                             Decode.field "message" (Decode.map MissingFunction Decode.string)

@@ -249,13 +249,14 @@ errors =
                         customErrorTask
                         |> runTaskWith
                             [ ( 0, success (Encode.string "a") )
-                            , ( 1, error "js_exception" "f threw an exception" )
+                            , ( 1, jsException "f threw an exception" (Encode.string "error data") )
                             ]
                         |> Expect.equal
                             (Task.UnexpectedError
                                 (Task.UnhandledJsException
                                     { function = "custom"
                                     , message = "f threw an exception"
+                                    , raw = Encode.string "error data"
                                     }
                                 )
                             )
@@ -268,7 +269,7 @@ errors =
                         |> runTaskWith
                             [ ( 0, success (Encode.string "a") )
                             , ( 1, success (Encode.string "b") )
-                            , ( 2, error "js_exception" "f threw an exception" )
+                            , ( 2, jsException "f threw an exception" (Encode.string "error data") )
                             ]
                         |> Expect.equal (Task.Error "f threw an exception")
             , test "Succeeds with fallback if task throws and has a catchAll handler" <|
@@ -279,7 +280,7 @@ errors =
                         catchTask
                         |> runTaskWith
                             [ ( 0, success (Encode.string "a") )
-                            , ( 1, error "js_exception" "f threw an exception" )
+                            , ( 1, jsException "f threw an exception" Encode.null )
                             , ( 2, success (Encode.string "b") )
                             ]
                         |> Expect.equal (Task.Success "aCAUGHTb")
@@ -298,7 +299,7 @@ errors =
                         |> runTaskWith
                             [ ( 0, success (Encode.string "a") )
                             , ( 1, success (Encode.string "b") )
-                            , ( 2, error "missing_function" "f is missing" )
+                            , ( 2, missingFunctionError "f is missing" )
                             ]
                         |> Expect.equal (Task.UnexpectedError (Task.MissingFunction "f is missing"))
                 )
@@ -393,7 +394,7 @@ errors =
                     createTask
                     |> runTaskWith
                         [ ( 0, success (Encode.string "a") )
-                        , ( 1, error "other_error" "..." )
+                        , ( 1, error "other_error" "..." Encode.null )
                         ]
                     |> Expect.equal (Task.UnexpectedError (Task.InternalError "Unknown runner error reason: other_error"))
          ]
@@ -528,14 +529,25 @@ success v =
         ]
 
 
-error : String -> String -> Encode.Value
-error reason message =
+jsException : String -> Encode.Value -> Encode.Value
+jsException =
+    error "js_exception"
+
+
+missingFunctionError : String -> Encode.Value
+missingFunctionError message =
+    error "missing_function" message Encode.null
+
+
+error : String -> String -> Encode.Value -> Encode.Value
+error reason message raw =
     Encode.object
         [ ( "status", Encode.string "error" )
         , ( "error"
           , Encode.object
                 [ ( "reason", Encode.string reason )
                 , ( "message", Encode.string message )
+                , ( "raw", raw )
                 ]
           )
         ]

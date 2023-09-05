@@ -32,6 +32,7 @@ export interface Error {
   error: {
     reason: string;
     message: string;
+    raw?: any;
   };
 }
 
@@ -140,6 +141,7 @@ export function register(options: Options): void {
               error: {
                 reason: "js_exception",
                 message: `${e.name}: ${e.message}`,
+                raw: e,
               },
             },
           });
