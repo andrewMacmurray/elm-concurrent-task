@@ -9,6 +9,7 @@ ConcurrentTask.register({
     send: ports.send,
     receive: ports.receive,
   },
+  debug: { taskStart: true },
 });
 
 ports.report.subscribe((res: { assertions: string; errors: string }) => {

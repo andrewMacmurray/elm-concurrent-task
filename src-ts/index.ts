@@ -123,31 +123,33 @@ export function register(options: Options): void {
           },
         });
         break;
-      } else {
-        try {
-          logTaskStart(def, options);
-          const result = await tasks[def.function]?.(def.args);
-          logTaskFinish(def, options);
-          debouncedSend({
-            attemptId: def.attemptId,
-            taskId: def.taskId,
-            result: { value: result },
-          });
-        } catch (e) {
-          debouncedSend({
-            attemptId: def.attemptId,
-            taskId: def.taskId,
-            result: {
-              error: {
-                reason: "js_exception",
-                message: `${e.name}: ${e.message}`,
-                raw: e,
-              },
-            },
-          });
-        }
       }
     }
+
+    defs.map(async (def) => {
+      try {
+        logTaskStart(def, options);
+        const result = await tasks[def.function]?.(def.args);
+        logTaskFinish(def, options);
+        debouncedSend({
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: { value: result },
+        });
+      } catch (e) {
+        debouncedSend({
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: {
+            error: {
+              reason: "js_exception",
+              message: `${e.name}: ${e.message}`,
+              raw: e,
+            },
+          },
+        });
+      }
+    });
   });
 }
 

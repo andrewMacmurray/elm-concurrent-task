@@ -3,7 +3,6 @@ module Integration.Spec exposing
     , Expect
     , Spec
     , assertAll
-    , assertEquals
     , assertSuccess
     , duration
     , fail
@@ -11,7 +10,9 @@ module Integration.Spec exposing
     , report
     , reportErrors
     , shouldBeFasterThan
-    , taskSpec
+    , shouldEqual
+    , shouldHaveDurationLessThan
+    , spec
     , timeExecution
     )
 
@@ -110,17 +111,32 @@ timeExecution task =
             )
 
 
+shouldHaveDurationLessThan : Int -> Timed a -> Expect
+shouldHaveDurationLessThan ms a =
+    if duration a < ms then
+        Pass
+
+    else
+        Fail
+            ("Duration was: "
+                ++ String.fromInt (duration a)
+                ++ ", Expected less than: "
+                ++ String.fromInt ms
+                ++ "ms"
+            )
+
+
 shouldBeFasterThan : Timed b -> Timed a -> Expect
 shouldBeFasterThan b a =
-    if duration b < duration a then
+    if duration a < duration b then
         Pass
 
     else
         Fail "Task was not faster than expected"
 
 
-assertEquals : a -> a -> Expect
-assertEquals a b =
+shouldEqual : a -> a -> Expect
+shouldEqual a b =
     if a == b then
         Pass
 
@@ -133,13 +149,13 @@ duration timed =
     Time.posixToMillis timed.finish - Time.posixToMillis timed.start
 
 
-taskSpec :
+spec :
     String
     -> String
     -> ConcurrentTask x a
     -> (ConcurrentTask x a -> ConcurrentTask Expect Expect)
     -> Spec
-taskSpec name description task assert =
+spec name description task assert =
     task
         |> assert
         |> Task.map

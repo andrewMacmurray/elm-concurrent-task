@@ -1,9 +1,9 @@
 port module Integration.Runner exposing (main)
 
 import ConcurrentTask as Task
+import Integration
 import Integration.Spec as Spec exposing (Assertion, Expect(..))
 import Json.Decode as Decode
-import Specs
 
 
 
@@ -59,7 +59,7 @@ init _ =
 
 startAllSpecs : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 startAllSpecs ( model, cmd ) =
-    List.foldl runSpec ( model, cmd ) Specs.all
+    List.foldl runSpec ( model, cmd ) Integration.specs
 
 
 runSpec : Task.ConcurrentTask Error Output -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -123,7 +123,7 @@ handleComplete model =
 
 allSpecsHaveRun : Model -> Bool
 allSpecsHaveRun model =
-    List.length model.completedAssertions + List.length model.unexpectedErrors == List.length Specs.all
+    List.length model.completedAssertions + List.length model.unexpectedErrors == List.length Integration.specs
 
 
 
