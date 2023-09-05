@@ -1,5 +1,5 @@
 import { Elm } from "./Main.elm";
-import * as ConcurrentTask from "../../../src/runner";
+import * as ConcurrentTask from "../../../src-ts";
 
 const app = Elm.Main.init({
   node: document.querySelector("main"),

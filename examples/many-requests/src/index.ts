@@ -1,5 +1,5 @@
 import { Elm } from "./Main.elm";
-import * as Tasks from "../../../src/runner";
+import * as Tasks from "../../../src-ts";
 
 const { ports } = Elm.Main.init({ flags: null });
 
