@@ -11,9 +11,11 @@ ConcurrentTask.register({
   },
 });
 
-ports.report.subscribe((res: { assertions: string; errors: string }) => {
-  console.log(res.assertions);
-  if (res.errors) {
-    console.log(res.errors);
+ports.report.subscribe((res: { message: string; passed: boolean }) => {
+  console.log(res.message);
+  if (res.passed) {
+    process.exit(0);
+  } else {
+    process.exit(1);
   }
 });

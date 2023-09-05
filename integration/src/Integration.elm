@@ -22,8 +22,8 @@ largeBatchSpec =
         batchSize =
             100000
     in
-    Spec.spec
-        "large batch test"
+    Spec.describe
+        "large batches"
         "can handle large batches"
         (Spec.timeExecution
             (ConcurrentTask.Process.sleep 100
@@ -43,8 +43,8 @@ largeBatchSpec =
 
 batchAndSequenceSpeedTest : Spec
 batchAndSequenceSpeedTest =
-    Spec.spec
-        "batch and sequence speed test"
+    Spec.describe
+        "batch and sequence speed"
         "the batched branch should be faster than the sequential branch"
         (Task.map2 Tuple.pair
             (Spec.timeExecution
@@ -78,7 +78,7 @@ batchAndSequenceSpeedTest =
 
 responseTest : Spec
 responseTest =
-    Spec.spec
+    Spec.describe
         "complex responses"
         "task should decode and combine responses correctly"
         (Task.map5 join5

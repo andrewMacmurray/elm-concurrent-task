@@ -112,9 +112,11 @@ handleComplete model =
     if allSpecsHaveRun model then
         ( model
         , report
-            { assertions = Spec.report model.completedAssertions
-            , errors = Spec.reportErrors model.unexpectedErrors
-            }
+            (Spec.report
+                { assertions = model.completedAssertions
+                , errors = model.unexpectedErrors
+                }
+            )
         )
 
     else
@@ -150,7 +152,7 @@ port send : Decode.Value -> Cmd msg
 port receive : (Decode.Value -> msg) -> Sub msg
 
 
-port report : { assertions : String, errors : String } -> Cmd msg
+port report : { message : String, passed : Bool } -> Cmd msg
 
 
 

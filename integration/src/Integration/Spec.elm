@@ -4,15 +4,14 @@ module Integration.Spec exposing
     , Spec
     , assertAll
     , assertSuccess
+    , describe
     , duration
     , fail
     , pass
     , report
-    , reportErrors
     , shouldBeFasterThan
     , shouldEqual
     , shouldHaveDurationLessThan
-    , spec
     , timeExecution
     )
 
@@ -149,13 +148,13 @@ duration timed =
     Time.posixToMillis timed.finish - Time.posixToMillis timed.start
 
 
-spec :
+describe :
     String
     -> String
     -> ConcurrentTask x a
     -> (ConcurrentTask x a -> ConcurrentTask Expect Expect)
     -> Spec
-spec name description task assert =
+describe name description task assert =
     task
         |> assert
         |> Task.map
@@ -176,8 +175,35 @@ spec name description task assert =
             )
 
 
-report : List Assertion -> String
-report assertions =
+type alias Report =
+    { assertions : List Assertion
+    , errors : List Task.UnexpectedError
+    }
+
+
+report : Report -> { message : String, passed : Bool }
+report r =
+    { message = reportMessage r
+    , passed = List.isEmpty r.errors && allPassed r.assertions
+    }
+
+
+reportMessage : Report -> String
+reportMessage r =
+    if List.isEmpty r.errors then
+        reportAssertions r.assertions
+
+    else
+        reportAssertions r.assertions ++ "\n" ++ reportErrors r.errors
+
+
+allPassed : List Assertion -> Bool
+allPassed =
+    List.all (\(Assertion x) -> x.expect == Pass)
+
+
+reportAssertions : List Assertion -> String
+reportAssertions assertions =
     "🧪 Test Results: \n" ++ String.join "\n" (List.map reportAssertion assertions)
 
 
