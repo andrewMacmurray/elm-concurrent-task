@@ -12,6 +12,6 @@ Tasks.register({
   debug: { taskStart: true },
 });
 
-ports.printResult.subscribe((res) => {
+ports.printResult.subscribe((res: string) => {
   console.log(res);
 });

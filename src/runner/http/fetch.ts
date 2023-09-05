@@ -1,11 +1,11 @@
-import { Request, Response, HttpError } from "./index";
+import { HttpResponse, HttpRequest, HttpError } from "./index";
 
-export function http(request: Request): Promise<Response> {
-  let controller;
+export function http(request: HttpRequest): Promise<HttpResponse> {
+  let controller: AbortController | undefined;
 
   if (request.timeout) {
     controller = new AbortController();
-    setTimeout(() => controller.abort(), request.timeout);
+    setTimeout(() => controller?.abort(), request.timeout);
   }
 
   return fetch(request.url, {
@@ -14,35 +14,25 @@ export function http(request: Request): Promise<Response> {
     headers: new Headers(request.headers),
     signal: controller?.signal,
   })
-    .then((res) => {
+    .then((res: Response) => {
       const headers = Object.fromEntries(res.headers.entries());
       switch (request.expect) {
-        case "JSON": {
-          return res
-            .json()
-            .then((x) => ({
-              url: res.url,
-              headers: headers,
-              status: res.status,
-              statusText: res.statusText,
-              body: x,
-            }))
-            .catch((e) => {
-              return {
-                error: {
-                  reason: "BAD_BODY",
-                  message: e.message,
-                },
-              };
-            });
-        }
         case "STRING": {
           return res.text().then((x) => ({
             url: res.url,
             headers: headers,
             status: res.status,
             statusText: res.statusText,
-            body: x,
+            body: x || null,
+          }));
+        }
+        case "JSON": {
+          return res.text().then((x) => ({
+            url: res.url,
+            headers: headers,
+            status: res.status,
+            statusText: res.statusText,
+            body: x || null,
           }));
         }
         case "WHATEVER": {
@@ -66,7 +56,7 @@ export function http(request: Request): Promise<Response> {
     });
 }
 
-function toHttpError(err): HttpError {
+function toHttpError(err: any): HttpError {
   switch (err.cause?.code) {
     case "ENOTFOUND":
       return "NETWORK_ERROR";

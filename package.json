@@ -2,7 +2,6 @@
   "name": "elm-concurrent-task",
   "version": "1.0.0",
   "description": "Run a tree of tasks concurrently",
-  "type": "module",
   "scripts": {
     "test": "elm-test",
     "docs": "elm-doc-preview",

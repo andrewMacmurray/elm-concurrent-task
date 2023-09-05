@@ -114,7 +114,10 @@ export function getElement(id: string): DomElement | Error {
 
 // Helpers
 
-function withDomNode<a>(id: string, callback: (HTMLElement) => a): a | Error {
+function withDomNode<a>(
+  id: string,
+  callback: (el: HTMLElement) => a
+): a | Error {
   const el = document.getElementById(id);
   if (el) {
     return callback(el);

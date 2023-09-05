@@ -316,7 +316,7 @@ decodeExpect expect =
                 if code >= 200 && code < 300 then
                     case expect of
                         ExpectJson decoder ->
-                            Decode.field "body" (Decode.map Ok decoder)
+                            Decode.field "body" (decodeJsonBody decoder)
 
                         ExpectString decoder ->
                             Decode.field "body" (Decode.map Ok decoder)
@@ -341,6 +341,20 @@ decodeExpect expect =
                         (Decode.field "statusText" Decode.string)
                         (Decode.field "body" Decode.value)
                         (Decode.field "headers" (Decode.dict Decode.string))
+            )
+
+
+decodeJsonBody : Decoder a -> Decoder (Result Error a)
+decodeJsonBody decoder =
+    Decode.string
+        |> Decode.andThen
+            (\res ->
+                case Decode.decodeString decoder res of
+                    Ok a ->
+                        Decode.succeed (Ok a)
+
+                    Err e ->
+                        Decode.succeed (Err (BadBody (Decode.errorToString e)))
             )
 
 
