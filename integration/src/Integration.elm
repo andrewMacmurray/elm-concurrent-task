@@ -2,33 +2,43 @@ module Integration exposing (specs)
 
 import ConcurrentTask as Task exposing (ConcurrentTask)
 import ConcurrentTask.Http as Http
+import ConcurrentTask.Process
 import Integration.Spec as Spec exposing (Spec)
 import Json.Decode as Decode
 
 
 specs : List Spec
 specs =
-    [ batchSpeedTest
-    , batchAndSequenceSpeedTest
+    [ batchAndSequenceSpeedTest
     , responseTest
+    , largeBatchSpec
     ]
 
 
-batchSpeedTest : Spec
-batchSpeedTest =
+largeBatchSpec : Spec
+largeBatchSpec =
+    let
+        batchSize : Int
+        batchSize =
+            100000
+    in
     Spec.spec
-        "batch speed test"
-        "batch should start all tasks at once"
+        "large batch test"
+        "can handle large batches"
         (Spec.timeExecution
-            (Task.batch
-                [ longRequest 100
-                , longRequest 100
-                , longRequest 100
-                , longRequest 100
-                ]
+            (ConcurrentTask.Process.sleep 100
+                |> List.repeat batchSize
+                |> Task.batch
             )
         )
-        (Spec.assertSuccess (\res -> Spec.shouldHaveDurationLessThan 200 res))
+        (Spec.assertSuccess
+            (\res ->
+                Spec.assertAll
+                    [ Spec.shouldHaveDurationLessThan 3000 res
+                    , res.result |> Spec.shouldEqual (List.repeat batchSize ())
+                    ]
+            )
+        )
 
 
 batchAndSequenceSpeedTest : Spec
@@ -69,8 +79,8 @@ batchAndSequenceSpeedTest =
 responseTest : Spec
 responseTest =
     Spec.spec
-        "Responses"
-        "Task should decode and combine responses correctly"
+        "complex responses"
+        "task should decode and combine responses correctly"
         (Task.map5 join5
             (longRequest 100)
             (longRequest 50
