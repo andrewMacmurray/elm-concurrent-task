@@ -21,7 +21,7 @@ export function http(request: HttpRequest): Promise<HttpResponse> {
           return res.text().then((x) => ({
             url: res.url,
             headers: headers,
-            status: res.status,
+            statusCode: res.status,
             statusText: res.statusText,
             body: x || null,
           }));
@@ -30,7 +30,7 @@ export function http(request: HttpRequest): Promise<HttpResponse> {
           return res.text().then((x) => ({
             url: res.url,
             headers: headers,
-            status: res.status,
+            statusCode: res.status,
             statusText: res.statusText,
             body: x || null,
           }));
@@ -39,7 +39,7 @@ export function http(request: HttpRequest): Promise<HttpResponse> {
           return {
             url: res.url,
             headers: headers,
-            status: res.status,
+            statusCode: res.status,
             statusText: res.statusText,
             body: null,
           };

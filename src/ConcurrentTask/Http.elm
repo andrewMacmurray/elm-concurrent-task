@@ -93,7 +93,6 @@ type alias Header =
   - `NetworkError` means the user turned off their wifi, went in a cave, etc.
   - `BadStatus` means you got a response back, but the status code indicates failure.
   - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected.
-    The String in this case is a debugging message that explains what went wrong with your JSON decoder or whatever.
 
 -}
 type Error
@@ -101,7 +100,7 @@ type Error
     | Timeout
     | NetworkError
     | BadStatus Metadata Decode.Value
-    | BadBody String
+    | BadBody Metadata Decode.Value Decode.Error
 
 
 {-| Extra information about the response:
@@ -233,7 +232,6 @@ request r =
         , args = encode r
         }
         |> ConcurrentTask.andThen ConcurrentTask.fromResult
-        |> ConcurrentTask.onResponseDecoderFailure wrapError
 
 
 {-| Send an Http `GET` request
@@ -277,13 +275,6 @@ post options =
         }
 
 
-wrapError : Decode.Error -> ConcurrentTask Error a
-wrapError =
-    Decode.errorToString
-        >> BadBody
-        >> ConcurrentTask.fail
-
-
 decodeError : Request a -> Decoder Error
 decodeError r =
     Decode.field "reason" Decode.string
@@ -299,10 +290,6 @@ decodeError r =
                     "BAD_URL" ->
                         Decode.succeed (BadUrl r.url)
 
-                    "BAD_BODY" ->
-                        Decode.field "message" Decode.string
-                            |> Decode.map BadBody
-
                     _ ->
                         Decode.fail ("Unknown error code: " ++ code)
             )
@@ -310,13 +297,13 @@ decodeError r =
 
 decodeExpect : Expect a -> Decoder (Result Error a)
 decodeExpect expect =
-    Decode.field "status" Decode.int
+    decodeMetadata
         |> Decode.andThen
-            (\code ->
-                if code >= 200 && code < 300 then
+            (\meta ->
+                if meta.statusCode >= 200 && meta.statusCode < 300 then
                     case expect of
                         ExpectJson decoder ->
-                            Decode.field "body" (decodeJsonBody decoder)
+                            Decode.field "body" (decodeJsonBody decoder meta)
 
                         ExpectString decoder ->
                             Decode.field "body" (Decode.map Ok decoder)
@@ -325,27 +312,21 @@ decodeExpect expect =
                             Decode.field "body" (Decode.map Ok decoder)
 
                 else
-                    Decode.map4
-                        (\url text body headers ->
-                            Err
-                                (BadStatus
-                                    { url = url
-                                    , statusCode = code
-                                    , statusText = text
-                                    , headers = headers
-                                    }
-                                    body
-                                )
-                        )
-                        (Decode.field "url" Decode.string)
-                        (Decode.field "statusText" Decode.string)
-                        (Decode.field "body" Decode.value)
-                        (Decode.field "headers" (Decode.dict Decode.string))
+                    withBodyValue (\body -> Err (BadStatus meta body))
             )
 
 
-decodeJsonBody : Decoder a -> Decoder (Result Error a)
-decodeJsonBody decoder =
+decodeMetadata : Decoder Metadata
+decodeMetadata =
+    Decode.map4 Metadata
+        (Decode.field "url" Decode.string)
+        (Decode.field "statusCode" Decode.int)
+        (Decode.field "statusText" Decode.string)
+        (Decode.field "headers" (Decode.dict Decode.string))
+
+
+decodeJsonBody : Decoder a -> Metadata -> Decoder (Result Error a)
+decodeJsonBody decoder meta =
     Decode.string
         |> Decode.andThen
             (\res ->
@@ -354,8 +335,13 @@ decodeJsonBody decoder =
                         Decode.succeed (Ok a)
 
                     Err e ->
-                        Decode.succeed (Err (BadBody (Decode.errorToString e)))
+                        withBodyValue (\body -> Err (BadBody meta body e))
             )
+
+
+withBodyValue : (Decode.Value -> a) -> Decoder a
+withBodyValue decode =
+    Decode.map decode (Decode.field "body" Decode.value)
 
 
 

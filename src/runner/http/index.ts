@@ -16,7 +16,7 @@ export interface ResponseSuccess {
   body: string | null;
   url: string;
   headers: { [header: string]: string };
-  status: number;
+  statusCode: number;
   statusText: string;
 }
 
