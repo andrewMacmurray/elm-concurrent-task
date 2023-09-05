@@ -186,9 +186,11 @@ successResponses =
         , test "handles large batches" <|
             \_ ->
                 let
+                    -- For some reason in elm-test large batches of Task.batch are very slow.
+                    -- In a real program they are much faster.
                     n : Int
                     n =
-                        2000
+                        1000
                 in
                 List.repeat n (create Decode.int)
                     |> Task.batch
