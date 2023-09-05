@@ -25,10 +25,11 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-  - [`Http.request`](ConcurrentTask-Http)
-  - [`Process.sleep`](ConcurrentTask-Process)
-  - [`Random.generate`](ConcurrentTask-Random)
-  - [`Time.now`](ConcurrentTask-Time)
+  - [`Browser.Dom`](ConcurrentTask-Browser-Dom)
+  - [`Http`](ConcurrentTask-Http)
+  - [`Process`](ConcurrentTask-Process)
+  - [`Random`](ConcurrentTask-Random)
+  - [`Time`](ConcurrentTask-Time)
 
 
 # Concurrent Tasks

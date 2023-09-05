@@ -13,15 +13,22 @@ Internally It uses the [fetch api](https://developer.mozilla.org/en-US/docs/Web/
 
 If needed you can supply a custom implementation like so:
 
-    Tasks.register({
+    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
+    import { HttpRequest, HttpResponse } from "@andrewMacmurray/elm-concurrent-task"
+
+    ConcurrentTask.register({
       tasks: {},
       ports: app.ports,
       builtins: {
-        http: (request) => customHttp(request),
+        http: customRequest
       },
     });
 
-See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src/runner/http/fetch.ts) to see how to create your own.
+    function customRequest(req: HttpRequest): Promise<HttpResponse> {
+      return ...<Your Custom Http Request>
+    }
+
+See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/http/fetch.ts) to see how to create your own.
 
 **Note:**
 
@@ -91,8 +98,13 @@ type alias Header =
   - `BadUrl` means you did not provide a valid URL.
   - `Timeout` means it took too long to get a response.
   - `NetworkError` means the user turned off their wifi, went in a cave, etc.
-  - `BadStatus` means you got a response back, but the status code indicates failure.
-  - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected.
+  - `BadStatus` means you got a response back, but the status code indicates failure. Contains:
+      - The response `Metadata`.
+      - The raw response body as a `Json.Decode.Value`.
+  - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected. Contains:
+      - The response `Metadata`.
+      - The raw response body as a `Json.Decode.Value`.
+      - The `Json.Decode.Error` that caused the error.
 
 -}
 type Error

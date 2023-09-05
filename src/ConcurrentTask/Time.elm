@@ -1,16 +1,38 @@
 module ConcurrentTask.Time exposing (now, here, getZoneName)
 
-{-| A drop in replacement for [elm/time's](https://package.elm-lang.org/packages/elm/time/latest/Time#now) `Time.now`
+{-| Drop in replacements for [elm/time's](https://package.elm-lang.org/packages/elm/time/latest/Time#now)'s `Task`s.
 
-The JavaScript runner has this task builtin by default. If needed it can be overridden like so:
+The JavaScript runner has these tasks builtin by default. If needed they can be overridden like so:
 
-    Tasks.register({
+**NOTE:** The custom examples are the same as the built-in implementations.
+
+    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
+
+    ConcurrentTask.register({
       tasks: {},
       ports: app.ports,
       builtins: {
-        timeNow: () => customTimeNow(),
+        timeNow: customTimeNow,
+        timeZoneOffset: customTimeZoneOffset,
+        timeZoneName: customTimeZoneName,
       }
     });
+
+    function customTimeNow(): number {
+      return Date.now()
+    }
+
+    function customTimeZoneOffset(): number {
+      return -new Date().getTimezoneOffset();
+    }
+
+    function customTimeZoneName(): string | number {
+      try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone;
+      } catch (e) {
+        return new Date().getTimezoneOffset();
+      }
+    }
 
 @docs now, here, getZoneName
 
@@ -23,6 +45,9 @@ import Time
 
 
 {-| Get the POSIX time at the moment when this task is run.
+
+A direct replacement for `elm/time`'s [`Time.now`](https://package.elm-lang.org/packages/elm/time/latest/Time#now).
+
 -}
 now : ConcurrentTask x Time.Posix
 now =
@@ -35,6 +60,9 @@ now =
 
 
 {-| Produce a `Zone` based on the current UTC offset.
+
+A direct replacement for `elm/time`'s [`Time.here`](https://package.elm-lang.org/packages/elm/time/latest/Time#here).
+
 -}
 here : ConcurrentTask x Time.Zone
 here =
@@ -48,6 +76,9 @@ here =
 
 
 {-| Use `Intl.DateTimeFormat().resolvedOptions().timeZone` to try to get names like Europe/Moscow or America/Havana.
+
+A direct replacement for `elm/time`'s [`Time.getZoneName`](https://package.elm-lang.org/packages/elm/time/latest/Time#getZoneName).
+
 -}
 getZoneName : ConcurrentTask x Time.ZoneName
 getZoneName =

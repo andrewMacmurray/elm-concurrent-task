@@ -1,18 +1,25 @@
 module ConcurrentTask.Random exposing (generate)
 
-{-| Generate random values based on an [elm/random](https://package.elm-lang.org/packages/elm/random/latest/Random#Generator) `Generator`
+{-| Generate random values based on an [elm/random](https://package.elm-lang.org/packages/elm/random/latest/Random#Generator) `Generator`.
 
 This Task uses a builtin randomSeed task from the JavaScript runner (the [same seed `elm/random` uses](https://github.com/elm/random/blob/ecf97bb43f0d5cd75243428f69f45323957bda25/src/Random.elm#L873-L875) - `Date.now()`).
 
 If needed you can override the randomSeed task like so (e.g. use node or web crypto module to generate secure randomness):
 
-    Tasks.register({
+    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
+    import crypto from "node:crypto"
+
+    ConcurrentTask.register({
       tasks: {},
       ports: app.ports,
       builtins: {
-        randomSeed: () => crypto.getRandomValues(new Uint32Array(1))[0],
+        randomSeed: customRandomSeed,
       },
     });
+
+    function customRandomSeed(): number {
+      return crypto.getRandomValues(new Uint32Array(1))[0];
+    }
 
 @docs generate
 

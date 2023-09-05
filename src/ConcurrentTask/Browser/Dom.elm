@@ -5,13 +5,45 @@ module ConcurrentTask.Browser.Dom exposing
     , getElement
     )
 
-{-|
+{-| Drop in replacements for [elm/browser's](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom)'s `Browser.Dom` `Task`s.
+
+The JavaScript runner has these tasks builtin by default. There shouldn't be much need to do this, but they can be overridden like so:
+
+**NOTE:** You can see the [built-in implementations here](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/browser/dom.ts). They follow the [`Elm.Kernel`](https://github.com/elm/browser/blob/1.0.2/src/Elm/Kernel/Browser.js) implementations as closely as possible.
+
+    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
+
+    ConcurrentTask.register({
+      tasks: {},
+      ports: app.ports,
+      builtins: {
+        domFocus: customFocus,
+        domBlur: customBlur,
+        domGetViewport: customGetViewport,
+        domGetViewportOf: customGetViewportOf,
+        domSetViewport: customSetViewport,
+        domSetViewportOf: customSetViewportOf,
+        domGetElement: customGetElement,
+      }
+    });
+
+
+# Focus
 
 @docs focus, blur
 
+
+# Get Viewport
+
 @docs getViewport, getViewportOf
 
+
+# Set Viewport
+
 @docs setViewport, setViewportOf
+
+
+# Position
 
 @docs getElement
 
@@ -23,7 +55,8 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
-{-| -}
+{-| A direct replacement for `elm/browser`'s [`Browser.Dom.focus`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#focus).
+-}
 focus : String -> ConcurrentTask Dom.Error ()
 focus id =
     ConcurrentTask.define
@@ -34,7 +67,8 @@ focus id =
         }
 
 
-{-| -}
+{-| A direct replacement for `elm/browser`'s [`Browser.Dom.blur`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#blur).
+-}
 blur : String -> ConcurrentTask Dom.Error ()
 blur id =
     ConcurrentTask.define
@@ -45,7 +79,8 @@ blur id =
         }
 
 
-{-| -}
+{-| A direct replacement for `elm/browser`'s [`Browser.Dom.getViewport`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#getViewport).
+-}
 getViewport : ConcurrentTask x Dom.Viewport
 getViewport =
     ConcurrentTask.define
@@ -71,7 +106,8 @@ fallbackViewport =
     }
 
 
-{-| -}
+{-| A direct replacement for `elm/browser`'s [`Browser.Dom.getViewportOf`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#getViewportOf).
+-}
 getViewportOf : String -> ConcurrentTask Dom.Error Dom.Viewport
 getViewportOf id =
     ConcurrentTask.define
@@ -82,7 +118,8 @@ getViewportOf id =
         }
 
 
-{-| -}
+{-| A direct replacement for `elm/browser`'s [`Browser.Dom.setViewport`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#setViewport).
+-}
 setViewport : Float -> Float -> ConcurrentTask x ()
 setViewport x y =
     ConcurrentTask.define
@@ -97,7 +134,8 @@ setViewport x y =
         }
 
 
-{-| -}
+{-| A direct replacement for `elm/browser`'s [`Browser.Dom.setViewportOf`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#setViewportOf).
+-}
 setViewportOf : String -> Float -> Float -> ConcurrentTask Dom.Error ()
 setViewportOf id x y =
     ConcurrentTask.define
@@ -113,7 +151,8 @@ setViewportOf id x y =
         }
 
 
-{-| -}
+{-| A direct replacement for `elm/browser`'s [`Browser.Dom.getElement`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#getElement).
+-}
 getElement : String -> ConcurrentTask Dom.Error Dom.Element
 getElement id =
     ConcurrentTask.define

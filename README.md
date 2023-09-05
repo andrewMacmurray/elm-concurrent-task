@@ -123,10 +123,11 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-- [`Http.request`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Http/)
-- [`Process.sleep`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Process/)
-- [`Random.generate`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Random/)
-- [`Time.now`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Time/)
+- [`Browser.Dom`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Browser-Dom/)
+- [`Http`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Http/)
+- [`Process`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Process/)
+- [`Random`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Random/)
+- [`Time`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Time/)
 
 ## How?
 
@@ -245,12 +246,11 @@ getAllTitles =
 
 getTitle : String -> ConcurrentTask Error String
 getTitle path =
-    Http.request
+    Http.get
         { url = "https://jsonplaceholder.typicode.com" ++ path
-        , method = "GET"
         , headers = []
-        , body = Http.emptyBody
         , expect = Http.expectJson (Decode.field "title" Decode.string)
+        , timeout = Nothing
         }
 
 
@@ -317,7 +317,7 @@ Connect the runner to your Elm app:
 
 ```ts
 import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task";
-// if you're beta testing this lib: import * as ConcurrentTask from "./elm-concurrent-task/src/runner"
+// if you're beta testing this lib: import * as ConcurrentTask from "./elm-concurrent-task/src-ts"
 
 const app = Elm.Main.init({});
 
