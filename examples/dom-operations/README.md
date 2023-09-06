@@ -1,4 +1,4 @@
-# Browser
+# Dom Operations
 
 1. Install dependencies:
 

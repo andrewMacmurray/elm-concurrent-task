@@ -8,6 +8,10 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 
 
+
+-- All Specs
+
+
 specs : List Spec
 specs =
     [ batchAndSequenceSpeedTest
@@ -17,6 +21,10 @@ specs =
     , missingFunctionSpec
     , httpMalformedSpec
     ]
+
+
+
+-- Integration Specs
 
 
 missingFunctionSpec : Spec
@@ -149,7 +157,7 @@ responseTest : Spec
 responseTest =
     Spec.describe
         "complex responses"
-        "task should decode and combine responses correctly"
+        "task should decode and combine responses"
         (Task.map5 join5
             (longRequest 100)
             (longRequest 50
@@ -202,6 +210,10 @@ responseTest =
                 )
             )
         )
+
+
+
+-- Helpers
 
 
 joinWith : String -> ConcurrentTask x String -> ConcurrentTask x String

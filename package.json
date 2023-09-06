@@ -1,7 +1,7 @@
 {
   "name": "elm-concurrent-task",
   "version": "1.0.0",
-  "description": "Run a tree of tasks concurrently",
+  "description": "Run a tree of Tasks concurrently, call JS functions as Tasks (Task Ports)",
   "scripts": {
     "test": "elm-test",
     "docs": "elm-doc-preview",

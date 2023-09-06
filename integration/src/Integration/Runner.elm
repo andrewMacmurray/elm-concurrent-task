@@ -2,7 +2,7 @@ port module Integration.Runner exposing (main)
 
 import ConcurrentTask as Task exposing (UnexpectedError)
 import Integration
-import Integration.Spec as Spec exposing (Assertion, Expect(..), Spec(..))
+import Integration.Spec as Spec exposing (Assertion, Spec(..))
 import Json.Decode as Decode
 
 
@@ -47,7 +47,7 @@ type alias Output =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    startAllSpecs
+    startAllSpecs Integration.specs
         ( { tasks = Task.pool
           , completed = []
           }
@@ -55,9 +55,9 @@ init _ =
         )
 
 
-startAllSpecs : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-startAllSpecs ( model, cmd ) =
-    List.foldl runSpec ( model, cmd ) Integration.specs
+startAllSpecs : List Spec -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+startAllSpecs specs ( model, cmd ) =
+    List.foldl runSpec ( model, cmd ) specs
 
 
 runSpec : Spec -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )

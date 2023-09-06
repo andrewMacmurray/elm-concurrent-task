@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "andrewMacmurray/elm-concurrent-task",
-    "summary": "Run a tree of tasks with structured concurrency",
+    "summary": "Run a tree of Tasks concurrently, call JS functions as Tasks (Task Ports)",
     "license": "MIT",
     "version": "1.0.0",
     "exposed-modules": [
