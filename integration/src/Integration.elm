@@ -1,10 +1,11 @@
 module Integration exposing (specs)
 
-import ConcurrentTask as Task exposing (ConcurrentTask)
+import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError(..))
 import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
 import Integration.Spec as Spec exposing (Spec)
 import Json.Decode as Decode
+import Json.Encode as Encode
 
 
 specs : List Spec
@@ -13,7 +14,27 @@ specs =
     , responseTest
     , largeBatchSpec
     , httpTimeoutSpec
+    , missingFunctionSpec
     ]
+
+
+missingFunctionSpec : Spec
+missingFunctionSpec =
+    Spec.describeUnexpected
+        "missing functions"
+        "aborts immediately if a function is not registered"
+        (Task.define
+            { function = "fire_ze_missiles"
+            , expect = Task.expectWhatever
+            , errors = Task.expectThrows identity
+            , args = Encode.null
+            }
+            |> Task.andThenDo (ConcurrentTask.Process.sleep 500)
+            |> Task.return "Completed"
+        )
+        (Spec.shouldEqual
+            (MissingFunction "fire_ze_missiles is not registered")
+        )
 
 
 httpTimeoutSpec : Spec
@@ -28,7 +49,7 @@ httpTimeoutSpec =
             , timeout = Just 100
             }
         )
-        (Spec.assertErrors
+        (Spec.assertError
             (Spec.shouldEqual Http.Timeout)
         )
 
@@ -185,4 +206,4 @@ waitThenRespond ms =
 
 baseUrl : String
 baseUrl =
-    "http://localhost:4000"
+    "http://localhost:4999"

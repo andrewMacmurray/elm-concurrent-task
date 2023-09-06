@@ -1,8 +1,8 @@
 port module Integration.Runner exposing (main)
 
-import ConcurrentTask as Task
+import ConcurrentTask as Task exposing (UnexpectedError)
 import Integration
-import Integration.Spec as Spec exposing (Assertion, Expect(..))
+import Integration.Spec as Spec exposing (Assertion, Expect(..), Spec(..))
 import Json.Decode as Decode
 
 
@@ -16,14 +16,13 @@ type alias Flags =
 
 type alias Model =
     { tasks : Pool
-    , unexpectedErrors : List Task.UnexpectedError
-    , completedAssertions : List Assertion
+    , completed : List Assertion
     }
 
 
 type Msg
     = OnProgress ( Pool, Cmd Msg )
-    | OnComplete (Task.Response Error Output)
+    | OnComplete (UnexpectedError -> Assertion) (Task.Response Error Output)
 
 
 
@@ -50,8 +49,7 @@ init : Flags -> ( Model, Cmd Msg )
 init _ =
     startAllSpecs
         ( { tasks = Task.pool
-          , unexpectedErrors = []
-          , completedAssertions = []
+          , completed = []
           }
         , Cmd.none
         )
@@ -62,16 +60,16 @@ startAllSpecs ( model, cmd ) =
     List.foldl runSpec ( model, cmd ) Integration.specs
 
 
-runSpec : Task.ConcurrentTask Error Output -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-runSpec spec ( model, cmd ) =
+runSpec : Spec -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+runSpec (Spec unexpected task) ( model, cmd ) =
     let
         ( tasks, cmd_ ) =
             Task.attempt
                 { send = send
-                , onComplete = OnComplete
+                , onComplete = OnComplete unexpected
                 , pool = model.tasks
                 }
-                spec
+                task
     in
     ( { model | tasks = tasks }
     , Cmd.batch [ cmd, cmd_ ]
@@ -85,38 +83,33 @@ runSpec spec ( model, cmd ) =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        OnComplete result ->
+        OnComplete handleUnexpected result ->
             result
-                |> handleResult model
+                |> handleResult model handleUnexpected
                 |> handleComplete
 
         OnProgress ( tasks, cmd ) ->
             ( { model | tasks = tasks }, cmd )
 
 
-handleResult : Model -> Task.Response Error Output -> Model
-handleResult model result =
+handleResult : Model -> (UnexpectedError -> Assertion) -> Task.Response Error Output -> Model
+handleResult model handleUnexpected result =
     case result of
         Task.Success assertion ->
-            { model | completedAssertions = assertion :: model.completedAssertions }
+            { model | completed = assertion :: model.completed }
 
         Task.Error assertion ->
-            { model | completedAssertions = assertion :: model.completedAssertions }
+            { model | completed = assertion :: model.completed }
 
         Task.UnexpectedError err ->
-            { model | unexpectedErrors = err :: model.unexpectedErrors }
+            { model | completed = handleUnexpected err :: model.completed }
 
 
 handleComplete : Model -> ( Model, Cmd Msg )
 handleComplete model =
     if allSpecsHaveRun model then
         ( model
-        , report
-            (Spec.report
-                { assertions = model.completedAssertions
-                , errors = model.unexpectedErrors
-                }
-            )
+        , report (Spec.report model.completed)
         )
 
     else
@@ -125,7 +118,7 @@ handleComplete model =
 
 allSpecsHaveRun : Model -> Bool
 allSpecsHaveRun model =
-    List.length model.completedAssertions + List.length model.unexpectedErrors == List.length Integration.specs
+    List.length model.completed == List.length Integration.specs
 
 
 

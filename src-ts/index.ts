@@ -112,7 +112,7 @@ export function register(options: Options): void {
 
     for (const def of defs) {
       if (!tasks[def.function]) {
-        debouncedSend({
+        return debouncedSend({
           attemptId: def.attemptId,
           taskId: def.taskId,
           result: {
@@ -122,7 +122,6 @@ export function register(options: Options): void {
             },
           },
         });
-        break;
       }
     }
 

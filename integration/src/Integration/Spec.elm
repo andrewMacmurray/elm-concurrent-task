@@ -1,11 +1,12 @@
 module Integration.Spec exposing
     ( Assertion
     , Expect
-    , Spec
+    , Spec(..)
     , assertAll
-    , assertErrors
+    , assertError
     , assertSuccess
     , describe
+    , describeUnexpected
     , duration
     , fail
     , pass
@@ -16,7 +17,7 @@ module Integration.Spec exposing
     , timeExecution
     )
 
-import ConcurrentTask as Task exposing (ConcurrentTask)
+import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError)
 import ConcurrentTask.Time
 import Console
 import Time
@@ -27,7 +28,11 @@ import Time
 A ConcurrentTask that contains assertions on either the Error or Success response
 
 -}
-type alias Spec =
+type Spec
+    = Spec (UnexpectedError -> Assertion) SpecTask
+
+
+type alias SpecTask =
     ConcurrentTask Assertion Assertion
 
 
@@ -61,8 +66,8 @@ assertSuccess f task =
         |> Task.mapError (\e -> Fail ("The Task returned an error: " ++ Debug.toString e))
 
 
-assertErrors : (x -> Expect) -> ConcurrentTask x a -> ConcurrentTask Expect Expect
-assertErrors f task =
+assertError : (x -> Expect) -> ConcurrentTask x a -> ConcurrentTask Expect Expect
+assertError f task =
     task
         |> Task.mapError f
         |> Task.map (\a -> Fail ("The Task was expected to fail but didn't, got: " ++ Debug.toString a))
@@ -148,7 +153,7 @@ shouldEqual a b =
         Pass
 
     else
-        Fail ("Expected: " ++ Debug.toString b ++ ", Got: " ++ Debug.toString a)
+        Fail ("\n Expected: " ++ Debug.toString a ++ ",\n Got:      " ++ Debug.toString b)
 
 
 duration : Timed a -> Int
@@ -165,44 +170,48 @@ describe :
 describe name description task assert =
     task
         |> assert
-        |> Task.map
-            (\expect ->
-                Assertion
-                    { name = name
-                    , description = description
-                    , expect = expect
-                    }
-            )
-        |> Task.mapError
-            (\expect ->
-                Assertion
-                    { name = name
-                    , description = description
-                    , expect = expect
-                    }
-            )
+        |> Task.map (toAssertion name description)
+        |> Task.mapError (toAssertion name description)
+        |> Spec (failOnUnexpectedError >> toAssertion name description)
 
 
-type alias Report =
-    { assertions : List Assertion
-    , errors : List Task.UnexpectedError
-    }
+describeUnexpected : String -> String -> ConcurrentTask a b -> (UnexpectedError -> Expect) -> Spec
+describeUnexpected name description task assertUnexpected =
+    task
+        |> Task.map (failOnSuccess >> toAssertion name description)
+        |> Task.mapError (failOnError >> toAssertion name description)
+        |> Spec (assertUnexpected >> toAssertion name description)
 
 
-report : Report -> { message : String, passed : Bool }
+toAssertion : String -> String -> Expect -> Assertion
+toAssertion name description expect =
+    Assertion
+        { name = name
+        , description = description
+        , expect = expect
+        }
+
+
+failOnError : a -> Expect
+failOnError e =
+    Fail ("Task raised an Error " ++ Debug.toString e)
+
+
+failOnSuccess : a -> Expect
+failOnSuccess a =
+    Fail ("Task Succeeded but was expected to fail " ++ Debug.toString a)
+
+
+failOnUnexpectedError : UnexpectedError -> Expect
+failOnUnexpectedError e =
+    Fail ("An Unexpected Error was raised " ++ Debug.toString e)
+
+
+report : List Assertion -> { message : String, passed : Bool }
 report r =
-    { message = reportMessage r
-    , passed = List.isEmpty r.errors && allPassed r.assertions
+    { message = reportAssertions r
+    , passed = allPassed r
     }
-
-
-reportMessage : Report -> String
-reportMessage r =
-    if List.isEmpty r.errors then
-        reportAssertions r.assertions
-
-    else
-        reportAssertions r.assertions ++ "\n" ++ reportErrors r.errors
 
 
 allPassed : List Assertion -> Bool
@@ -223,14 +232,3 @@ reportAssertion (Assertion a) =
 
         Fail reason ->
             Console.red ("FAIL ❌ - " ++ a.name ++ " - " ++ reason)
-
-
-reportErrors : List Task.UnexpectedError -> String
-reportErrors errs =
-    if List.isEmpty errs then
-        ""
-
-    else
-        Console.red "Unexpected Errors: "
-            ++ "\n"
-            ++ String.join "\n" (List.map Debug.toString errs)

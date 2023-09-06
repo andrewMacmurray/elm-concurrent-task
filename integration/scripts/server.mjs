@@ -2,7 +2,7 @@ import express from "express";
 import morgan from "morgan";
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4999;
 
 app.use(morgan("tiny"));
 app.use(express.json());
