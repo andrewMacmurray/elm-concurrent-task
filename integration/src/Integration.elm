@@ -15,6 +15,7 @@ specs =
     , largeBatchSpec
     , httpTimeoutSpec
     , missingFunctionSpec
+    , httpMalformedSpec
     ]
 
 
@@ -35,6 +36,35 @@ missingFunctionSpec =
         (Spec.shouldEqual
             (MissingFunction "fire_ze_missiles is not registered")
         )
+
+
+httpMalformedSpec : Spec
+httpMalformedSpec =
+    Spec.describe
+        "malformed http response"
+        "returns a BadBody for non JSON responses when expecting JSON"
+        (Http.get
+            { url = baseUrl ++ "/malformed"
+            , headers = []
+            , expect = Http.expectJson (Decode.field "invalid" Decode.string)
+            , timeout = Nothing
+            }
+        )
+        (Spec.assertError assertMalformedResponse)
+
+
+assertMalformedResponse : Http.Error -> Spec.Expect
+assertMalformedResponse err =
+    case err of
+        Http.BadBody _ _ e ->
+            if String.contains "This is not valid JSON!" (Decode.errorToString e) then
+                Spec.pass
+
+            else
+                Spec.failWith "Got BadBody but expected invalid JSON Error" e
+
+        _ ->
+            Spec.failWith "Expected BadBody, got" err
 
 
 httpTimeoutSpec : Spec

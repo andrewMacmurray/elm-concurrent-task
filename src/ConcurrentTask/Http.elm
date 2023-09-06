@@ -347,7 +347,7 @@ decodeJsonBody decoder meta =
                         Decode.succeed (Ok a)
 
                     Err e ->
-                        withBodyValue (\body -> Err (BadBody meta body e))
+                        Decode.succeed (Err (BadBody meta (Encode.string res) e))
             )
 
 

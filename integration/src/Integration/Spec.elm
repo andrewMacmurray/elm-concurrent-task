@@ -9,6 +9,7 @@ module Integration.Spec exposing
     , describeUnexpected
     , duration
     , fail
+    , failWith
     , pass
     , report
     , shouldBeFasterThan
@@ -59,18 +60,23 @@ fail =
     Fail
 
 
+failWith : String -> a -> Expect
+failWith message val =
+    Fail (message ++ ": " ++ Debug.toString val)
+
+
 assertSuccess : (a -> Expect) -> ConcurrentTask x a -> ConcurrentTask Expect Expect
 assertSuccess f task =
     task
         |> Task.map f
-        |> Task.mapError (\e -> Fail ("The Task returned an error: " ++ Debug.toString e))
+        |> Task.mapError (failWith "The Task returned an error")
 
 
 assertError : (x -> Expect) -> ConcurrentTask x a -> ConcurrentTask Expect Expect
 assertError f task =
     task
         |> Task.mapError f
-        |> Task.map (\a -> Fail ("The Task was expected to fail but didn't, got: " ++ Debug.toString a))
+        |> Task.map (failWith "The Task was expected to fail but didn't, got")
 
 
 assertAll : List Expect -> Expect
@@ -172,14 +178,14 @@ describe name description task assert =
         |> assert
         |> Task.map (toAssertion name description)
         |> Task.mapError (toAssertion name description)
-        |> Spec (failOnUnexpectedError >> toAssertion name description)
+        |> Spec (failWith "An Unexpected Error was raised" >> toAssertion name description)
 
 
 describeUnexpected : String -> String -> ConcurrentTask a b -> (UnexpectedError -> Expect) -> Spec
 describeUnexpected name description task assertUnexpected =
     task
-        |> Task.map (failOnSuccess >> toAssertion name description)
-        |> Task.mapError (failOnError >> toAssertion name description)
+        |> Task.map (failWith "Task Succeeded but was expected to fail" >> toAssertion name description)
+        |> Task.mapError (failWith "Task raised an Error" >> toAssertion name description)
         |> Spec (assertUnexpected >> toAssertion name description)
 
 
@@ -190,21 +196,6 @@ toAssertion name description expect =
         , description = description
         , expect = expect
         }
-
-
-failOnError : a -> Expect
-failOnError e =
-    Fail ("Task raised an Error " ++ Debug.toString e)
-
-
-failOnSuccess : a -> Expect
-failOnSuccess a =
-    Fail ("Task Succeeded but was expected to fail " ++ Debug.toString a)
-
-
-failOnUnexpectedError : UnexpectedError -> Expect
-failOnUnexpectedError e =
-    Fail ("An Unexpected Error was raised " ++ Debug.toString e)
 
 
 report : List Assertion -> { message : String, passed : Bool }
