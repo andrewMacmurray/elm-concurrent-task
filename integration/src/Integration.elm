@@ -31,7 +31,7 @@ missingFunctionSpec : Spec
 missingFunctionSpec =
     Spec.describeUnexpected
         "missing functions"
-        "aborts immediately if a function is not registered"
+        "task should abort immediately if a function is not registered"
         (Task.define
             { function = "fire_ze_missiles"
             , expect = Task.expectWhatever
@@ -50,7 +50,7 @@ httpMalformedSpec : Spec
 httpMalformedSpec =
     Spec.describe
         "malformed http response"
-        "returns a BadBody for non JSON responses when expecting JSON"
+        "should return a BadBody Error for non JSON responses when expecting JSON"
         (Http.get
             { url = baseUrl ++ "/malformed"
             , headers = []
@@ -79,16 +79,23 @@ httpTimeoutSpec : Spec
 httpTimeoutSpec =
     Spec.describe
         "http timeout"
-        "handles http timeouts"
-        (Http.get
-            { url = waitThenRespond 10000
-            , headers = []
-            , expect = Http.expectWhatever
-            , timeout = Just 100
-            }
+        "http requests should abort if request takes longer than given timeout"
+        (Spec.timeExecution
+            (Http.get
+                { url = waitThenRespond 10000
+                , headers = []
+                , expect = Http.expectWhatever
+                , timeout = Just 100
+                }
+            )
         )
         (Spec.assertError
-            (Spec.shouldEqual Http.Timeout)
+            (\err ->
+                Spec.assertAll
+                    [ Spec.shouldEqual Http.Timeout err.result
+                    , err |> Spec.shouldHaveDurationLessThan 1000 -- account for test flake
+                    ]
+            )
         )
 
 
@@ -101,7 +108,7 @@ largeBatchSpec =
     in
     Spec.describe
         "large batches"
-        "can handle large batches"
+        "large batches should complete in reasonable time"
         (Spec.timeExecution
             (ConcurrentTask.Process.sleep 100
                 |> List.repeat batchSize

@@ -109,20 +109,32 @@ type alias Timed a =
     }
 
 
-timeExecution : ConcurrentTask x a -> ConcurrentTask x (Timed a)
+timeExecution : ConcurrentTask x a -> ConcurrentTask (Timed x) (Timed a)
 timeExecution task =
     ConcurrentTask.Time.now
         |> Task.andThen
             (\start ->
                 task
+                    |> Task.onError
+                        (\x ->
+                            ConcurrentTask.Time.now
+                                |> Task.andThen
+                                    (\finish ->
+                                        Task.fail
+                                            { start = start
+                                            , finish = finish
+                                            , result = x
+                                            }
+                                    )
+                        )
                     |> Task.andThen
-                        (\res ->
+                        (\a ->
                             ConcurrentTask.Time.now
                                 |> Task.map
                                     (\finish ->
                                         { start = start
                                         , finish = finish
-                                        , result = res
+                                        , result = a
                                         }
                                     )
                         )
