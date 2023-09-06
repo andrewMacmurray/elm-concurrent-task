@@ -18,6 +18,15 @@ app.get("/boom", (req, res) => {
   res.send({ message: "error" });
 });
 
+app.get("/flaky", (req, res) => {
+  if (Math.random() > 0.7) {
+    res.send({ message: "ok" });
+  } else {
+    res.status(400);
+    res.send({ message: "error" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Listening on port ${PORT}`);
 });
