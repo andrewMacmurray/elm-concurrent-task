@@ -1,5 +1,5 @@
 import { Elm } from "./Integration/Runner.elm";
-import * as ConcurrentTask from "../../src-ts";
+import * as ConcurrentTask from "../../runner";
 
 const { ports } = Elm.Integration.Runner.init({ flags: null });
 

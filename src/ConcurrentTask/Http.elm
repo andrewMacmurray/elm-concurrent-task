@@ -28,7 +28,7 @@ If needed you can supply a custom implementation like so:
       return ...<Your Custom Http Request>
     }
 
-See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/http/fetch.ts) to see how to create your own.
+See the [typescript definitions](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/runner/http/index.ts) and the [fetch adapter](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/runner/http/fetch.ts) to see how to create your own.
 
 **Note:**
 

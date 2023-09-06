@@ -9,7 +9,7 @@ module ConcurrentTask.Browser.Dom exposing
 
 The JavaScript runner has these tasks builtin by default. There shouldn't be much need to do this, but they can be overridden like so:
 
-**NOTE:** You can see the [built-in implementations here](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/src-ts/browser/dom.ts). They follow the [`Elm.Kernel`](https://github.com/elm/browser/blob/1.0.2/src/Elm/Kernel/Browser.js) implementations as closely as possible.
+**NOTE:** You can see the [built-in implementations here](https://github.com/andrewMacmurray/elm-concurrent-task/blob/main/runner/browser/dom.ts). They follow the [`Elm.Kernel`](https://github.com/elm/browser/blob/1.0.2/src/Elm/Kernel/Browser.js) implementations as closely as possible.
 
     import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
 

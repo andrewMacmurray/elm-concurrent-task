@@ -317,7 +317,7 @@ Connect the runner to your Elm app:
 
 ```ts
 import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task";
-// if you're beta testing this lib: import * as ConcurrentTask from "./elm-concurrent-task/src-ts"
+// if you're beta testing this lib: import * as ConcurrentTask from "./elm-concurrent-task/runner"
 
 const app = Elm.Main.init({});
 
