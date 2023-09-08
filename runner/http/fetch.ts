@@ -66,6 +66,8 @@ function toHttpError(err: any): HttpError {
       return "NETWORK_ERROR";
     case "EAGAIN":
       return "NETWORK_ERROR";
+    case "UND_ERR_SOCKET":
+      return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
   }
