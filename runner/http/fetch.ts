@@ -107,8 +107,6 @@ function toHttpError(err: any): HttpError {
   switch (err.name) {
     case "AbortError":
       return "TIMEOUT";
-    case "TypeError":
-      return "BAD_BODY";
   }
 
   return err.cause?.code;
