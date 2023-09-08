@@ -66,10 +66,42 @@ function toHttpError(err: any): HttpError {
       return "NETWORK_ERROR";
     case "EAGAIN":
       return "NETWORK_ERROR";
-    case "UND_ERR_SOCKET":
-      return "NETWORK_ERROR";
     case "ERR_INVALID_URL":
       return "BAD_URL";
+    case "UND_ERR":
+      return "NETWORK_ERROR"
+    case "UND_ERR_CONNECT_TIMEOUT":
+      return "NETWORK_ERROR"
+    case "UND_ERR_HEADERS_TIMEOUT":
+      return "NETWORK_ERROR"
+    case "UND_ERR_HEADERS_OVERFLOW":
+      return "NETWORK_ERROR"
+    case "UND_ERR_BODY_TIMEOUT":
+      return "NETWORK_ERROR"
+    case "UND_ERR_RESPONSE_STATUS_CODE":
+      return "NETWORK_ERROR"
+    case "UND_ERR_INVALID_ARG":
+      return "NETWORK_ERROR"
+    case "UND_ERR_INVALID_RETURN_VALUE":
+      return "NETWORK_ERROR"
+    case "UND_ERR_ABORTED":
+      return "NETWORK_ERROR"
+    case "UND_ERR_DESTROYED":
+      return "NETWORK_ERROR"
+    case "UND_ERR_CLOSED":
+      return "NETWORK_ERROR"
+    case "UND_ERR_SOCKET":
+      return "NETWORK_ERROR"
+    case "UND_ERR_NOT_SUPPORTED":
+      return "NETWORK_ERROR"
+    case "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH":
+      return "NETWORK_ERROR"
+    case "UND_ERR_RES_CONTENT_LENGTH_MISMATCH":
+      return "NETWORK_ERROR"
+    case "UND_ERR_INFO":
+      return "NETWORK_ERROR"
+    case "UND_ERR_RES_EXCEEDED_MAX_SIZE":
+      return "NETWORK_ERROR"
   }
 
   switch (err.name) {
