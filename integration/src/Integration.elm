@@ -14,8 +14,8 @@ import Json.Encode as Encode
 
 specs : List Spec
 specs =
-    [ batchAndSequenceSpeedTest
-    , responseTest
+    [ batchAndSequenceSpec
+    , complexResponseSpec
     , largeBatchSpec
     , httpTimeoutSpec
     , missingFunctionSpec
@@ -125,8 +125,8 @@ largeBatchSpec =
         )
 
 
-batchAndSequenceSpeedTest : Spec
-batchAndSequenceSpeedTest =
+batchAndSequenceSpec : Spec
+batchAndSequenceSpec =
     Spec.describe
         "batch and sequence speed"
         "the batched branch should be faster than the sequential branch"
@@ -160,8 +160,8 @@ batchAndSequenceSpeedTest =
         )
 
 
-responseTest : Spec
-responseTest =
+complexResponseSpec : Spec
+complexResponseSpec =
     Spec.describe
         "complex responses"
         "task should decode and combine responses"
