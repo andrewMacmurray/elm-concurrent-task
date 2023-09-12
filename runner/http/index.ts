@@ -20,12 +20,7 @@ export interface ResponseSuccess {
   statusText: string;
 }
 
-export type HttpError =
-  | "BAD_URL"
-  | "NETWORK_ERROR"
-  | "TIMEOUT"
-  | "BAD_BODY"
-  | string;
+export type HttpError = "BAD_URL" | "NETWORK_ERROR" | "TIMEOUT";
 
 export interface ResponseError {
   error: { reason: HttpError; message: string };
