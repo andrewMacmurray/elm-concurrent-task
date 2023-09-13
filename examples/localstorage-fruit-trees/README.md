@@ -1,6 +1,6 @@
-# Dom Operations
+# Localstorage Fruit Trees
 
-Interactive examples of `Browser.Dom` operations.
+Add fruits to a basket using localstorage.
 
 1. Install dependencies:
 
