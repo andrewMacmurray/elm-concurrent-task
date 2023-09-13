@@ -194,7 +194,7 @@ elm install andrewMacmurray/elm-concurrent-task
 Install the JavaScript/TypeScript runner with
 
 ```
-npm install @andrewMacmurray/elm-concurrent-task
+npm install @andrewmacmurray/elm-concurrent-task
 ```
 
 ### 2. Add to your Elm app
@@ -339,7 +339,7 @@ main =
 Connect the runner to your Elm app:
 
 ```ts
-import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task";
+import * as ConcurrentTask from "@andrewmacmurray/elm-concurrent-task";
 
 const app = Elm.Main.init({});
 

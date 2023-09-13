@@ -13,8 +13,8 @@ Internally It uses the [fetch api](https://developer.mozilla.org/en-US/docs/Web/
 
 If needed you can supply a custom implementation like so:
 
-    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
-    import { HttpRequest, HttpResponse } from "@andrewMacmurray/elm-concurrent-task"
+    import * as ConcurrentTask from "@andrewmacmurray/elm-concurrent-task"
+    import { HttpRequest, HttpResponse } from "@andrewmacmurray/elm-concurrent-task"
 
     ConcurrentTask.register({
       tasks: {},

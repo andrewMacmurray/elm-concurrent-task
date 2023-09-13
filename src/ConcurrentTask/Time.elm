@@ -6,7 +6,7 @@ The JavaScript runner has these tasks builtin by default. If needed they can be 
 
 **NOTE:** The custom examples are the same as the built-in implementations.
 
-    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
+    import * as ConcurrentTask from "@andrewmacmurray/elm-concurrent-task"
 
     ConcurrentTask.register({
       tasks: {},

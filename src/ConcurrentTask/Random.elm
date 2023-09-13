@@ -6,7 +6,7 @@ This Task uses a builtin randomSeed task from the JavaScript runner (the [same s
 
 If needed you can override the randomSeed task like so (e.g. use node or web crypto module to generate secure randomness):
 
-    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task"
+    import * as ConcurrentTask from "@andrewmacmurray/elm-concurrent-task"
     import crypto from "node:crypto"
 
     ConcurrentTask.register({

@@ -237,7 +237,7 @@ Define your task in `Elm`:
 And in your `JavaScript` runner:
 
     import * as fs from "node:fs/promises"
-    import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task";
+    import * as ConcurrentTask from "@andrewmacmurray/elm-concurrent-task";
 
 
     const app = Elm.Main.init({});
