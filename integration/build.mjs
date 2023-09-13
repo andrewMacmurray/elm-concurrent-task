@@ -13,7 +13,6 @@ function main() {
 const options = {
   ENTRTY: "src/index.ts",
   OUTFILE: "dist/index.js",
-  START: "set -e; node ./dist/index.js",
 };
 
 function ci() {
@@ -22,7 +21,7 @@ function ci() {
     bundle: true,
     outfile: options.OUTFILE,
     platform: "node",
-    plugins: [ElmPlugin({}), start({ script: options.START })],
+    plugins: [ElmPlugin({})],
   });
 }
 
@@ -33,7 +32,7 @@ function watch() {
       bundle: true,
       outfile: options.OUTFILE,
       platform: "node",
-      plugins: [ElmPlugin({}), start({ script: options.START })],
+      plugins: [ElmPlugin({}), start({ script: "node ./dist/index.js" })],
     })
     .then((ctx) => ctx.watch());
 }
