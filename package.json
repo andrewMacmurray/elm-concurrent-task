@@ -13,7 +13,7 @@
     "docs:verify": "elm make --docs docs.json",
     "review": "elm-review --fix",
     "review:watch": "elm-review --watch",
-    "tsc:check": "tsc"
+    "runner:compile": "tsc"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
