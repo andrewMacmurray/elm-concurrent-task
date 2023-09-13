@@ -44,49 +44,6 @@ Check out the built-ins for more details:
 
 # Error Handling
 
-`Error` handlers provide different ways to capture errors for a `Task`.
-
-
-## Understanding Errors
-
-`ConcurrentTask` has two main kinds of `Errors`:
-
-
-## Error
-
-This is the `x` in the `ConcurrentTask x a` and represents an **expected error** as part of your task flow.
-You can handle these with [mapError](ConcurrentTask#mapError) and [onError](ConcurrentTask#onError).
-
-
-## UnexpectedError
-
-You can think of these as **unhandled** errors that are not a normal part of your task flow.
-
-The idea behind `UnexpectedError` is to keep your task flow types `ConcurrentTask x a` clean and meaningful,
-and optionally lift some of them into your `Error` type where it makes sense
-
-See the section on [UnexpectedError](ConcurrentTask#UnexpectedError)s for more details.
-
-
-## Handling Unexpected Errors
-
-Some of these can be captured as regular `Errors` (The `x` in `ConcurrentTask x a`) using handlers and hooks:
-
-  - `UnhandledJsException` can be:
-      - converted into a regular `Error` with [expectThrows](ConcurrentTask#expectThrows).
-      - converted into a `Success` with [catchAll](ConcurrentTask#catchAll).
-      - lifted into regular task flow with [onJsException](ConcurrentTask#onJsException).
-  - `ResponseDecoderFailure` can be:
-      - lifted into regular task flow with [onResponseDecoderFailure](ConcurrentTask#onResponseDecoderFailure).
-
-
-## Un-catchable Errors
-
-Some `UnexpectedError`s cannot be caught, these are assumed to have no meaningful way to recover from:
-
-  - `MissingFunction` will always be thrown if there is a mismatch between JS and Elm function names.
-  - `ErrorsDecoderFailure` will always be thrown if a returned error didn't match a provided [expectErrors](ConcurrentTask#expectErrors) decoder.
-
 @docs Errors, expectThrows, expectErrors, expectNoErrors
 
 
@@ -354,7 +311,30 @@ expectWhatever =
 -- Errors
 
 
-{-| A handler passed to `ConcurrentTask.define`.
+{-| The `Errors` type provides different ways to capture errors for a `ConcurrentTask`.
+
+
+## Understanding Errors
+
+`ConcurrentTask` has two main kinds of `Errors`:
+
+
+### [Error](ConcurrentTask#Response)
+
+This is the `x` in the `ConcurrentTask x a` and represents an **expected error** as part of your task flow.
+You can handle these with [mapError](ConcurrentTask#mapError) and [onError](ConcurrentTask#onError).
+
+
+### [UnexpectedError](ConcurrentTask#UnexpectedError)
+
+You can think of these as **unhandled** errors that are not a normal part of your task flow.
+
+The idea behind `UnexpectedError` is to keep your task flow types `ConcurrentTask x a` clean and meaningful,
+and optionally lift some of them into regular task flow where it makes sense.
+Two hooks you can use for this are [onResponseDecoderFailure](ConcurrentTask#onResponseDecoderFailure) and [onJsException](ConcurrentTask#onJsException).
+
+See the section on [UnexpectedError](ConcurrentTask#UnexpectedError)s for more details.
+
 -}
 type alias Errors x =
     Internal.Errors x
@@ -381,8 +361,7 @@ Maybe your JS function throws an `AccessError`:
 When the task is run it will complete with `Task.Error (MyError "AccessError: access denied")`.
 This can be transformed and chained using `Task.mapError` and `Task.onError`.
 
-
-### Note:
+**NOTE:**
 
 This kind of error handling can be useful to get started quickly,
 but it's often much more expressive and useful if you catch and explicitly return error data in your JS function that can be decoded with the `expectError` handler.
@@ -393,7 +372,7 @@ expectThrows =
     Internal.expectThrows
 
 
-{-| Decode explicit errors returned by a Task. Use this when you want more meaningful errors in your task.
+{-| Decode explicit errors returned by a `ConcurrentTask`. Use this when you want more meaningful errors in your task.
 
 This will decode the value from an `error` key returned by a JS function, e.g.:
 
@@ -404,12 +383,15 @@ This will decode the value from an `error` key returned by a JS function, e.g.:
       }
     }
 
-**Important Notes**:
+**IMPORTANT NOTES**:
 
   - If your function doesn't return an `"error"` key it will be interpreted as a success response.
-  - If your JS function throws an exception it will surface as a `RunnerError UnhandledJsException` -
-    make sure to catch these in your JS function and return them as structured error responses.
-  - If your error decoder fails the task will surface a `RunnerError ExpectErrorFailure`.
+  - If your JS function throws an exception it will surface an `UnhandledJsException` -
+    make sure to either:
+      - catch these in your JS function and return them as structured errors.
+      - catch them with the [onJsException](ConcurrentTask#onJsException) hook.
+  - If your error decoder fails the task will surface an `ExpectErrorFailure`.
+      - This error is uncatchable, make sure to return data that matches your error decoder.
 
 Maybe you want to handle different kinds of errors when writing to `localStorage`:
 
@@ -488,7 +470,7 @@ expectErrors =
 {-| Only use this handler for functions that you don't expect to fail.
 
 **NOTE**:
-If the expect decoder fails or the function throws an exception, these will be surfaced as `UnexpectedError`s.
+If the decoder fails or the function throws an exception, these will be surfaced as `UnexpectedError`s.
 
 e.g. logging to the console:
 
@@ -550,7 +532,11 @@ onResponseDecoderFailure =
     Internal.onResponseDecoderFailure
 
 
-{-| Use this hook if you want access to the raw JsException to lift it into the task flow
+{-| Use this to capture a raw JsException to lift it into the task flow.
+
+**NOTE**: Tasks defined with [expectThrows](ConcurrentTask#expectThrows) will never trigger this hook,
+make sure to only use it with [expectErrors](ConcurrentTask#expectErrors) and [expectNoErrors](ConcurrentTask#expectNoErrors).
+
 -}
 onJsException :
     ({ message : String, raw : Decode.Value } -> ConcurrentTask x a)
@@ -821,9 +807,7 @@ onError =
 -- Run a Task
 
 
-{-| Start a Task.
-
-This needs:
+{-| Start a `ConcurrentTask`. This needs:
 
   - A task `Pool` (The internal model to keep track of task progress).
   - The `send` port.
@@ -876,14 +860,20 @@ type Response x a
 
 {-| This error will surface if something **unexpected** has happened during the task flow.
 
-These errors will be returned **if not handled** during task flow:
 
-  - `UnhandledJsException` - a task threw an exception and was not caught with an error handler (can be caught with `expectThrows` and `catchAll`).
+## Catchable Errors
+
+These errors will be surfaced **if not handled** during task flow:
+
+  - `UnhandledJsException` - a task threw an exception and was not caught with an error handler (can be caught with [expectThrows](ConcurrentTask#expectThrows) and [onJsException](ConcurrentTask#onJsException)).
   - `ResponseDecoderFailure` - a task returned an unexpected response (can be caught with [onResponseDecoderFailure](ConcurrentTask#onResponseDecoderFailure)).
+
+
+## Uncatchable Errors
 
 These errors will **always surface**, as they are assumed to have no meaningful way to recover from during regular task flow:
 
-  - `ErrorsDecoderFailure` - a task returned error data in an unexpected format.
+  - `ErrorsDecoderFailure` - a task returned error data in an unexpected format when using an [expectErrors](ConcurrentTask#expectErrors) handler.
   - `MissingFunction` - a task tried to call a function in the JS runner which was not registered.
   - `InternalError` - something went wrong with the runner internals - this should not happen, but if you see this error [please leave details and an issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues/new).
 
