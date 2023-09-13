@@ -1,5 +1,7 @@
 ## Many Requests
 
+Fires of a sequence of concurrent http requests with error recovery steps.
+
 1. Install dependencies:
 
 ```

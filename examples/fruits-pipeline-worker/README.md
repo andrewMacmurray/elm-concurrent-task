@@ -1,8 +1,8 @@
 ## Fruits Pipeline Worker
 
-To run the pipeline worker example:
+A fruit picking worker process that talks to AWS services.
 
-Add the env vars:
+Add the env vars to your shell:
 
 ```
 export IN_QUEUE=tasks-in

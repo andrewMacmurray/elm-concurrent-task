@@ -1,5 +1,7 @@
 # Dom Operations
 
+Interactive examples of `Browser.Dom` operations.
+
 1. Install dependencies:
 
 ```
