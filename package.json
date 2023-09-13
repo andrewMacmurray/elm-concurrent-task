@@ -12,6 +12,7 @@
     "docs": "elm-doc-preview",
     "docs:verify": "elm make --docs docs.json",
     "review": "elm-review --fix",
+    "review:ci": "elm-review",
     "review:watch": "elm-review --watch",
     "runner:compile": "tsc"
   },

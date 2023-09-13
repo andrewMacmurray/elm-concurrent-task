@@ -12,7 +12,7 @@ This package is heavily inspired by [elm-pages](https://github.com/dillonkearns/
 
 See the [examples](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/examples) for more things you can do!
 
-View [the elm-package docs here](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/latest/).
+View [the elm-package docs here](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/).
 
 ## Why?
 
