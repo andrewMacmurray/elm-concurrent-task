@@ -1,5 +1,7 @@
 # Elm Concurrent Task
 
+[![CI](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/ci.yml)
+
 ## What?
 
 - An alternative `Task` api - run a tree of tasks concurrently.
