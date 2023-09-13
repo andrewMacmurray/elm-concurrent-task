@@ -2,13 +2,14 @@ module ConcurrentTask exposing
     ( ConcurrentTask, define
     , Expect, expectJson, expectString, expectWhatever
     , Errors, expectThrows, expectErrors, expectNoErrors
-    , onResponseDecoderFailure, onJsException
+    , onJsException
     , mapError, onError
     , succeed, fail, andThen
     , fromResult, andThenDo, return
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , attempt, Response(..), UnexpectedError(..), onProgress, Pool, pool
+    , onDecodeFailure
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -545,8 +546,8 @@ Maybe you want to represent an unexpected response as a `BadBody` error for a ht
             |> ConcurrentTask.onResponseDecoderFailure (BadBody >> Task.fail)
 
 -}
-onResponseDecoderFailure : (Decode.Error -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
-onResponseDecoderFailure =
+onDecodeFailure : (Decode.Error -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
+onDecodeFailure =
     Internal.onResponseDecoderFailure
 
 

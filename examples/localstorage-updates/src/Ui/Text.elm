@@ -2,6 +2,7 @@ module Ui.Text exposing
     ( baseSize
     , bold
     , color
+    , error
     , f1
     , f2
     , f3
@@ -20,6 +21,7 @@ module Ui.Text exposing
 
 import Element exposing (Attribute, Element)
 import Element.Font as Font
+import Ui.Palette as Palette
 import Ui.Spacing as Spacing
 
 
@@ -103,6 +105,11 @@ fontStack =
 text : List (Attribute msg) -> String -> Element msg
 text attrs content =
     Element.el (f5 :: attrs) (Element.text content)
+
+
+error : List (Attribute msg) -> String -> Element msg
+error attrs content =
+    text (color Palette.error :: attrs) content
 
 
 paragraph : List (Attribute msg) -> List (Element msg) -> Element msg
