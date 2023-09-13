@@ -14,7 +14,8 @@
     "review": "elm-review --fix",
     "review:ci": "elm-review",
     "review:watch": "elm-review --watch",
-    "runner:compile": "tsc"
+    "runner:compile": "tsc",
+    "check-versions": "node ./scripts/versions.js"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",

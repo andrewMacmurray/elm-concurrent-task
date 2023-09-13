@@ -384,3 +384,10 @@ View the docs locally with:
 ```
 npm run docs
 ```
+
+## Publishing a new release
+
+1. Run `elm bump` to bump the elm version.
+2. Update the `version` in [package.json](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/package.json) to match the new elm version.
+3. Commit and push the updates.
+4. Wait for the [Publish Github Action](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/publish.yml) to complete.
