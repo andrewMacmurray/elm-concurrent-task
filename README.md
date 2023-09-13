@@ -14,8 +14,6 @@ See the [examples](https://github.com/andrewMacmurray/elm-concurrent-task/tree/m
 
 Preview [the docs here](https://elm-doc-preview.netlify.app/?repo=andrewMacmurray/elm-concurrent-task&version=main).
 
-I would love your help beta testing this library! If you're interested please checkout the [Beta Testing Section](#beta-testing).
-
 ## Why?
 
 ### Structured Concurrency
@@ -183,33 +181,6 @@ Check out the built-ins for more details:
 
 ## How?
 
-## Beta Testing
-
-I would love your help beta testing this lib before publishing it!
-
-If you want to try it out, here are a few steps:
-
-1. Clone this repo into your elm project:
-
-```
-git clone git@github.com:andrewMacmurray/elm-concurrent-task.git
-```
-
-2. Add `./elm-concurrent-task/src` to your `elm.json` `source-directories`.
-
-```json
-"source-directories": [
-    "./src",
-    "./elm-concurrent-task/src"
-],
-```
-
-3. Follow steps 2 & 3 in the [Getting Started](#getting-started) section below to try it out in your project.
-
-   You can preview [the docs here](https://elm-doc-preview.netlify.app/?repo=andrewMacmurray/elm-concurrent-task&version=main).
-
-4. Leave an [issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues) or chat to me on the [`#Elm Slack`](https://elmlang.slack.com/team/U4Y56SNH3) - I'd love to hear from you with any feedback 😄.
-
 ### Getting Started
 
 ### 1. Install Elm and JavaScript/TypeScript packages
@@ -369,7 +340,6 @@ Connect the runner to your Elm app:
 
 ```ts
 import * as ConcurrentTask from "@andrewMacmurray/elm-concurrent-task";
-// if you're beta testing this lib: import * as ConcurrentTask from "./elm-concurrent-task/runner"
 
 const app = Elm.Main.init({});
 
