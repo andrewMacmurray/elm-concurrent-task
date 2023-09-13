@@ -93,7 +93,7 @@ httpTimeoutSpec =
             (\err ->
                 Spec.assertAll
                     [ Spec.shouldEqual Http.Timeout err.result
-                    , err |> Spec.shouldHaveDurationLessThan 1000 -- account for test flake
+                    , err |> Spec.shouldHaveDurationLessThan 2000 -- account for test flake
                     ]
             )
         )

@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node ./build.mjs",
+    "test:ci": "node ./build.mjs --ci",
     "server": "node ./scripts/server.mjs"
   },
   "author": "",
