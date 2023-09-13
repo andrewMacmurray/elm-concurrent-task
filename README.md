@@ -54,9 +54,9 @@ This library helps you do this with a lot less boilerplate.
 
 ### A Sequenceable JavaScript FFI
 
-Sometimes you want to call JavaScript from elm in order.
+Sometimes you want to call JavaScript from elm in order. For example sequencing updates to localstorage:
 
-For example sequencing updates to localstorage:
+**NOTE**: See a [full working localstorage example here](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/examples/localstorage-fruit-trees).
 
 ```elm
 import ConcurrentTask exposing (ConcurrentTask)
@@ -64,40 +64,90 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
-type Error
-    = Error String
+
+-- Preferences
 
 
-updateTheme : Theme -> ConcurrentTask Error ()
-updateTheme theme =
+type alias Preferences =
+    { contrast : Int
+    , brightness : Int
+    }
+
+
+setContrast : Int -> ConcurrentTask Error ()
+setContrast contrast =
     getItem "preferences" decodePreferences
-        |> ConcurrentTask.map (setTheme theme >> encodePreferences)
-        |> ConcurrentTask.andThen (setItem "preferences")
+        |> ConcurrentTask.map (\preferences -> { preferences | contrast = contrast })
+        |> ConcurrentTask.andThen (encodePreferences >> setItem "preferences")
 
 
-setItem : String -> Encode.Value -> ConcurrentTask Error ()
-setItem key item =
-    ConcurrentTask.define
-        { function = "storage:setItem"
-        , expect = ConcurrentTask.expectWhatever
-        , errors = ConcurrentTask.expectThrows Error
-        , args =
-            Encode.object
-                [ ( "key", Encode.string key )
-                , ( "item", Encode.string (Encode.encode 0 item) )
-                ]
-        }
+encodePreferences : Preferences -> Encode.Value
+encodePreferences p =
+    Encode.object
+        [ ( "contrast", Encode.int p.contrast )
+        , ( "brightness", Encode.int p.brightness )
+        ]
+
+
+decodePreferences : Decoder Preferences
+decodePreferences =
+    Decode.map2 Preferences
+        (Decode.field "contrast" Decode.int)
+        (Decode.field "brightness" Decode.int)
+
+
+
+-- Localstorage
+
+
+type Error
+    = NoValue
+    | ReadBlocked
+    | DecodeError Decode.Error
+    | WriteError String
 
 
 getItem : String -> Decoder a -> ConcurrentTask Error a
 getItem key decoder =
     ConcurrentTask.define
-        { function = "storage:getItem"
+        { function = "localstorage:getItem"
         , expect = ConcurrentTask.expectString
-        , errors = ConcurrentTask.expectThrows Error
+        , errors = ConcurrentTask.expectErrors decodeReadErrors
         , args = Encode.object [ ( "key", Encode.string key ) ]
         }
-        |> ConcurrentTask.andThen (decodeItem decoder)
+        |> ConcurrentTask.map (Decode.decodeString decoder >> Result.mapError DecodeError)
+        |> ConcurrentTask.andThen ConcurrentTask.fromResult
+
+
+setItem : String -> Encode.Value -> ConcurrentTask Error ()
+setItem key value =
+    ConcurrentTask.define
+        { function = "localstorage:setItem"
+        , expect = ConcurrentTask.expectWhatever
+        , errors = ConcurrentTask.expectThrows WriteError
+        , args =
+            Encode.object
+                [ ( "key", Encode.string key )
+                , ( "value", Encode.string (Encode.encode 0 value) )
+                ]
+        }
+
+
+decodeReadErrors : Decoder Error
+decodeReadErrors =
+    Decode.string
+        |> Decode.andThen
+            (\reason ->
+                case reason of
+                    "NO_VALUE" ->
+                        Decode.succeed NoValue
+
+                    "READ_BLOCKED" ->
+                        Decode.succeed ReadBlocked
+
+                    _ ->
+                        Decode.fail ("Unrecognized Read Error: " ++ reason)
+            )
 ```
 
 ## Hack Free you say?
