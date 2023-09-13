@@ -13,7 +13,7 @@ function main() {
 const options = {
   ENTRTY: "src/index.ts",
   OUTFILE: "dist/index.js",
-  START: "node ./dist/index.js",
+  START: "set -e; node ./dist/index.js",
 };
 
 function ci() {
