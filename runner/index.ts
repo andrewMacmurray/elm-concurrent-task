@@ -1,6 +1,5 @@
 import { HttpRequest, HttpResponse } from "./http";
 import * as fetchAdapter from "./http/fetch";
-export * from "./http";
 import {
   DomError,
   DomElement,
@@ -9,6 +8,9 @@ import {
   SetViewportOfOptions,
 } from "./browser";
 import * as dom from "./browser/dom";
+
+export * from "./http";
+export * from "./browser";
 
 export interface ElmPorts {
   send: {
