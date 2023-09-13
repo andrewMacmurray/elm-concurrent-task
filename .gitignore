@@ -3,8 +3,7 @@ repl-temp-*
 
 node_modules
 dist
-.parcel*
-.graphql-generated
+lib
 
 .env
 .idea

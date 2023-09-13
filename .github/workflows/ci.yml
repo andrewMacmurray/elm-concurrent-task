@@ -29,6 +29,29 @@ jobs:
       - name: Run Unit Tests
         run: npm test
 
+  integration:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./integration
+    steps:
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.elm
+            ~/.npm
+            **/elm-stuff
+            **/node_modules
+          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - uses: jorelali/setup-elm@v5
+      - run: npm install
+
+      - name: Run Integration Tests
+        run: npm run server & npm run test:ci
+
   review:
     runs-on: ubuntu-latest
     steps:
@@ -52,25 +75,19 @@ jobs:
       - name: Run Elm Review
         run: npm run review
 
-  integration:
+  runner:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./integration
     steps:
       - uses: actions/cache@v3
         with:
           path: |
-            ~/.elm
             ~/.npm
-            **/elm-stuff
             **/node_modules
           key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
 
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-      - uses: jorelali/setup-elm@v5
       - run: npm install
 
-      - name: Run Integration Tests
-        run: npm run server & npm run test:ci
+      - name: Verify Runner Compiles
+        run: npm run tsc:check

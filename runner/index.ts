@@ -1,5 +1,13 @@
 import { HttpRequest, HttpResponse } from "./http";
 import * as fetchAdapter from "./http/fetch";
+export * from "./http";
+import {
+  DomError,
+  DomElement,
+  Viewport,
+  SetViewportOptions,
+  SetViewportOfOptions,
+} from "./browser";
 import * as dom from "./browser/dom";
 
 export interface ElmPorts {
@@ -45,13 +53,13 @@ export interface Builtins {
   timeZoneName?: () => string | number;
   randomSeed?: () => number;
   sleep?: (ms: number) => Promise<void>;
-  domFocus?: (id: string) => void | dom.Error;
-  domBlur?: (id: string) => void | dom.Error;
-  domGetViewport?: () => dom.Viewport;
-  domGetViewportOf?: (id: string) => dom.Viewport | dom.Error;
-  domSetViewport?: (args: dom.SetViewport) => void;
-  domSetViewportOf?: (args: dom.SetViewportOf) => void | dom.Error;
-  domGetElement?: (id: string) => dom.DomElement | dom.Error;
+  domFocus?: (id: string) => void | DomError;
+  domBlur?: (id: string) => void | DomError;
+  domGetViewport?: () => Viewport;
+  domGetViewportOf?: (id: string) => Viewport | DomError;
+  domSetViewport?: (args: SetViewportOptions) => void;
+  domSetViewportOf?: (args: SetViewportOfOptions) => void | DomError;
+  domGetElement?: (id: string) => DomElement | DomError;
 }
 
 const BuiltInTasks: Builtins = {
@@ -88,7 +96,7 @@ function getTimeZoneName(): string | number {
 
 // Debug Options
 
-interface DebugOptions {
+export interface DebugOptions {
   taskStart?: boolean;
   taskFinish?: boolean;
 }

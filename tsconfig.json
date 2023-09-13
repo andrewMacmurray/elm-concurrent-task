@@ -3,6 +3,7 @@
     "outDir": "lib",
     "removeComments": true,
     "target": "ESNext",
+    "declaration": true,
 
     // Module resolution
     "baseUrl": "runner",

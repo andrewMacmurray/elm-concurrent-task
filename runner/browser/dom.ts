@@ -1,42 +1,16 @@
-export type Error = { error: null };
+import {
+  Viewport,
+  DomElement,
+  DomError,
+  SetViewportOptions,
+  SetViewportOfOptions,
+} from "browser";
 
-export interface Viewport {
-  scene: {
-    width: number;
-    height: number;
-  };
-  viewport: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-}
-
-export interface DomElement {
-  scene: {
-    width: number;
-    height: number;
-  };
-  viewport: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-  element: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-}
-
-export function focus(id: string): void | Error {
+export function focus(id: string): void | DomError {
   return withDomNode(id, (el) => el.focus());
 }
 
-export function blur(id: string): void | Error {
+export function blur(id: string): void | DomError {
   return withDomNode(id, (el) => el.blur());
 }
 
@@ -52,7 +26,7 @@ export function getViewport(): Viewport {
   };
 }
 
-export function getViewportOf(id: string): Viewport | Error {
+export function getViewportOf(id: string): Viewport | DomError {
   return withDomNode(id, (el) => ({
     scene: {
       width: el.scrollWidth,
@@ -67,29 +41,18 @@ export function getViewportOf(id: string): Viewport | Error {
   }));
 }
 
-export interface SetViewport {
-  x: number;
-  y: number;
-}
-
-export function setViewport(options: SetViewport): void {
+export function setViewport(options: SetViewportOptions): void {
   window.scroll(options.y, options.y);
 }
 
-export interface SetViewportOf {
-  id: string;
-  x: number;
-  y: number;
-}
-
-export function setViewportOf(options: SetViewportOf): void | Error {
+export function setViewportOf(options: SetViewportOfOptions): void | DomError {
   return withDomNode(options.id, (el) => {
     el.scrollLeft = options.x;
     el.scrollTop = options.y;
   });
 }
 
-export function getElement(id: string): DomElement | Error {
+export function getElement(id: string): DomElement | DomError {
   return withDomNode(id, (el) => {
     const rect = el.getBoundingClientRect();
     const x = window.scrollX;
@@ -117,7 +80,7 @@ export function getElement(id: string): DomElement | Error {
 function withDomNode<a>(
   id: string,
   callback: (el: HTMLElement) => a
-): a | Error {
+): a | DomError {
   const el = document.getElementById(id);
   if (el) {
     return callback(el);
