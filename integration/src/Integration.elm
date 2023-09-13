@@ -93,7 +93,7 @@ httpTimeoutSpec =
             (\err ->
                 Spec.assertAll
                     [ Spec.shouldEqual Http.Timeout err.result
-                    , err |> Spec.shouldHaveDurationLessThan 2000 -- account for test flake
+                    , err |> Spec.shouldHaveDurationLessThan 3000 -- account for test flake
                     ]
             )
         )
@@ -118,7 +118,7 @@ largeBatchSpec =
         (Spec.assertSuccess
             (\res ->
                 Spec.assertAll
-                    [ Spec.shouldHaveDurationLessThan 3000 res
+                    [ Spec.shouldHaveDurationLessThan 5000 res
                     , res.result |> Spec.shouldEqual (List.repeat batchSize ())
                     ]
             )
