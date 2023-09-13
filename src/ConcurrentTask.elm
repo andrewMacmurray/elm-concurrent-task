@@ -1,7 +1,7 @@
 module ConcurrentTask exposing
     ( ConcurrentTask, define
     , Expect, expectJson, expectString, expectWhatever
-    , Errors, expectThrows, expectErrors, catchAll
+    , Errors, expectThrows, expectErrors, expectNoErrors
     , onResponseDecoderFailure, onJsException
     , mapError, onError
     , succeed, fail, andThen
@@ -87,7 +87,7 @@ Some `UnexpectedError`s cannot be caught, these are assumed to have no meaningfu
   - `MissingFunction` will always be thrown if there is a mismatch between JS and Elm function names.
   - `ErrorsDecoderFailure` will always be thrown if a returned error didn't match a provided [expectErrors](ConcurrentTask#expectErrors) decoder.
 
-@docs Errors, expectThrows, expectErrors, catchAll
+@docs Errors, expectThrows, expectErrors, expectNoErrors
 
 
 # Error Hooks
@@ -233,7 +233,7 @@ Here's a minimal complete example:
 
 -}
 
-import ConcurrentTask.Internal.Task as Internal
+import ConcurrentTask.Internal.ConcurrentTask as Internal
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
@@ -311,7 +311,7 @@ The `Errors` section goes into more detail on different error handling strategie
 define :
     { function : String
     , expect : Expect a
-    , errors : Errors x a
+    , errors : Errors x
     , args : Encode.Value
     }
     -> ConcurrentTask x a
@@ -356,8 +356,8 @@ expectWhatever =
 
 {-| A handler passed to `ConcurrentTask.define`.
 -}
-type alias Errors x a =
-    Internal.Errors x a
+type alias Errors x =
+    Internal.Errors x
 
 
 {-| The simplest Error handler. If a JS function throws an Exception, it will be wrapped in the provided `Error` type.
@@ -388,7 +388,7 @@ This kind of error handling can be useful to get started quickly,
 but it's often much more expressive and useful if you catch and explicitly return error data in your JS function that can be decoded with the `expectError` handler.
 
 -}
-expectThrows : (String -> x) -> Errors x a
+expectThrows : (String -> x) -> Errors x
 expectThrows =
     Internal.expectThrows
 
@@ -480,14 +480,15 @@ And on the JS side:
     }
 
 -}
-expectErrors : Decoder x -> Errors x a
+expectErrors : Decoder x -> Errors x
 expectErrors =
     Internal.expectErrors
 
 
-{-| Using this handler transforms any `JS Exceptions` or `ResponseDecoderFailures` into a `Success` with the provided fallback.
+{-| Only use this handler for functions that you don't expect to fail.
 
-Only use this handler for functions that can't fail.
+**NOTE**:
+If the expect decoder fails or the function throws an exception, these will be surfaced as `UnexpectedError`s.
 
 e.g. logging to the console:
 
@@ -498,7 +499,7 @@ e.g. logging to the console:
         ConcurrentTask.define
             { function = "console:log"
             , expect = ConcurrentTask.expectWhatever ()
-            , errors = ConcurrentTask.catchAll ()
+            , errors = ConcurrentTask.expectNoErrors
             , args = Encode.string msg
             }
 
@@ -515,9 +516,9 @@ On the JS side:
     });
 
 -}
-catchAll : a -> Errors x a
-catchAll =
-    Internal.catchAll
+expectNoErrors : Errors x
+expectNoErrors =
+    Internal.expectNoErrors
 
 
 {-| Use this alongside other error handlers to lift a `ResponseDecoderFailure`'s `Json.Decode` error into regular task flow.

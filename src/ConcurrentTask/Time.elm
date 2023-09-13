@@ -54,7 +54,7 @@ now =
     ConcurrentTask.define
         { function = "builtin:timeNow"
         , expect = ConcurrentTask.expectJson (Decode.map Time.millisToPosix Decode.int)
-        , errors = ConcurrentTask.catchAll (Time.millisToPosix 0)
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
         }
 
@@ -69,7 +69,7 @@ here =
     ConcurrentTask.define
         { function = "builtin:timeZoneOffset"
         , expect = ConcurrentTask.expectJson Decode.int
-        , errors = ConcurrentTask.catchAll 0
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
         }
         |> ConcurrentTask.map (\offset -> Time.customZone offset [])
@@ -85,7 +85,7 @@ getZoneName =
     ConcurrentTask.define
         { function = "builtin:timeZoneOffset"
         , expect = ConcurrentTask.expectJson decodeZoneName
-        , errors = ConcurrentTask.catchAll (Time.Offset 0)
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
         }
 

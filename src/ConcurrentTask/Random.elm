@@ -48,6 +48,6 @@ randomSeed =
     ConcurrentTask.define
         { function = "builtin:randomSeed"
         , expect = ConcurrentTask.expectJson Decode.int
-        , errors = ConcurrentTask.catchAll 0
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
         }

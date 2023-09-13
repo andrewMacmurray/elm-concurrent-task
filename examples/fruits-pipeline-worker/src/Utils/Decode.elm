@@ -1,4 +1,4 @@
-module Common.Decode exposing (decodeJsonl)
+module Utils.Decode exposing (decodeJsonl)
 
 import Json.Decode as Decode exposing (Decoder)
 

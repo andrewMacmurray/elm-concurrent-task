@@ -1,4 +1,4 @@
-module Common.Uuid exposing
+module Utils.Uuid exposing
     ( Uuid
     , generate
     )
@@ -16,6 +16,6 @@ generate =
     ConcurrentTask.define
         { function = "uuid:generate"
         , expect = ConcurrentTask.expectString
-        , errors = ConcurrentTask.catchAll "THIS_SHOULD_NOT_HAPPEN"
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
         }

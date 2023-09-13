@@ -1,4 +1,4 @@
-module ConcurrentTask.Internal.Task exposing
+module ConcurrentTask.Internal.ConcurrentTask exposing
     ( Attempt
     , ConcurrentTask(..)
     , Errors
@@ -14,10 +14,10 @@ module ConcurrentTask.Internal.Task exposing
     , andThenDo
     , attempt
     , batch
-    , catchAll
     , define
     , expectErrors
     , expectJson
+    , expectNoErrors
     , expectString
     , expectThrows
     , expectWhatever
@@ -95,8 +95,8 @@ type Expect a
     = ExpectJson (Decoder a)
 
 
-type Errors x a
-    = CatchAll a
+type Errors x
+    = ExpectNoErrors
     | ExpectThrows (String -> x)
     | ExpectErrors (Decoder x)
 
@@ -124,17 +124,17 @@ expectWhatever =
 -- Errors
 
 
-catchAll : a -> Errors x a
-catchAll =
-    CatchAll
+expectNoErrors : Errors x
+expectNoErrors =
+    ExpectNoErrors
 
 
-expectThrows : (String -> x) -> Errors x a
+expectThrows : (String -> x) -> Errors x
 expectThrows =
     ExpectThrows
 
 
-expectErrors : Decoder x -> Errors x a
+expectErrors : Decoder x -> Errors x
 expectErrors =
     ExpectErrors
 
@@ -146,7 +146,7 @@ expectErrors =
 type alias Definition x a =
     { function : String
     , expect : Expect a
-    , errors : Errors x a
+    , errors : Errors x
     , args : Encode.Value
     }
 
@@ -747,37 +747,34 @@ decodeRawResult =
 decodeResponse : Definition x a -> Decode.Value -> Response x a
 decodeResponse def val =
     case def.errors of
-        CatchAll fallback ->
-            decodeCatchAll fallback def val
-
         ExpectThrows catch ->
             decodeExpectThrows catch def val
 
         ExpectErrors expect ->
             decodeExpectErrors expect def val
 
+        ExpectNoErrors ->
+            decodeExpectNoErrors def val
 
-decodeCatchAll : a -> Definition x a -> Decode.Value -> Response b a
-decodeCatchAll fallback def val =
+
+decodeExpectNoErrors : Definition x a -> Decode.Value -> Response b a
+decodeExpectNoErrors def val =
     case Decode.decodeValue (decodeRunnerError def) val of
         Ok err ->
-            case err of
-                UnhandledJsException _ ->
-                    Success fallback
-
-                ResponseDecoderFailure _ ->
-                    Success fallback
-
-                _ ->
-                    UnexpectedError err
+            UnexpectedError err
 
         Err _ ->
             case Decode.decodeValue (decodeRunnerSuccess def) val of
                 Ok a ->
                     Success a
 
-                Err _ ->
-                    Success fallback
+                Err e ->
+                    UnexpectedError
+                        (ResponseDecoderFailure
+                            { function = def.function
+                            , error = e
+                            }
+                        )
 
 
 decodeExpectThrows : (String -> x) -> Definition a b -> Decode.Value -> Response x b

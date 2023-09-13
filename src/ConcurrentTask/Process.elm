@@ -38,6 +38,6 @@ sleep ms =
     ConcurrentTask.define
         { function = "builtin:sleep"
         , expect = ConcurrentTask.expectWhatever
-        , errors = ConcurrentTask.catchAll ()
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.int ms
         }

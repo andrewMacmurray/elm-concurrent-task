@@ -3,9 +3,9 @@ import * as Tasks from "../../../runner";
 import * as S3 from "./Aws/s3";
 import * as SQS from "./Aws/sqs";
 import * as SNS from "./Aws/sns";
-import * as Env from "./Common/env";
-import * as Uuid from "./Common/uuid";
-import * as Logger from "./Common/logger";
+import * as Env from "./Utils/env";
+import * as Uuid from "./Utils/uuid";
+import * as Logger from "./Utils/logger";
 
 // App
 

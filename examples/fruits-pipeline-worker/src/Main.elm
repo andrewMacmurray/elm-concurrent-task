@@ -3,16 +3,16 @@ port module Main exposing (main)
 import Aws.S3 as S3
 import Aws.SNS as SNS
 import Aws.SQS as SQS
-import Common.Decode as Decode
-import Common.Encode as Encode
-import Common.Env as Env
-import Common.Logger as Logger
-import Common.Uuid as Uuid exposing (Uuid)
 import ConcurrentTask as Task exposing (ConcurrentTask)
 import ConcurrentTask.Time
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Time
+import Utils.Decode as Decode
+import Utils.Encode as Encode
+import Utils.Env as Env
+import Utils.Logger as Logger
+import Utils.Uuid as Uuid exposing (Uuid)
 
 
 {-| Fruit Picking Worker 🍓🍑🍐

@@ -1,4 +1,4 @@
-module Common.Env exposing
+module Utils.Env exposing
     ( Error
     , Parser
     , andThen
@@ -31,7 +31,7 @@ load parser =
     ConcurrentTask.define
         { function = "env:load"
         , expect = ConcurrentTask.expectJson Decode.value
-        , errors = ConcurrentTask.catchAll Encode.null
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
         }
         |> ConcurrentTask.map (parse parser)

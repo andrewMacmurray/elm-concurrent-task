@@ -86,24 +86,9 @@ getViewport =
     ConcurrentTask.define
         { function = "builtin:domGetViewport"
         , expect = ConcurrentTask.expectJson decodeViewport
-        , errors = ConcurrentTask.catchAll fallbackViewport
+        , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
         }
-
-
-fallbackViewport : Dom.Viewport
-fallbackViewport =
-    { scene =
-        { width = 0
-        , height = 0
-        }
-    , viewport =
-        { x = 0
-        , y = 0
-        , width = 0
-        , height = 0
-        }
-    }
 
 
 {-| A direct replacement for `elm/browser`'s [`Browser.Dom.getViewportOf`](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#getViewportOf).
@@ -125,7 +110,7 @@ setViewport x y =
     ConcurrentTask.define
         { function = "builtin:domSetViewport"
         , expect = ConcurrentTask.expectWhatever
-        , errors = ConcurrentTask.catchAll ()
+        , errors = ConcurrentTask.expectNoErrors
         , args =
             Encode.object
                 [ ( "x", Encode.float x )
@@ -167,7 +152,7 @@ getElement id =
 -- Errors
 
 
-expectDomError : String -> ConcurrentTask.Errors Dom.Error a
+expectDomError : String -> ConcurrentTask.Errors Dom.Error
 expectDomError id =
     ConcurrentTask.expectErrors (Decode.succeed (Dom.NotFound id))
 

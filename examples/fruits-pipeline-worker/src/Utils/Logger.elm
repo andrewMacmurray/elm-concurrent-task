@@ -1,4 +1,4 @@
-module Common.Logger exposing
+module Utils.Logger exposing
     ( debug
     , error
     , info
@@ -81,7 +81,7 @@ log_ level message =
     ConcurrentTask.define
         { function = "console:log"
         , expect = ConcurrentTask.expectWhatever
-        , errors = ConcurrentTask.catchAll ()
+        , errors = ConcurrentTask.expectNoErrors
         , args =
             Encode.object
                 [ ( "level", Encode.string level )
