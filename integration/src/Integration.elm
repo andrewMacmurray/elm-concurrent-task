@@ -1,11 +1,26 @@
-module Integration exposing (specs)
+port module Integration exposing (specs)
 
 import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError(..))
 import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
+import Integration.Runner as Runner exposing (RunnerProgram)
 import Integration.Spec as Spec exposing (Spec)
 import Json.Decode as Decode
 import Json.Encode as Encode
+
+
+
+-- Program
+
+
+main : RunnerProgram
+main =
+    Runner.program
+        { specs = specs
+        , send = send
+        , receive = receive
+        , report = report
+        }
 
 
 
@@ -14,89 +29,18 @@ import Json.Encode as Encode
 
 specs : List Spec
 specs =
-    [ batchAndSequenceSpec
+    [ largeBatchSpec
+    , batchAndSequenceSpec
     , complexResponseSpec
-    , largeBatchSpec
-    , httpTimeoutSpec
     , missingFunctionSpec
     , httpMalformedSpec
+    , httpTimeoutSpec
+    , httpBadBodySpec
     ]
 
 
 
 -- Integration Specs
-
-
-missingFunctionSpec : Spec
-missingFunctionSpec =
-    Spec.describeUnexpected
-        "missing functions"
-        "task should abort immediately if a function is not registered"
-        (Task.define
-            { function = "fire_ze_missiles"
-            , expect = Task.expectWhatever
-            , errors = Task.expectThrows identity
-            , args = Encode.null
-            }
-            |> Task.andThenDo (ConcurrentTask.Process.sleep 500)
-            |> Task.return "Completed"
-        )
-        (Spec.shouldEqual
-            (MissingFunction "fire_ze_missiles is not registered")
-        )
-
-
-httpMalformedSpec : Spec
-httpMalformedSpec =
-    Spec.describe
-        "malformed http response"
-        "should return a BadBody Error for non JSON responses when expecting JSON"
-        (Http.get
-            { url = baseUrl ++ "/malformed"
-            , headers = []
-            , expect = Http.expectJson (Decode.field "invalid" Decode.string)
-            , timeout = Nothing
-            }
-        )
-        (Spec.assertError assertMalformedResponse)
-
-
-assertMalformedResponse : Http.Error -> Spec.Expect
-assertMalformedResponse err =
-    case err of
-        Http.BadBody _ _ e ->
-            if String.contains "This is not valid JSON!" (Decode.errorToString e) then
-                Spec.pass
-
-            else
-                Spec.failWith "Got BadBody but expected invalid JSON Error" e
-
-        _ ->
-            Spec.failWith "Expected BadBody, got" err
-
-
-httpTimeoutSpec : Spec
-httpTimeoutSpec =
-    Spec.describe
-        "http timeout"
-        "http requests should abort if request takes longer than given timeout"
-        (Spec.timeExecution
-            (Http.get
-                { url = waitThenRespond 10000
-                , headers = []
-                , expect = Http.expectWhatever
-                , timeout = Just 100
-                }
-            )
-        )
-        (Spec.assertError
-            (\err ->
-                Spec.assertAll
-                    [ Spec.shouldEqual Http.Timeout err.result
-                    , err |> Spec.shouldHaveDurationLessThan 3000 -- account for test flake
-                    ]
-            )
-        )
 
 
 largeBatchSpec : Spec
@@ -219,6 +163,106 @@ complexResponseSpec =
         )
 
 
+missingFunctionSpec : Spec
+missingFunctionSpec =
+    Spec.describeUnexpected
+        "missing functions"
+        "task should abort immediately if a function is not registered"
+        (Task.define
+            { function = "fire_ze_missiles"
+            , expect = Task.expectWhatever
+            , errors = Task.expectThrows identity
+            , args = Encode.null
+            }
+            |> Task.andThenDo (ConcurrentTask.Process.sleep 500)
+            |> Task.return "Completed"
+        )
+        (Spec.shouldEqual
+            (MissingFunction "fire_ze_missiles is not registered")
+        )
+
+
+httpMalformedSpec : Spec
+httpMalformedSpec =
+    Spec.describe
+        "malformed http response"
+        "should return a BadBody Error for non JSON responses when expecting JSON"
+        (Http.get
+            { url = baseUrl ++ "/malformed"
+            , headers = []
+            , expect = Http.expectJson (Decode.field "invalid" Decode.string)
+            , timeout = Nothing
+            }
+        )
+        (Spec.assertError assertMalformedResponse)
+
+
+assertMalformedResponse : Http.Error -> Spec.Expect
+assertMalformedResponse err =
+    case err of
+        Http.BadBody _ _ e ->
+            if String.contains "This is not valid JSON!" (Decode.errorToString e) then
+                Spec.pass
+
+            else
+                Spec.failWith "Got BadBody but expected invalid JSON Error" e
+
+        _ ->
+            Spec.failWith "Expected BadBody, got" err
+
+
+httpTimeoutSpec : Spec
+httpTimeoutSpec =
+    Spec.describe
+        "http timeout"
+        "http requests should abort if request takes longer than given timeout"
+        (Spec.timeExecution
+            (Http.get
+                { url = waitThenRespond 10000
+                , headers = []
+                , expect = Http.expectWhatever
+                , timeout = Just 100
+                }
+            )
+        )
+        (Spec.assertError
+            (\err ->
+                Spec.assertAll
+                    [ Spec.shouldEqual Http.Timeout err.result
+                    , err |> Spec.shouldHaveDurationLessThan 3000 -- account for test flake
+                    ]
+            )
+        )
+
+
+httpBadBodySpec : Spec
+httpBadBodySpec =
+    Spec.describe
+        "http bad body"
+        "should surface a BadBody error if response doesn't match the decoder"
+        (Http.get
+            { url = waitThenRespond 0
+            , headers = []
+            , expect = Http.expectJson Decode.int
+            , timeout = Nothing
+            }
+        )
+        (Spec.assertError
+            (\err ->
+                case err of
+                    Http.BadBody _ _ e ->
+                        if String.contains "Expecting an INT" (Decode.errorToString e) then
+                            Spec.pass
+
+                        else
+                            Spec.failWith "Did not contain the expected BadBody decode error" (Decode.errorToString e)
+
+                    _ ->
+                        Spec.failWith "Expected a BadBody error" e
+            )
+        )
+
+
 
 -- Helpers
 
@@ -256,3 +300,16 @@ waitThenRespond ms =
 baseUrl : String
 baseUrl =
     "http://localhost:4999"
+
+
+
+-- Ports
+
+
+port send : Decode.Value -> Cmd msg
+
+
+port receive : (Decode.Value -> msg) -> Sub msg
+
+
+port report : { message : String, passed : Bool } -> Cmd msg

@@ -1,7 +1,7 @@
-import { Elm } from "./Integration/Runner.elm";
+import { Elm } from "./Integration.elm";
 import * as ConcurrentTask from "../../runner";
 
-const { ports } = Elm.Integration.Runner.init({ flags: null });
+const { ports } = Elm.Integration.init({ flags: null });
 
 ConcurrentTask.register({
   tasks: {},
