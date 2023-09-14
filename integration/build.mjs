@@ -4,7 +4,7 @@ import start from "@es-exec/esbuild-plugin-start";
 
 function main() {
   if (process.argv.includes("--ci")) {
-    return ci();
+    return build();
   } else {
     return watch();
   }
@@ -15,7 +15,7 @@ const options = {
   OUTFILE: "dist/index.js",
 };
 
-function ci() {
+function build() {
   esbuild.build({
     entryPoints: [options.ENTRTY],
     bundle: true,
