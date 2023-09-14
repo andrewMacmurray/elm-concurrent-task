@@ -14,7 +14,6 @@ app.get("/wait-then-respond/:time", (req, res) => {
 });
 
 app.post("/echo", (req, res) => {
-  console.log(req.body, req.headers);
   res.send(req.body);
 });
 

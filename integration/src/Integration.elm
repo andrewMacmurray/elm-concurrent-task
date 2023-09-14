@@ -5,7 +5,7 @@ import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
 import Integration.Runner as Runner exposing (RunnerProgram)
 import Integration.Spec as Spec exposing (Spec)
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
 
@@ -33,9 +33,11 @@ specs =
     , batchAndSequenceSpec
     , complexResponseSpec
     , missingFunctionSpec
+    , httpJsonBodySpec
     , httpMalformedSpec
     , httpTimeoutSpec
     , httpBadBodySpec
+    , httpBadStatusSpec
     ]
 
 
@@ -182,10 +184,40 @@ missingFunctionSpec =
         )
 
 
+httpJsonBodySpec : Spec
+httpJsonBodySpec =
+    Spec.describe
+        "http json body"
+        "sends an http body in a request"
+        (let
+            body : Encode.Value
+            body =
+                Encode.object
+                    [ ( "message1", Encode.string "hello" )
+                    , ( "message2", Encode.string "world" )
+                    ]
+
+            response : Decoder String
+            response =
+                Decode.map2 join2
+                    (Decode.field "message1" Decode.string)
+                    (Decode.field "message2" Decode.string)
+         in
+         Http.post
+            { url = baseUrl ++ "/echo"
+            , headers = []
+            , timeout = Nothing
+            , expect = Http.expectJson response
+            , body = Http.jsonBody body
+            }
+        )
+        (Spec.assertSuccess (Spec.shouldEqual "hello,world"))
+
+
 httpMalformedSpec : Spec
 httpMalformedSpec =
     Spec.describe
-        "malformed http response"
+        "http malformed response"
         "should return a BadBody Error for non JSON responses when expecting JSON"
         (Http.get
             { url = baseUrl ++ "/malformed"
@@ -263,6 +295,34 @@ httpBadBodySpec =
         )
 
 
+httpBadStatusSpec : Spec
+httpBadStatusSpec =
+    Spec.describe
+        "http bad status"
+        "should surface a BadStatus error if response is a non 200"
+        (Http.get
+            { url = httpError
+            , headers = []
+            , expect = Http.expectWhatever
+            , timeout = Nothing
+            }
+        )
+        (Spec.assertError
+            (\err ->
+                case err of
+                    Http.BadStatus meta _ ->
+                        if meta.statusCode == 400 then
+                            Spec.pass
+
+                        else
+                            Spec.failWith "Unexpected status code" meta
+
+                    _ ->
+                        Spec.failWith "Expected a BadStatus error" err
+            )
+        )
+
+
 
 -- Helpers
 
@@ -295,6 +355,11 @@ longRequest ms =
 waitThenRespond : Int -> String
 waitThenRespond ms =
     baseUrl ++ "/wait-then-respond/" ++ String.fromInt ms
+
+
+httpError : String
+httpError =
+    baseUrl ++ "/boom"
 
 
 baseUrl : String
