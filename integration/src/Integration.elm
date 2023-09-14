@@ -3,10 +3,13 @@ port module Integration exposing (specs)
 import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError(..))
 import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
+import ConcurrentTask.Random
 import Integration.Runner as Runner exposing (RunnerProgram)
 import Integration.Spec as Spec exposing (Spec)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+import Random
+import Set
 
 
 
@@ -38,6 +41,7 @@ specs =
     , httpTimeoutSpec
     , httpBadBodySpec
     , httpBadStatusSpec
+    , randomSpec
     ]
 
 
@@ -204,7 +208,7 @@ httpJsonBodySpec =
                     (Decode.field "message2" Decode.string)
          in
          Http.post
-            { url = baseUrl ++ "/echo"
+            { url = echoBody
             , headers = []
             , timeout = Nothing
             , expect = Http.expectJson response
@@ -220,7 +224,7 @@ httpMalformedSpec =
         "http malformed response"
         "should return a BadBody Error for non JSON responses when expecting JSON"
         (Http.get
-            { url = baseUrl ++ "/malformed"
+            { url = malformed
             , headers = []
             , expect = Http.expectJson (Decode.field "invalid" Decode.string)
             , timeout = Nothing
@@ -323,6 +327,32 @@ httpBadStatusSpec =
         )
 
 
+randomSpec : Spec
+randomSpec =
+    Spec.describe
+        "random generator"
+        "produces random values"
+        (ConcurrentTask.Random.generate
+            (Random.list 50
+                (Random.int 0 1000000)
+            )
+        )
+        (Spec.assertSuccess
+            (\numbers ->
+                if allElementsUnique numbers then
+                    Spec.pass
+
+                else
+                    Spec.failWith "Expected all numbers to be unique" numbers
+            )
+        )
+
+
+allElementsUnique : List comparable -> Bool
+allElementsUnique xs =
+    List.length xs == Set.size (Set.fromList xs)
+
+
 
 -- Helpers
 
@@ -355,6 +385,16 @@ longRequest ms =
 waitThenRespond : Int -> String
 waitThenRespond ms =
     baseUrl ++ "/wait-then-respond/" ++ String.fromInt ms
+
+
+echoBody : String
+echoBody =
+    baseUrl ++ "/echo"
+
+
+malformed : String
+malformed =
+    baseUrl ++ "/malformed"
 
 
 httpError : String
