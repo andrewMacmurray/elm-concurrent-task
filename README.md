@@ -152,7 +152,7 @@ decodeReadErrors =
 
 ## Hack Free you say?
 
-Popular implementations of `Task Ports` rely on either:
+Other implementations of `Task Ports` rely on either:
 
 - `ServiceWorkers` - intercept certain http requests and call custom JavaScript from the service worker.
 - Monkeypatching `XMLHttpRequest` - Modify methods on the global `XMLHttpRequest` to intercept http requests and call custom JavaScript.
