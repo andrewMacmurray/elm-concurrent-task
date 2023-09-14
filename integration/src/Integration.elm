@@ -215,7 +215,9 @@ httpJsonBodySpec =
             , body = Http.jsonBody body
             }
         )
-        (Spec.assertSuccess (Spec.shouldEqual "hello,world"))
+        (Spec.assertSuccess
+            (Spec.shouldEqual "hello,world")
+        )
 
 
 httpMalformedSpec : Spec
@@ -230,21 +232,9 @@ httpMalformedSpec =
             , timeout = Nothing
             }
         )
-        (Spec.assertError assertMalformedResponse)
-
-
-assertMalformedResponse : Http.Error -> Spec.Expect
-assertMalformedResponse err =
-    case err of
-        Http.BadBody _ _ e ->
-            if String.contains "This is not valid JSON!" (Decode.errorToString e) then
-                Spec.pass
-
-            else
-                Spec.failWith "Got BadBody but expected invalid JSON Error" e
-
-        _ ->
-            Spec.failWith "Expected BadBody, got" err
+        (Spec.assertError
+            (badBodyShouldContainMessage "This is not valid JSON!")
+        )
 
 
 httpTimeoutSpec : Spec
@@ -284,18 +274,7 @@ httpBadBodySpec =
             }
         )
         (Spec.assertError
-            (\err ->
-                case err of
-                    Http.BadBody _ _ e ->
-                        if String.contains "Expecting an INT" (Decode.errorToString e) then
-                            Spec.pass
-
-                        else
-                            Spec.failWith "Did not contain the expected BadBody decode error" (Decode.errorToString e)
-
-                    _ ->
-                        Spec.failWith "Expected a BadBody error" e
-            )
+            (badBodyShouldContainMessage "Expecting an INT")
         )
 
 
@@ -311,20 +290,7 @@ httpBadStatusSpec =
             , timeout = Nothing
             }
         )
-        (Spec.assertError
-            (\err ->
-                case err of
-                    Http.BadStatus meta _ ->
-                        if meta.statusCode == 400 then
-                            Spec.pass
-
-                        else
-                            Spec.failWith "Unexpected status code" meta
-
-                    _ ->
-                        Spec.failWith "Expected a BadStatus error" err
-            )
-        )
+        (Spec.assertError (shouldHaveBadStatus 400))
 
 
 randomSpec : Spec
@@ -351,6 +317,38 @@ randomSpec =
 allElementsUnique : List comparable -> Bool
 allElementsUnique xs =
     List.length xs == Set.size (Set.fromList xs)
+
+
+
+-- Expect Helpers
+
+
+badBodyShouldContainMessage : String -> Http.Error -> Spec.Expect
+badBodyShouldContainMessage message err =
+    case err of
+        Http.BadBody _ _ e ->
+            if String.contains message (Decode.errorToString e) then
+                Spec.pass
+
+            else
+                Spec.failWith "Got BadBody but with unexpected message" e
+
+        _ ->
+            Spec.failWith "Expected BadBody, got" err
+
+
+shouldHaveBadStatus : Int -> Http.Error -> Spec.Expect
+shouldHaveBadStatus code err =
+    case err of
+        Http.BadStatus meta _ ->
+            if meta.statusCode == code then
+                Spec.pass
+
+            else
+                Spec.failWith "Unexpected status code" meta
+
+        _ ->
+            Spec.failWith "Expected a BadStatus error" err
 
 
 
