@@ -38,6 +38,7 @@ specs =
     , missingFunctionSpec
     , httpJsonBodySpec
     , httpMalformedSpec
+    , httpStringSpec
     , httpTimeoutSpec
     , httpBadBodySpec
     , httpBadStatusSpec
@@ -226,7 +227,7 @@ httpMalformedSpec =
         "http malformed response"
         "should return a BadBody Error for non JSON responses when expecting JSON"
         (Http.get
-            { url = malformed
+            { url = malformedJson
             , headers = []
             , expect = Http.expectJson (Decode.field "invalid" Decode.string)
             , timeout = Nothing
@@ -235,6 +236,21 @@ httpMalformedSpec =
         (Spec.assertError
             (badBodyShouldContainMessage "This is not valid JSON!")
         )
+
+
+httpStringSpec : Spec
+httpStringSpec =
+    Spec.describe
+        "http string response"
+        "should return a successful string response when expecting a String"
+        (Http.get
+            { url = malformedJson
+            , headers = []
+            , expect = Http.expectString
+            , timeout = Nothing
+            }
+        )
+        (Spec.assertSuccess (Spec.shouldEqual "{ 'invalid': 'json"))
 
 
 httpTimeoutSpec : Spec
@@ -390,8 +406,8 @@ echoBody =
     baseUrl ++ "/echo"
 
 
-malformed : String
-malformed =
+malformedJson : String
+malformedJson =
     baseUrl ++ "/malformed"
 
 
