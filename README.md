@@ -358,10 +358,12 @@ e.g. tasks for reading and writing to localStorage:
 
 ```js
 const tasks = {
-  "storage:get": (args) => localStorage.getItem(args.key),
-  "storage:set": (args) => localStorage.setItem(args.key, args.item),
+  "localstorage:getItem": (args) => localStorage.getItem(args.key),
+  "localstorage:setItem": (args) => localStorage.setItem(args.key, args.item),
 };
 ```
+
+**NOTE**: for a more complete `localStorage` integration with proper error handling [check out the localstorage example](https://github.com/andrewMacmurray/elm-concurrent-task/blob/ba7c8af4b1afeff138ba839511d4411a0a40bbb1/examples/localstorage-fruit-trees/src/index.ts).
 
 ## Develop Locally
 

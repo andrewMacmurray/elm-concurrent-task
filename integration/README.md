@@ -2,7 +2,7 @@
 
 This is a custom test runner to run tasks in a real environment and assert on their outcomes.
 
-View the [specs here](./src/Integration.elm).
+View the [specs here](src/Main.elm).
 
 ## Run the test suite
 

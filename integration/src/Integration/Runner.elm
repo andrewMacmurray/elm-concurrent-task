@@ -1,7 +1,12 @@
-port module Integration.Runner exposing (main)
+module Integration.Runner exposing
+    ( Flags
+    , Model
+    , Msg
+    , RunnerProgram
+    , program
+    )
 
 import ConcurrentTask as Task exposing (UnexpectedError)
-import Integration
 import Integration.Spec as Spec exposing (Assertion, Spec(..))
 import Json.Decode as Decode
 
@@ -45,9 +50,9 @@ type alias Output =
 -- Init
 
 
-init : Flags -> ( Model, Cmd Msg )
-init _ =
-    startAllSpecs Integration.specs
+init : Options Msg -> Flags -> ( Model, Cmd Msg )
+init options _ =
+    startAllSpecs options
         ( { tasks = Task.pool
           , completed = []
           }
@@ -55,17 +60,17 @@ init _ =
         )
 
 
-startAllSpecs : List Spec -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-startAllSpecs specs ( model, cmd ) =
-    List.foldl runSpec ( model, cmd ) specs
+startAllSpecs : Options Msg -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+startAllSpecs options ( model, cmd ) =
+    List.foldl (runSpec options) ( model, cmd ) options.specs
 
 
-runSpec : Spec -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-runSpec (Spec unexpected task) ( model, cmd ) =
+runSpec : Options Msg -> Spec -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+runSpec options (Spec unexpected task) ( model, cmd ) =
     let
         ( tasks, cmd_ ) =
             Task.attempt
-                { send = send
+                { send = options.send
                 , onComplete = OnComplete unexpected
                 , pool = model.tasks
                 }
@@ -80,13 +85,13 @@ runSpec (Spec unexpected task) ( model, cmd ) =
 -- Update
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+update : Options Msg -> Msg -> Model -> ( Model, Cmd Msg )
+update options msg model =
     case msg of
         OnComplete handleUnexpected result ->
             result
                 |> handleResult model handleUnexpected
-                |> handleComplete
+                |> handleComplete options
 
         OnProgress ( tasks, cmd ) ->
             ( { model | tasks = tasks }, cmd )
@@ -105,57 +110,56 @@ handleResult model handleUnexpected result =
             { model | completed = handleUnexpected err :: model.completed }
 
 
-handleComplete : Model -> ( Model, Cmd Msg )
-handleComplete model =
-    if allSpecsHaveRun model then
+handleComplete : Options Msg -> Model -> ( Model, Cmd Msg )
+handleComplete options model =
+    if allSpecsHaveRun options model then
         ( model
-        , report (Spec.report model.completed)
+        , options.report (Spec.report model.completed)
         )
 
     else
         ( model, Cmd.none )
 
 
-allSpecsHaveRun : Model -> Bool
-allSpecsHaveRun model =
-    List.length model.completed == List.length Integration.specs
+allSpecsHaveRun : Options Msg -> Model -> Bool
+allSpecsHaveRun options model =
+    List.length model.completed == List.length options.specs
 
 
 
 -- Subscriptions
 
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions : Options Msg -> Model -> Sub Msg
+subscriptions options model =
     Task.onProgress
-        { send = send
-        , receive = receive
+        { send = options.send
+        , receive = options.receive
         , onProgress = OnProgress
         }
         model.tasks
 
 
 
--- Ports
-
-
-port send : Decode.Value -> Cmd msg
-
-
-port receive : (Decode.Value -> msg) -> Sub msg
-
-
-port report : { message : String, passed : Bool } -> Cmd msg
-
-
-
 -- Program
 
 
-main : Program Flags Model Msg
-main =
+type alias Options msg =
+    { specs : List Spec
+    , send : Decode.Value -> Cmd msg
+    , receive : (Decode.Value -> msg) -> Sub msg
+    , report : { message : String, passed : Bool } -> Cmd msg
+    }
+
+
+type alias RunnerProgram =
+    Program Flags Model Msg
+
+
+program : Options Msg -> RunnerProgram
+program options =
     Platform.worker
-        { init = init
-        , update = update
-        , subscriptions = subscriptions
+        { init = init options
+        , update = update options
+        , subscriptions = subscriptions options
         }
