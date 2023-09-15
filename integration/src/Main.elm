@@ -191,24 +191,24 @@ missingFunctionSpec =
 
 httpJsonBodySpec : Spec
 httpJsonBodySpec =
+    let
+        body : Encode.Value
+        body =
+            Encode.object
+                [ ( "message1", Encode.string "hello" )
+                , ( "message2", Encode.string "world" )
+                ]
+
+        response : Decoder String
+        response =
+            Decode.map2 join2
+                (Decode.field "message1" Decode.string)
+                (Decode.field "message2" Decode.string)
+    in
     Spec.describe
         "http json body"
-        "sends an http body in a request"
-        (let
-            body : Encode.Value
-            body =
-                Encode.object
-                    [ ( "message1", Encode.string "hello" )
-                    , ( "message2", Encode.string "world" )
-                    ]
-
-            response : Decoder String
-            response =
-                Decode.map2 join2
-                    (Decode.field "message1" Decode.string)
-                    (Decode.field "message2" Decode.string)
-         in
-         Http.post
+        "sends an http json body in a request"
+        (Http.post
             { url = echoBody
             , headers = []
             , timeout = Nothing
