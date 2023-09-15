@@ -1,4 +1,4 @@
-port module Integration exposing (specs)
+port module Main exposing (main)
 
 import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError(..))
 import ConcurrentTask.Http as Http
@@ -13,7 +13,7 @@ import Set
 
 
 
--- Program
+-- Integration Program
 
 
 main : RunnerProgram
