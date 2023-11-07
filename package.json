@@ -20,6 +20,7 @@
   "author": "Andrew MacMurray",
   "license": "MIT",
   "devDependencies": {
+    "elm": "^0.19.1-6",
     "elm-doc-preview": "^1.0.7",
     "elm-review": "^2.10.2",
     "elm-test": "^0.19.1-revision12",
