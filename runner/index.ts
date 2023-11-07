@@ -49,6 +49,7 @@ export interface Error {
 // Built In Tasks
 
 export interface Builtins {
+  debugLog?: (message: string) => void;
   http?: (request: HttpRequest) => Promise<HttpResponse>;
   timeNow?: () => number;
   timeZoneOffset?: () => number;
@@ -65,6 +66,7 @@ export interface Builtins {
 }
 
 const BuiltInTasks: Builtins = {
+  debugLog: console.log,
   http: fetchAdapter.http,
   timeNow: () => Date.now(),
   timeZoneOffset: () => getTimezoneOffset(),

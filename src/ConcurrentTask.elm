@@ -5,7 +5,7 @@ module ConcurrentTask exposing
     , onResponseDecoderFailure, onJsException
     , mapError, onError
     , succeed, fail, andThen
-    , fromResult, andThenDo, return
+    , fromResult, andThenDo, return, debug
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , attempt, Response(..), UnexpectedError(..), onProgress, Pool, pool
@@ -66,9 +66,9 @@ Lift `UnexpectedError`s into regular task flow.
 
 # Convenience Helpers
 
-These are some general helpers that can make chaining and combining tasks more convenient.
+These are some general helpers that can make chaining, combining and debugging tasks more convenient.
 
-@docs fromResult, andThenDo, return
+@docs fromResult, andThenDo, return, debug
 
 
 # Batch Helpers
@@ -637,7 +637,7 @@ andThenDo =
     Internal.andThenDo
 
 
-{-| Succeed with a hardcoded value after the previous Task
+{-| Succeed with a hardcoded value after the previous Task.
 
 Maybe you want to do some Tasks on a User but allow it to be chained onwards:
 
@@ -653,6 +653,59 @@ Maybe you want to do some Tasks on a User but allow it to be chained onwards:
 return : b -> ConcurrentTask x a -> ConcurrentTask x b
 return =
     Internal.return
+
+
+{-| Debug the current state of a Task to the console.
+
+This can be useful during development if you want to quickly peek at a Task:
+
+    import ConcurrentTask exposing (ConcurrentTask)
+
+
+    -- Prints to the console "Debug - Success: 130"
+    myTask : ConcurrentTask x Int
+    myTask =
+        ConcurrentTask.succeed 123
+            |> ConcurrentTask.map (\n -> n + 7)
+            |> ConcurrentTask.debug Debug.toString Debug.toString
+
+    -- Prints to the console "Debug - Failure: 'error'"
+    myErrorTask : ConcurrentTask String Int
+    myErrorTask =
+        ConcurrentTask.succeed 123
+            |> ConcurrentTask.map (\n -> n + 7)
+            |> ConcurrentTask.andThenDo (ConcurrentTask.fail "error")
+            |> ConcurrentTask.debug Debug.toString Debug.toString
+
+NOTE: Passing `Debug.toString` is useful to prevent shipping `ConcurrentTask.debug` calls to production,
+but any function that converts a task `error` or `success` value to a `String` can be used.
+
+-}
+debug : (a -> String) -> (x -> String) -> ConcurrentTask x a -> ConcurrentTask x a
+debug toOk toErr task =
+    task
+        |> andThen
+            (\a ->
+                toOk a
+                    |> debugLog "Success"
+                    |> (\_ -> succeed a)
+            )
+        |> onError
+            (\x ->
+                toErr x
+                    |> debugLog "Failure"
+                    |> (\_ -> fail x)
+            )
+
+
+debugLog : String -> String -> ConcurrentTask x ()
+debugLog tag message =
+    define
+        { function = "builtin:debugLog"
+        , expect = expectWhatever
+        , errors = expectNoErrors
+        , args = Encode.string ("Debug - " ++ tag ++ ": " ++ message)
+        }
 
 
 
