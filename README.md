@@ -199,9 +199,9 @@ npm install @andrewmacmurray/elm-concurrent-task
 
 ### 2. Add to your Elm app
 
-Your Elm program needs
+Your Elm program needs:
 
-- A `ConcurrentTask.Pool` in your `Model` to keep track of each task attempt:
+- A single `ConcurrentTask.Pool` in your `Model` to keep track of each task attempt:
 
   ```elm
   type alias Model =
@@ -364,6 +364,14 @@ const tasks = {
 ```
 
 **NOTE**: for a more complete `localStorage` integration with proper error handling [check out the localstorage example](https://github.com/andrewMacmurray/elm-concurrent-task/blob/ba7c8af4b1afeff138ba839511d4411a0a40bbb1/examples/localstorage-fruit-trees/src/index.ts).
+
+## Re-using ports
+
+Each `send` and `receive` port pair only support **one** `ConcurrentTask.Pool` subscribed at a time.
+**Weird** things can happen if you have **two or more** `ConcurrentTask.Pool`s using the same ports at the same time.
+
+Generally this should not be needed, but if you have a use-case, please leave an [issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues).
+
 
 ## Develop Locally
 

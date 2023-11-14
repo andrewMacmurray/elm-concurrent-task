@@ -14,10 +14,16 @@ export * from "./browser";
 
 export interface ElmPorts {
   send: {
-    subscribe: (callback: (defs: TaskDefinition[]) => Promise<void>) => void;
+    subscribe: (
+      callback: (defs: TaskDefinition[] | Command) => Promise<void>
+    ) => void;
   };
-  receive: { send: (result: TaskResult[]) => void };
+  receive: { send: (result: TaskResult[] | PoolId) => void };
 }
+
+export type Command = { command: "identify-pool" };
+
+export type PoolId = { poolId: number };
 
 export type Tasks = { [fn: string]: (arg: any) => any };
 
@@ -118,49 +124,59 @@ export function register(options: Options): void {
   const tasks = createTasks(options);
   const subscribe = options.ports.send.subscribe;
   const send = options.ports.receive.send;
+  let poolId = 0;
 
-  subscribe(async (defs) => {
-    const debouncedSend = debounce(send, debounceThreshold(defs));
-
-    for (const def of defs) {
-      if (!tasks[def.function]) {
-        return debouncedSend({
-          attemptId: def.attemptId,
-          taskId: def.taskId,
-          result: {
-            error: {
-              reason: "missing_function",
-              message: `${def.function} is not registered`,
-            },
-          },
-        });
+  subscribe(async (payload) => {
+    if ("command" in payload) {
+      if (payload.command === "identify-pool") {
+        send({ poolId });
+        poolId = cycleInt({ max: 1000 }, poolId);
+      } else {
+        throw new Error(`Unrecognised internal command: ${payload}`);
       }
+    } else {
+      const debouncedSend = debounce(send, debounceThreshold(payload));
+
+      for (const def of payload) {
+        if (!tasks[def.function]) {
+          return debouncedSend({
+            attemptId: def.attemptId,
+            taskId: def.taskId,
+            result: {
+              error: {
+                reason: "missing_function",
+                message: `${def.function} is not registered`,
+              },
+            },
+          });
+        }
+      }
+
+      payload.map(async (def) => {
+        try {
+          logTaskStart(def, options);
+          const result = await tasks[def.function]?.(def.args);
+          logTaskFinish(def, options);
+          debouncedSend({
+            attemptId: def.attemptId,
+            taskId: def.taskId,
+            result: { value: result },
+          });
+        } catch (e) {
+          debouncedSend({
+            attemptId: def.attemptId,
+            taskId: def.taskId,
+            result: {
+              error: {
+                reason: "js_exception",
+                message: `${e.name}: ${e.message}`,
+                raw: e,
+              },
+            },
+          });
+        }
+      });
     }
-
-    defs.map(async (def) => {
-      try {
-        logTaskStart(def, options);
-        const result = await tasks[def.function]?.(def.args);
-        logTaskFinish(def, options);
-        debouncedSend({
-          attemptId: def.attemptId,
-          taskId: def.taskId,
-          result: { value: result },
-        });
-      } catch (e) {
-        debouncedSend({
-          attemptId: def.attemptId,
-          taskId: def.taskId,
-          result: {
-            error: {
-              reason: "js_exception",
-              message: `${e.name}: ${e.message}`,
-              raw: e,
-            },
-          },
-        });
-      }
-    });
   });
 }
 
@@ -238,4 +254,8 @@ function prefixWith(prefix: string, tasks: Tasks): Tasks {
   return Object.fromEntries(
     Object.entries(tasks).map(([key, fn]) => [`${prefix}${key}`, fn])
   );
+}
+
+function cycleInt(options: { max: number }, i: number): number {
+  return i >= options.max ? 0 : i + 1;
 }
