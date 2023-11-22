@@ -4,12 +4,14 @@ import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError(..))
 import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
 import ConcurrentTask.Random
+import ConcurrentTask.Time
 import Integration.Runner as Runner exposing (RunnerProgram)
 import Integration.Spec as Spec exposing (Spec)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Random
 import Set
+import Time
 
 
 
@@ -43,6 +45,8 @@ specs =
     , httpBadBodySpec
     , httpBadStatusSpec
     , randomSpec
+    , timeZoneSpec
+    , timeHereSpec
     ]
 
 
@@ -333,6 +337,33 @@ randomSpec =
 allElementsUnique : List comparable -> Bool
 allElementsUnique xs =
     List.length xs == Set.size (Set.fromList xs)
+
+
+timeZoneSpec : Spec
+timeZoneSpec =
+    Spec.describe
+        "Time.getZoneName"
+        "smoke test for Time.getZoneName"
+        ConcurrentTask.Time.getZoneName
+        (Spec.assertSuccess
+            (\zone ->
+                case zone of
+                    Time.Offset _ ->
+                        Spec.failWith "Expected actual timezone but got an offset" zone
+
+                    Time.Name _ ->
+                        Spec.pass
+            )
+        )
+
+
+timeHereSpec : Spec
+timeHereSpec =
+    Spec.describe
+        "Time.here"
+        "smoke test for Time.here"
+        ConcurrentTask.Time.here
+        (Spec.assertSuccess (\_ -> Spec.pass))
 
 
 
