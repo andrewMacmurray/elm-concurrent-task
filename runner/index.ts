@@ -88,14 +88,18 @@ const BuiltInTasks: Builtins = {
   domGetElement: dom.getElement,
 };
 
+// Equivalent Elm Kernel code: https://github.com/elm/core/blob/master/src/Elm/Kernel/Process.js#L9-L18
+// Note: this implementation uses a promise rather than the scheduler callback
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L27-L35
 function getTimezoneOffset(): number {
   return -new Date().getTimezoneOffset();
 }
 
+// Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
 function getTimeZoneName(): string | number {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;

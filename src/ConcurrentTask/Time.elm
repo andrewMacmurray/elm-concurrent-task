@@ -83,7 +83,7 @@ A direct replacement for `elm/time`'s [`Time.getZoneName`](https://package.elm-l
 getZoneName : ConcurrentTask x Time.ZoneName
 getZoneName =
     ConcurrentTask.define
-        { function = "builtin:timeZoneOffset"
+        { function = "builtin:timeZoneName"
         , expect = ConcurrentTask.expectJson decodeZoneName
         , errors = ConcurrentTask.expectNoErrors
         , args = Encode.null
