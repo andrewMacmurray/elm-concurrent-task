@@ -2,8 +2,16 @@
   "name": "@andrewmacmurray/elm-concurrent-task",
   "version": "1.0.0",
   "description": "Run a tree of Tasks concurrently, call JS functions as Tasks (Task Ports)",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "lib/cjs/index.js",
+  "module": "lib/mjs/index.js",
+  "types": "lib/mjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/mjs/index.js",
+      "require": "./lib/cjs/index.js",
+      "types": "./lib/mjs/index.d.ts"
+    }
+  },
   "files": [
     "lib"
   ],
@@ -14,7 +22,7 @@
     "review": "elm-review --fix",
     "review:ci": "elm-review",
     "review:watch": "elm-review --watch",
-    "runner:compile": "tsc",
+    "runner:compile": "rm -rf lib/* && tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json && ./scripts/package-fixup.sh",
     "check-versions": "node ./scripts/versions.js"
   },
   "author": "Andrew MacMurray",

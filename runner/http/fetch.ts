@@ -15,7 +15,11 @@ export function http(request: HttpRequest): Promise<HttpResponse> {
     signal: controller?.signal,
   })
     .then((res: Response) => {
-      const headers = Object.fromEntries(res.headers.entries());
+      const headers: { [key: string]: string } = {};
+      res.headers.forEach((val, key) => {
+        headers[key] = val;
+      });
+
       switch (request.expect) {
         case "STRING": {
           return res.text().then((x) => ({

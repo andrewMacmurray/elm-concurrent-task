@@ -1,33 +1,21 @@
 {
   "compilerOptions": {
-    "outDir": "lib",
     "removeComments": true,
-    "target": "ESNext",
     "declaration": true,
-
-    // Module resolution
     "baseUrl": "runner",
     "esModuleInterop": true,
     "moduleResolution": "node",
-
-    // Source Map
     "sourceMap": true,
     "sourceRoot": "./runner",
-
-    // Strict Checks
     "alwaysStrict": true,
     "allowUnreachableCode": false,
     "noImplicitAny": true,
     "strictNullChecks": true,
-
-    // Linter Checks
     "noImplicitReturns": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
   "include": ["runner/**/*.ts"],
-  "exclude": [
-    "node_modules/**/*"
-  ]
+  "exclude": ["node_modules/**/*"]
 }
