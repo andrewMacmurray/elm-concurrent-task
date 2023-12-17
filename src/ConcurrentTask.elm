@@ -107,7 +107,7 @@ Here's a minimal complete example:
 
     getAllTitles : ConcurrentTask Http.Error Titles
     getAllTitles =
-        Task.map3 Titles
+        ConcurrentTask.map3 Titles
             (getTitle "/todos/1")
             (getTitle "/posts/1")
             (getTitle "/albums/1")
@@ -145,7 +145,7 @@ Here's a minimal complete example:
             ( tasks, cmd ) =
                 ConcurrentTask.attempt
                     { send = send
-                    , pool = Task.pool
+                    , pool = ConcurrentTask.pool
                     , onComplete = OnComplete
                     }
                     getAllTitles
@@ -524,7 +524,7 @@ Maybe you want to represent an unexpected response as a `BadBody` error for a ht
             , errors = ConcurrentTask.expectErrors decodeHttpErrors
             , args = encodeArgs options
             }
-            |> ConcurrentTask.onResponseDecoderFailure (BadBody >> Task.fail)
+            |> ConcurrentTask.onResponseDecoderFailure (BadBody >> ConcurrentTask.fail)
 
 -}
 onResponseDecoderFailure : (Decode.Error -> ConcurrentTask x a) -> ConcurrentTask x a -> ConcurrentTask x a
@@ -576,7 +576,7 @@ Maybe you want to do a timestamped Http request
     task : ConcurrentTask Http.Error String
     task =
         ConcurrentTask.Time.now
-            |> Task.andThen (createArticle "my article")
+            |> ConcurrentTask.andThen (createArticle "my article")
 
     createArticle : String -> Time.Posix -> ConcurrentTask Http.Error String
     createArticle title time =
