@@ -15,6 +15,7 @@ app.get("/wait-then-respond/:time", (req, res) => {
 });
 
 app.post("/echo", (req, res) => {
+  res.setHeaders(new Headers(req.headers))
   res.send(req.body);
 });
 

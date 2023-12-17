@@ -1,7 +1,7 @@
 module ConcurrentTask.Http exposing
     ( request, get, post
     , Body, emptyBody, stringBody, jsonBody, bytesBody
-    , Expect, expectJson, expectString, expectBytes, expectWhatever
+    , Expect, expectJson, expectString, expectBytes, expectWhatever, withMetadata
     , Header, header
     , Error(..), Metadata
     )
@@ -48,7 +48,7 @@ You could create entirely your own from scratch - maybe you want an http package
 
 # Expect
 
-@docs Expect, expectJson, expectString, expectBytes, expectWhatever
+@docs Expect, expectJson, expectString, expectBytes, expectWhatever, withMetadata
 
 
 # Headers
@@ -90,6 +90,7 @@ type Expect a
     | ExpectString (Decoder a)
     | ExpectBytes (Bytes.Decode.Decoder a)
     | ExpectWhatever (Decoder a)
+    | ExpectMetadata (Metadata -> Expect a)
 
 
 {-| An Http header for configuring a request.
@@ -248,6 +249,27 @@ expectWhatever =
     ExpectWhatever (Decode.succeed ())
 
 
+{-| Include Http metadata in a successful response.
+-}
+withMetadata : (Metadata -> a -> b) -> Expect a -> Expect b
+withMetadata toMeta expect =
+    case expect of
+        ExpectJson decoder ->
+            ExpectMetadata (\meta -> ExpectJson (Decode.map (toMeta meta) decoder))
+
+        ExpectString decoder ->
+            ExpectMetadata (\meta -> ExpectString (Decode.map (toMeta meta) decoder))
+
+        ExpectBytes decoder ->
+            ExpectMetadata (\meta -> ExpectBytes (Bytes.Decode.map (toMeta meta) decoder))
+
+        ExpectWhatever decoder ->
+            ExpectMetadata (\meta -> ExpectWhatever (Decode.map (toMeta meta) decoder))
+
+        ExpectMetadata f ->
+            ExpectMetadata (\meta -> withMetadata toMeta (f meta))
+
+
 
 -- Send Request
 
@@ -350,22 +372,30 @@ decodeExpect expect =
         |> Decode.andThen
             (\meta ->
                 if meta.statusCode >= 200 && meta.statusCode < 300 then
-                    case expect of
-                        ExpectJson decoder ->
-                            Decode.field "body" (decodeJsonBody decoder meta)
-
-                        ExpectString decoder ->
-                            Decode.field "body" (Decode.map Ok decoder)
-
-                        ExpectBytes decoder ->
-                            Decode.field "body" (decodeBytesBody decoder meta)
-
-                        ExpectWhatever decoder ->
-                            Decode.field "body" (Decode.map Ok decoder)
+                    decodeSuccess meta expect
 
                 else
                     withBodyValue (\body -> Err (BadStatus meta body))
             )
+
+
+decodeSuccess : Metadata -> Expect a -> Decoder (Result Error a)
+decodeSuccess meta expect =
+    case expect of
+        ExpectJson decoder ->
+            Decode.field "body" (decodeJsonBody decoder meta)
+
+        ExpectString decoder ->
+            Decode.field "body" (Decode.map Ok decoder)
+
+        ExpectBytes decoder ->
+            Decode.field "body" (decodeBytesBody decoder meta)
+
+        ExpectWhatever decoder ->
+            Decode.field "body" (Decode.map Ok decoder)
+
+        ExpectMetadata toMeta ->
+            decodeSuccess meta (toMeta meta)
 
 
 decodeMetadata : Decoder Metadata
@@ -450,6 +480,20 @@ encodeExpect expect =
 
         ExpectWhatever _ ->
             Encode.string "WHATEVER"
+
+        ExpectMetadata toExpect ->
+            let
+                -- It's safe to use fake metadata here to get at the expect kind `String`, as `withMetadata` never changes the underlying kind of expect.
+                -- But it's important not to expose the `ExpectMetadata` constructor as this would make it unsafe.
+                fake : Metadata
+                fake =
+                    { url = ""
+                    , statusCode = 123
+                    , statusText = ""
+                    , headers = Dict.empty
+                    }
+            in
+            encodeExpect (toExpect fake)
 
 
 encodeHeaders : Body -> List Header -> Encode.Value

@@ -8,6 +8,7 @@ import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
 import ConcurrentTask.Random
 import ConcurrentTask.Time
+import Dict
 import Integration.Runner as Runner exposing (RunnerProgram)
 import Integration.Spec as Spec exposing (Spec)
 import Json.Decode as Decode exposing (Decoder)
@@ -42,6 +43,7 @@ specs =
     , complexResponseSpec
     , missingFunctionSpec
     , httpJsonBodySpec
+    , httpHeadersSpec
     , httpBytesSpec
     , httpMalformedSpec
     , httpStringSpec
@@ -275,6 +277,34 @@ httpMalformedSpec =
         )
         (Spec.assertError
             (badBodyShouldContainMessage "This is not valid JSON!")
+        )
+
+
+httpHeadersSpec : Spec
+httpHeadersSpec =
+    Spec.describe
+        "http headers"
+        "should send and receive http headers"
+        (Http.post
+            { url = echoBody
+            , headers = [ Http.header "foo" "bar" ]
+            , expect = Http.withMetadata always Http.expectWhatever
+            , timeout = Nothing
+            , body = Http.emptyBody
+            }
+        )
+        (Spec.assertSuccess
+            (\meta ->
+                case Dict.get "foo" meta.headers of
+                    Just "bar" ->
+                        Spec.pass
+
+                    Just x ->
+                        Spec.failWith "Got a header but not the expected value" x
+
+                    Nothing ->
+                        Spec.failWith "Did not contain expected header" meta
+            )
         )
 
 
