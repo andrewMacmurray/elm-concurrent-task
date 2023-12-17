@@ -130,13 +130,21 @@ export function register(options: Options): void {
   const send = options.ports.receive.send;
   let poolId = 0;
 
+  function nextPoolId() {
+    poolId = cycleInt({ max: 1000 }, poolId);
+  }
+
   subscribe(async (payload) => {
     if ("command" in payload) {
-      if (payload.command === "identify-pool") {
-        send({ poolId });
-        poolId = cycleInt({ max: 1000 }, poolId);
-      } else {
-        throw new Error(`Unrecognised internal command: ${payload}`);
+      switch (payload.command) {
+        case "identify-pool": {
+          send({ poolId });
+          nextPoolId();
+          return;
+        }
+        default: {
+          throw new Error(`Unrecognised internal command: ${payload}`);
+        }
       }
     } else {
       const debouncedSend = debounce(send, debounceThreshold(payload));
