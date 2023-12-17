@@ -1,6 +1,6 @@
 {
   "name": "@andrewmacmurray/elm-concurrent-task",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Run a tree of Tasks concurrently, call JS functions as Tasks (Task Ports)",
   "main": "lib/cjs/index.js",
   "module": "lib/mjs/index.js",

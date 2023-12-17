@@ -1,6 +1,7 @@
 # Elm Concurrent Task
 
 [![CI](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/@andrewmacmurray%2Felm-concurrent-task.svg)](https://badge.fury.io/js/@andrewmacmurray%2Felm-concurrent-task)
 
 ## What?
 
@@ -12,7 +13,7 @@ This package is heavily inspired by [elm-pages](https://github.com/dillonkearns/
 
 See the [examples](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/examples) for more things you can do!
 
-View [the elm-package docs here](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/).
+View [the elm-package docs here](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/).
 
 ## Why?
 
@@ -173,11 +174,11 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-- [`Browser.Dom`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Browser-Dom/)
-- [`Http`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Http/)
-- [`Process`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Process/)
-- [`Random`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Random/)
-- [`Time`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.0.0/ConcurrentTask-Time/)
+- [`Browser.Dom`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Browser-Dom/)
+- [`Http`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Http/)
+- [`Process`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Process/)
+- [`Random`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Random/)
+- [`Time`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Time/)
 
 ## How?
 
