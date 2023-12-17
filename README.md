@@ -337,7 +337,7 @@ main =
 
 ### 3. Register the runner in your JavaScript/TypeScript app
 
-Connect the runner to your Elm app:
+Connect the runner to your Elm app (the runner supports both `import` and `require` syntax):
 
 ```ts
 import * as ConcurrentTask from "@andrewmacmurray/elm-concurrent-task";
@@ -372,7 +372,6 @@ Each `send` and `receive` port pair only support **one** `ConcurrentTask.Pool` s
 **Weird** things can happen if you have **two or more** `ConcurrentTask.Pool`s using the same ports at the same time.
 
 Generally this should not be needed, but if you have a use-case, please leave an [issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues).
-
 
 ## Develop Locally
 
