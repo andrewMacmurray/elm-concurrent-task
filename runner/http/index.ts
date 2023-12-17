@@ -10,7 +10,7 @@ export interface HttpRequest {
 }
 
 export type HttpResponse = ResponseSuccess | ResponseError;
-export type Expect = "STRING" | "JSON" | "WHATEVER";
+export type Expect = "STRING" | "JSON" | "BYTES" | "WHATEVER";
 
 export interface ResponseSuccess {
   body: string | null;
