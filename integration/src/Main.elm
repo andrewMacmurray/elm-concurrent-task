@@ -1,10 +1,14 @@
 port module Main exposing (main)
 
+import Bytes
+import Bytes.Decode
+import Bytes.Encode
 import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError(..))
 import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
 import ConcurrentTask.Random
 import ConcurrentTask.Time
+import Dict
 import Integration.Runner as Runner exposing (RunnerProgram)
 import Integration.Spec as Spec exposing (Spec)
 import Json.Decode as Decode exposing (Decoder)
@@ -39,6 +43,8 @@ specs =
     , complexResponseSpec
     , missingFunctionSpec
     , httpJsonBodySpec
+    , httpHeadersSpec
+    , httpBytesSpec
     , httpMalformedSpec
     , httpStringSpec
     , httpTimeoutSpec
@@ -225,6 +231,38 @@ httpJsonBodySpec =
         )
 
 
+httpBytesSpec : Spec
+httpBytesSpec =
+    let
+        body : Bytes.Encode.Encoder
+        body =
+            Bytes.Encode.sequence
+                [ Bytes.Encode.unsignedInt32 Bytes.BE 41
+                , Bytes.Encode.unsignedInt32 Bytes.BE 1
+                ]
+
+        response : Bytes.Decode.Decoder Int
+        response =
+            Bytes.Decode.map2 (+)
+                (Bytes.Decode.unsignedInt32 Bytes.BE)
+                (Bytes.Decode.unsignedInt32 Bytes.BE)
+    in
+    Spec.describe
+        "http bytes"
+        "sends http bytes body in a request and decodes them in response"
+        (Http.post
+            { url = echoBody
+            , headers = []
+            , timeout = Nothing
+            , expect = Http.expectBytes response
+            , body = Http.bytesBody "application/octet-stream" (Bytes.Encode.encode body)
+            }
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual 42)
+        )
+
+
 httpMalformedSpec : Spec
 httpMalformedSpec =
     Spec.describe
@@ -239,6 +277,34 @@ httpMalformedSpec =
         )
         (Spec.assertError
             (badBodyShouldContainMessage "This is not valid JSON!")
+        )
+
+
+httpHeadersSpec : Spec
+httpHeadersSpec =
+    Spec.describe
+        "http headers"
+        "should send and receive http headers"
+        (Http.post
+            { url = echoBody
+            , headers = [ Http.header "foo" "bar" ]
+            , expect = Http.withMetadata always Http.expectWhatever
+            , timeout = Nothing
+            , body = Http.emptyBody
+            }
+        )
+        (Spec.assertSuccess
+            (\meta ->
+                case Dict.get "foo" meta.headers of
+                    Just "bar" ->
+                        Spec.pass
+
+                    Just x ->
+                        Spec.failWith "Got a header but not the expected value" x
+
+                    Nothing ->
+                        Spec.failWith "Did not contain expected header" meta
+            )
         )
 
 

@@ -6,6 +6,7 @@ const PORT = process.env.PORT || 4999;
 
 app.use(morgan("tiny"));
 app.use(express.json());
+app.use(express.raw({ type: "application/octet-stream" }));
 
 app.get("/wait-then-respond/:time", (req, res) => {
   setTimeout(() => {
@@ -14,6 +15,7 @@ app.get("/wait-then-respond/:time", (req, res) => {
 });
 
 app.post("/echo", (req, res) => {
+  res.setHeaders(new Headers(req.headers))
   res.send(req.body);
 });
 

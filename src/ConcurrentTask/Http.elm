@@ -1,7 +1,7 @@
 module ConcurrentTask.Http exposing
     ( request, get, post
-    , Body, emptyBody, stringBody, jsonBody
-    , Expect, expectJson, expectString, expectWhatever
+    , Body, emptyBody, stringBody, jsonBody, bytesBody
+    , Expect, expectJson, expectString, expectBytes, expectWhatever, withMetadata
     , Header, header
     , Error(..), Metadata
     )
@@ -43,12 +43,12 @@ You could create entirely your own from scratch - maybe you want an http package
 
 # Body
 
-@docs Body, emptyBody, stringBody, jsonBody
+@docs Body, emptyBody, stringBody, jsonBody, bytesBody
 
 
 # Expect
 
-@docs Expect, expectJson, expectString, expectWhatever
+@docs Expect, expectJson, expectString, expectBytes, expectWhatever, withMetadata
 
 
 # Headers
@@ -62,6 +62,9 @@ You could create entirely your own from scratch - maybe you want an http package
 
 -}
 
+import Base64
+import Bytes exposing (Bytes)
+import Bytes.Decode
 import ConcurrentTask exposing (ConcurrentTask)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
@@ -77,6 +80,7 @@ import Json.Encode as Encode
 type Body
     = EmptyBody
     | StringBody String String
+    | BytesBody String Bytes
 
 
 {-| Describe what you expect to be returned in an http response body.
@@ -84,7 +88,9 @@ type Body
 type Expect a
     = ExpectJson (Decoder a)
     | ExpectString (Decoder a)
+    | ExpectBytes (Bytes.Decode.Decoder a)
     | ExpectWhatever (Decoder a)
+    | ExpectMetadata (Metadata -> Expect a)
 
 
 {-| An Http header for configuring a request.
@@ -186,6 +192,31 @@ jsonBody value =
     stringBody "application/json" (Encode.encode 0 value)
 
 
+{-| Put some `Bytes` in the body of your `Request`. This allows you to use
+[`elm/bytes`](https://package.elm-lang.org/packages/elm/bytes/latest/) to have full control over the binary
+representation of the data you are sending. For example, you could create an
+`archive.zip` file and send it along like this:
+
+    import Bytes exposing (Bytes)
+
+    zipBody : Bytes -> Body
+    zipBody bytes =
+        bytesBody "application/zip" bytes
+
+The first argument is a [MIME type](https://en.wikipedia.org/wiki/Media_type)
+of the body. In other scenarios you may want to use MIME types like `image/png`
+or `image/jpeg` instead.
+
+**NOTE**: Because `Bytes` can't be sent out of a port (internally `ConcurrentTask` sends all its arguments out of a port), they are serialised to a base64 encoded `String`.
+
+Unfortunately some of the performance benefits of `Bytes` are lost at this point.
+
+-}
+bytesBody : String -> Bytes -> Body
+bytesBody =
+    BytesBody
+
+
 
 -- Expect
 
@@ -204,11 +235,39 @@ expectString =
     ExpectString Decode.string
 
 
+{-| Expect the response body to be `Bytes`, decode it using the supplied decoder.
+-}
+expectBytes : Bytes.Decode.Decoder a -> Expect a
+expectBytes =
+    ExpectBytes
+
+
 {-| Discard the response body.
 -}
 expectWhatever : Expect ()
 expectWhatever =
     ExpectWhatever (Decode.succeed ())
+
+
+{-| Include Http metadata in a successful response.
+-}
+withMetadata : (Metadata -> a -> b) -> Expect a -> Expect b
+withMetadata toMeta expect =
+    case expect of
+        ExpectJson decoder ->
+            ExpectMetadata (\meta -> ExpectJson (Decode.map (toMeta meta) decoder))
+
+        ExpectString decoder ->
+            ExpectMetadata (\meta -> ExpectString (Decode.map (toMeta meta) decoder))
+
+        ExpectBytes decoder ->
+            ExpectMetadata (\meta -> ExpectBytes (Bytes.Decode.map (toMeta meta) decoder))
+
+        ExpectWhatever decoder ->
+            ExpectMetadata (\meta -> ExpectWhatever (Decode.map (toMeta meta) decoder))
+
+        ExpectMetadata f ->
+            ExpectMetadata (\meta -> withMetadata toMeta (f meta))
 
 
 
@@ -313,19 +372,30 @@ decodeExpect expect =
         |> Decode.andThen
             (\meta ->
                 if meta.statusCode >= 200 && meta.statusCode < 300 then
-                    case expect of
-                        ExpectJson decoder ->
-                            Decode.field "body" (decodeJsonBody decoder meta)
-
-                        ExpectString decoder ->
-                            Decode.field "body" (Decode.map Ok decoder)
-
-                        ExpectWhatever decoder ->
-                            Decode.field "body" (Decode.map Ok decoder)
+                    decodeSuccess meta expect
 
                 else
                     withBodyValue (\body -> Err (BadStatus meta body))
             )
+
+
+decodeSuccess : Metadata -> Expect a -> Decoder (Result Error a)
+decodeSuccess meta expect =
+    case expect of
+        ExpectJson decoder ->
+            Decode.field "body" (decodeJsonBody decoder meta)
+
+        ExpectString decoder ->
+            Decode.field "body" (Decode.map Ok decoder)
+
+        ExpectBytes decoder ->
+            Decode.field "body" (decodeBytesBody decoder meta)
+
+        ExpectWhatever decoder ->
+            Decode.field "body" (Decode.map Ok decoder)
+
+        ExpectMetadata toMeta ->
+            decodeSuccess meta (toMeta meta)
 
 
 decodeMetadata : Decoder Metadata
@@ -348,6 +418,25 @@ decodeJsonBody decoder meta =
 
                     Err e ->
                         Decode.succeed (Err (BadBody meta (Encode.string res) e))
+            )
+
+
+decodeBytesBody : Bytes.Decode.Decoder a -> Metadata -> Decoder (Result Error a)
+decodeBytesBody decoder meta =
+    Decode.string
+        |> Decode.andThen
+            (\res ->
+                case Base64.toBytes res of
+                    Just bytes ->
+                        case Bytes.Decode.decode decoder bytes of
+                            Just a ->
+                                Decode.succeed (Ok a)
+
+                            Nothing ->
+                                Decode.succeed (Err (BadBody meta (Encode.string res) (Decode.Failure "Could not decode Bytes" Encode.null)))
+
+                    Nothing ->
+                        Decode.succeed (Err (BadBody meta (Encode.string res) (Decode.Failure "Invalid Bytes body" Encode.null)))
             )
 
 
@@ -386,8 +475,25 @@ encodeExpect expect =
         ExpectJson _ ->
             Encode.string "JSON"
 
+        ExpectBytes _ ->
+            Encode.string "BYTES"
+
         ExpectWhatever _ ->
             Encode.string "WHATEVER"
+
+        ExpectMetadata toExpect ->
+            let
+                -- It's safe to use fake metadata here to get at the expect kind `String`, as `withMetadata` never changes the underlying kind of expect.
+                -- But it's important not to expose the `ExpectMetadata` constructor as this would make it unsafe.
+                fake : Metadata
+                fake =
+                    { url = ""
+                    , statusCode = 123
+                    , statusText = ""
+                    , headers = Dict.empty
+                    }
+            in
+            encodeExpect (toExpect fake)
 
 
 encodeHeaders : Body -> List Header -> Encode.Value
@@ -404,6 +510,9 @@ addContentTypeForBody body headers =
             headers
 
         StringBody contentType _ ->
+            header "Content-Type" contentType :: headers
+
+        BytesBody contentType _ ->
             header "Content-Type" contentType :: headers
 
 
@@ -423,3 +532,8 @@ encodeBody body =
 
         EmptyBody ->
             Encode.null
+
+        BytesBody _ bytes ->
+            Base64.fromBytes bytes
+                |> Maybe.withDefault ""
+                |> Encode.string

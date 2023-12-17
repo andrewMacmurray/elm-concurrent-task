@@ -35,6 +35,20 @@ export function http(request: HttpRequest): Promise<HttpResponse> {
             body: x || null,
           }));
         }
+        case "BYTES": {
+          return res
+            .blob()
+            .then((blob) => blob.text())
+            .then((x) => {
+              return {
+                url: res.url,
+                headers: headers,
+                statusCode: res.status,
+                statusText: res.statusText,
+                body: x || null,
+              };
+            });
+        }
         case "WHATEVER": {
           return {
             url: res.url,
