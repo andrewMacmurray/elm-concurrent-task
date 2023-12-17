@@ -22,6 +22,7 @@ jobs:
       - run: npm run check-versions
       - run: npm install
       - uses: jorelali/setup-elm@v5
+      - run: npm run review:ci
       - uses: dillonkearns/elm-publish-action@v1
         id: elm-package-publish
         with:
