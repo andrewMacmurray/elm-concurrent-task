@@ -13,7 +13,7 @@ This package is heavily inspired by [elm-pages](https://github.com/dillonkearns/
 
 See the [examples](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/examples) for more things you can do!
 
-View [the elm-package docs here](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/).
+View [the elm-package docs here](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.1/).
 
 ## Why?
 
@@ -174,11 +174,11 @@ However, there are a number of tasks built into the JavaScript runner and suppor
 
 Check out the built-ins for more details:
 
-- [`Browser.Dom`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Browser-Dom/)
-- [`Http`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Http/)
-- [`Process`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Process/)
-- [`Random`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Random/)
-- [`Time`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.0/ConcurrentTask-Time/)
+- [`Browser.Dom`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.1/ConcurrentTask-Browser-Dom/)
+- [`Http`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.1/ConcurrentTask-Http/)
+- [`Process`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.1/ConcurrentTask-Process/)
+- [`Random`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.1/ConcurrentTask-Random/)
+- [`Time`](https://package.elm-lang.org/packages/andrewMacmurray/elm-concurrent-task/1.1.1/ConcurrentTask-Time/)
 
 ## How?
 
@@ -399,5 +399,6 @@ npm run docs
 
 1. Run `elm bump` to bump the elm version.
 2. Update the `version` in [package.json](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/package.json) to match the new elm version.
-3. Commit and push the updates.
-4. Wait for the [Publish Github Action](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/publish.yml) to complete.
+3. Ensure all links in the README / docs are pointing to the correct new version.
+4. Commit and push the updates.
+5. Wait for the [Publish Github Action](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/publish.yml) to complete.
