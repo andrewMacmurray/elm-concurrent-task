@@ -138,9 +138,11 @@ export function register(options: Options): void {
     if ("command" in payload) {
       switch (payload.command) {
         case "identify-pool": {
-          send({ poolId });
-          nextPoolId();
-          return;
+          // The Promise.resolve wrapper here prevents a race condition in Elm where sometimes the Model is not updated in time before the poolId is received
+          return Promise.resolve().then(() => {
+            send({ poolId });
+            nextPoolId();
+          });
         }
         default: {
           throw new Error(`Unrecognised internal command: ${payload}`);
