@@ -688,13 +688,13 @@ debug toOk toErr task =
             (\a ->
                 toOk a
                     |> debugLog "Success"
-                    |> (\_ -> succeed a)
+                    |> return a
             )
         |> onError
             (\x ->
                 toErr x
                     |> debugLog "Failure"
-                    |> (\_ -> fail x)
+                    |> andThenDo (fail x)
             )
 
 

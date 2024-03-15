@@ -113,6 +113,7 @@ longRequest ms =
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
+        |> Task.debug Debug.toString Debug.toString
 
 
 sometimesFails : ConcurrentTask Http.Error String
@@ -123,6 +124,7 @@ sometimesFails =
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
+        |> Task.debug Debug.toString Debug.toString
 
 
 httpError : ConcurrentTask Http.Error String
@@ -133,6 +135,7 @@ httpError =
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
+        |> Task.debug Debug.toString Debug.toString
 
 
 {-| Simple retry mechanism with backoff
