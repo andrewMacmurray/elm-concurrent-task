@@ -23,6 +23,7 @@ suite =
         [ hardcoded
         , successResponses
         , errors
+        , helpers
         ]
 
 
@@ -445,6 +446,35 @@ hardcoded =
                     |> ConcurrentTask.onError (\_ -> ConcurrentTask.succeed b)
                     |> runTask []
                     |> Expect.equal (Internal.Success b)
+        ]
+
+
+helpers : Test
+helpers =
+    describe "Task Helpers"
+        [ describe "finallyDo"
+            [ test "Runs the followup task when the first task succeeds" <|
+                \_ ->
+                    createTask
+                        |> ConcurrentTask.finallyDo createTask
+                        |> runTask
+                            [ ( 0, Encode.string "first" )
+                            , ( 1, Encode.string "followup" )
+                            ]
+                        |> Expect.equal (Internal.Success "followup")
+            , test "Runs the followup task when the first task fails" <|
+                \_ ->
+                    createTask
+                        |> ConcurrentTask.finallyDo (ConcurrentTask.succeed "followup")
+                        |> evalTask
+                            [ ( 0, jsException "error" Encode.null )
+                            , ( 1, Encode.string "followup" )
+                            ]
+                        |> Expect.all
+                            [ Tuple.second >> Expect.equal (Internal.Error "error")
+                            , Tuple.first >> Ids.get >> Expect.equal "1"
+                            ]
+            ]
         ]
 
 
