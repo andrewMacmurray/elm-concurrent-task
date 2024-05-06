@@ -5,11 +5,10 @@ module ConcurrentTask exposing
     , onResponseDecoderFailure, onJsException
     , mapError, onError
     , succeed, fail, andThen
-    , fromResult, andThenDo, return, debug
+    , fromResult, andThenDo, return, debug, finallyDo
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , attempt, Response(..), UnexpectedError(..), onProgress, Pool, pool
-    , finallyDo
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -69,7 +68,7 @@ Lift `UnexpectedError`s into regular task flow.
 
 These are some general helpers that can make chaining, combining and debugging tasks more convenient.
 
-@docs fromResult, andThenDo, return, debug
+@docs fromResult, andThenDo, return, debug, finallyDo
 
 
 # Batch Helpers
