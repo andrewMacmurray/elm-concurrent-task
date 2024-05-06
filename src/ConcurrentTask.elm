@@ -9,6 +9,7 @@ module ConcurrentTask exposing
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , attempt, Response(..), UnexpectedError(..), onProgress, Pool, pool
+    , finallyDo
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -706,6 +707,40 @@ debugLog tag message =
         , errors = expectNoErrors
         , args = Encode.string ("Debug - " ++ tag ++ ": " ++ message)
         }
+
+
+{-| Always executes the Task, regardless of whether the previous Task has succeeded or failed.
+
+The behavior is similar to JavaScript's `finally` block in a `try-catch-finally` statement.
+
+This can, for example, be used to ensure that a resource is always released after being locked:
+
+    import ConcurrentTask exposing (ConcurrentTask)
+
+    lockResource : ConcurrentTask String ()
+    lockResource =
+        succeed ()
+
+    unlockResource : ConcurrentTask String ()
+    unlockResource =
+        succeed ()
+
+    performOperation : ConcurrentTask String ()
+    performOperation =
+        fail "operation failed"
+
+    secureOperation : ConcurrentTask String ()
+    secureOperation =
+        lockResource
+            |> andThenDo performOperation
+            |> finallyDo unlockResource
+
+-}
+finallyDo : ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x a
+finallyDo t2 t1 =
+    t1
+        |> onError (\e -> t2 |> andThenDo (fail e))
+        |> andThenDo t2
 
 
 
