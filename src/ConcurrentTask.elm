@@ -8,7 +8,7 @@ module ConcurrentTask exposing
     , fromResult, andThenDo, return, debug
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , attempt, Response(..), UnexpectedError(..), onProgress, Pool, pool
+    , attempt, attemptSimple, Response(..), UnexpectedError(..), onProgress, Pool, pool
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -186,7 +186,7 @@ Here's a minimal complete example:
             , subscriptions = subscriptions
             }
 
-@docs attempt, Response, UnexpectedError, onProgress, Pool, pool
+@docs attempt, attemptSimple, Response, UnexpectedError, onProgress, Pool, pool
 
 -}
 
@@ -894,6 +894,66 @@ attempt options =
         , send = options.send
         , onComplete = toResponse >> options.onComplete
         }
+
+
+{-| Start a `ConcurrentTask` - simplified version. This needs:
+
+  - A task `Pool` (The internal model to keep track of task progress).
+  - The `send` port.
+  - The `Msg` to be called when the task completes.
+  - Your `ConcurrentTask` to be run.
+
+Make sure to update your `Model` and pass in the `Cmd` returned from `attempt`. e.g. in a branch of `update`:
+
+    let
+        ( tasks, cmd ) =
+            ConcurrentTask.attemptSimple
+                { send = send
+                , pool = model.pool
+                , onComplete = OnComplete
+                }
+                myTask
+    in
+    ( { model | tasks = tasks }, cmd )
+
+-}
+attemptSimple :
+    { pool : Pool msg msg msg
+    , send : Decode.Value -> Cmd msg
+    , onComplete : Response x a -> msg
+    }
+    -> ConcurrentTask x a
+    -> ( Pool msg msg msg, Cmd msg )
+attemptSimple config task =
+    let
+        mappedTask : ConcurrentTask msg msg
+        mappedTask =
+            task
+                |> map (\res -> config.onComplete (Success res))
+                |> onError
+                    (\err ->
+                        config.onComplete (Error err)
+                            |> succeed
+                    )
+
+        onComplete : Response msg msg -> msg
+        onComplete res =
+            case res of
+                Success s ->
+                    s
+
+                Error e ->
+                    e
+
+                UnexpectedError e ->
+                    config.onComplete (UnexpectedError e)
+    in
+    attempt
+        { pool = config.pool
+        , send = config.send
+        , onComplete = onComplete
+        }
+        mappedTask
 
 
 {-| The value returned from a task when it completes (returned in the `OnComplete` msg).
