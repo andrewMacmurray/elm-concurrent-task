@@ -410,33 +410,33 @@ decodeMetadata =
 decodeJsonBody : Decoder a -> Metadata -> Decoder (Result Error a)
 decodeJsonBody decoder meta =
     Decode.string
-        |> Decode.andThen
+        |> Decode.map
             (\res ->
                 case Decode.decodeString decoder res of
                     Ok a ->
-                        Decode.succeed (Ok a)
+                        Ok a
 
                     Err e ->
-                        Decode.succeed (Err (BadBody meta (Encode.string res) e))
+                        Err (BadBody meta (Encode.string res) e)
             )
 
 
 decodeBytesBody : Bytes.Decode.Decoder a -> Metadata -> Decoder (Result Error a)
 decodeBytesBody decoder meta =
     Decode.string
-        |> Decode.andThen
+        |> Decode.map
             (\res ->
                 case Base64.toBytes res of
                     Just bytes ->
                         case Bytes.Decode.decode decoder bytes of
                             Just a ->
-                                Decode.succeed (Ok a)
+                                Ok a
 
                             Nothing ->
-                                Decode.succeed (Err (BadBody meta (Encode.string res) (Decode.Failure "Could not decode Bytes" Encode.null)))
+                                Err (BadBody meta (Encode.string res) (Decode.Failure "Could not decode Bytes" Encode.null))
 
                     Nothing ->
-                        Decode.succeed (Err (BadBody meta (Encode.string res) (Decode.Failure "Invalid Bytes body" Encode.null)))
+                        Err (BadBody meta (Encode.string res) (Decode.Failure "Invalid Bytes body" Encode.null))
             )
 
 
