@@ -30,7 +30,7 @@
   "devDependencies": {
     "elm": "^0.19.1-6",
     "elm-doc-preview": "^1.0.7",
-    "elm-review": "^2.10.2",
+    "elm-review": "^2.13.2",
     "elm-test": "^0.19.1-revision12",
     "typescript": "^5.2.2"
   }
