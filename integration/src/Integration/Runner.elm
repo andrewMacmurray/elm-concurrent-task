@@ -35,7 +35,7 @@ type Msg
 
 
 type alias Pool =
-    Task.Pool Msg Error Output
+    Task.Pool Msg
 
 
 type alias Error =
