@@ -3,7 +3,7 @@ port module Main exposing (main)
 import ConcurrentTask as Task exposing (ConcurrentTask)
 import ConcurrentTask.Http as Http
 import ConcurrentTask.Process
-import Json.Decode as Decode exposing (Decoder)
+import Json.Decode as Decode
 
 
 {-| Many Requests
@@ -37,7 +37,7 @@ type Msg
 
 
 type alias Pool =
-    Task.Pool Msg Error Output
+    Task.Pool Msg
 
 
 type alias Error =
