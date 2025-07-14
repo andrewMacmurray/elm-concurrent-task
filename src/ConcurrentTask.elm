@@ -132,11 +132,11 @@ Here's a minimal complete example:
     import Json.Decode as Decode
 
     type alias Model =
-        { tasks : ConcurrentTask.Pool Msg Http.Error Titles
+        { tasks : ConcurrentTask.Pool Msg
         }
 
     type Msg
-        = OnProgress ( ConcurrentTask.Pool Msg Http.Error Titles, Cmd Msg )
+        = OnProgress ( ConcurrentTask.Pool Msg, Cmd Msg )
         | OnComplete (ConcurrentTask.Response Http.Error Titles)
 
     init : ( Model, Cmd Msg )
