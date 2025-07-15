@@ -7,9 +7,9 @@
   "types": "lib/mjs/index.d.ts",
   "exports": {
     ".": {
+      "types": "./lib/mjs/index.d.ts",
       "import": "./lib/mjs/index.js",
-      "require": "./lib/cjs/index.js",
-      "types": "./lib/mjs/index.d.ts"
+      "require": "./lib/cjs/index.js"
     }
   },
   "files": [
@@ -30,7 +30,7 @@
   "license": "MIT",
   "devDependencies": {
     "elm": "^0.19.1-6",
-    "elm-doc-preview": "^1.0.7",
+    "elm-doc-preview": "^6.0.1",
     "elm-review": "^2.13.2",
     "elm-test": "^0.19.1-revision12",
     "typescript": "^5.2.2"
