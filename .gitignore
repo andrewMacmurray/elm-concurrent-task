@@ -4,6 +4,7 @@ repl-temp-*
 node_modules
 dist
 lib
+docs.json
 
 .env
 .idea
