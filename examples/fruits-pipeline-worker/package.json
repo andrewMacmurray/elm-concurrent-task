@@ -2,9 +2,9 @@
   "name": "fruits-pipeline-worker",
   "scripts": {
     "start": "node ./build.mjs",
-    "infra": "docker-compose up",
-    "send-message": "./scripts/send-message.sh",
-    "receive-message": "./scripts/receive-message.sh"
+    "infra": "docker compose up",
+    "send-message": "node --experimental-strip-types scripts/send-message.mts",
+    "receive-message": "node --experimental-strip-types scripts/receive-message.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.400.0",
