@@ -4,7 +4,7 @@ import {
   DomError,
   SetViewportOptions,
   SetViewportOfOptions,
-} from "browser";
+} from "./index.js";
 
 // Relevant Elm Kernel code: https://github.com/elm/browser/blob/master/src/Elm/Kernel/Browser.js#L322-L328
 // Note: `focus` is called using `Elm.Kernel.Browser.call "focus"`

@@ -1,4 +1,4 @@
-import { HttpResponse, HttpRequest, HttpError } from "./index";
+import { HttpResponse, HttpRequest, HttpError } from "./index.js";
 
 export function http(request: HttpRequest): Promise<HttpResponse> {
   let controller: AbortController | undefined;
