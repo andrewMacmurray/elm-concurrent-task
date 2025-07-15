@@ -1,7 +1,7 @@
 module ConcurrentTask.Http exposing
     ( request, get, post
     , Body, emptyBody, stringBody, jsonBody, bytesBody
-    , Expect, expectJson, expectString, expectBytes, expectWhatever, withMetadata
+    , Expect, expectJson, expectString, expectBytes, expectRawBytes, expectWhatever, withMetadata
     , Header, header
     , Error(..), Metadata
     )
@@ -48,7 +48,7 @@ You could create entirely your own from scratch - maybe you want an http package
 
 # Expect
 
-@docs Expect, expectJson, expectString, expectBytes, expectWhatever, withMetadata
+@docs Expect, expectJson, expectString, expectBytes, expectRawBytes, expectWhatever, withMetadata
 
 
 # Headers
@@ -88,7 +88,7 @@ type Body
 type Expect a
     = ExpectJson (Decoder a)
     | ExpectString (Decoder a)
-    | ExpectBytes (Bytes.Decode.Decoder a)
+    | ExpectBytes (Bytes -> Bytes.Decode.Decoder a)
     | ExpectWhatever (Decoder a)
     | ExpectMetadata (Metadata -> Expect a)
 
@@ -238,8 +238,15 @@ expectString =
 {-| Expect the response body to be `Bytes`, decode it using the supplied decoder.
 -}
 expectBytes : Bytes.Decode.Decoder a -> Expect a
-expectBytes =
-    ExpectBytes
+expectBytes decoder =
+    ExpectBytes (\_ -> decoder)
+
+
+{-| Expect the response body to be raw `Bytes`.
+-}
+expectRawBytes : Expect Bytes
+expectRawBytes =
+    ExpectBytes Bytes.Decode.succeed
 
 
 {-| Discard the response body.
@@ -261,7 +268,7 @@ withMetadata toMeta expect =
             ExpectMetadata (\meta -> ExpectString (Decode.map (toMeta meta) decoder))
 
         ExpectBytes decoder ->
-            ExpectMetadata (\meta -> ExpectBytes (Bytes.Decode.map (toMeta meta) decoder))
+            ExpectMetadata (\meta -> ExpectBytes (\raw -> Bytes.Decode.map (toMeta meta) (decoder raw)))
 
         ExpectWhatever decoder ->
             ExpectMetadata (\meta -> ExpectWhatever (Decode.map (toMeta meta) decoder))
@@ -421,14 +428,14 @@ decodeJsonBody decoder meta =
             )
 
 
-decodeBytesBody : Bytes.Decode.Decoder a -> Metadata -> Decoder (Result Error a)
+decodeBytesBody : (Bytes -> Bytes.Decode.Decoder a) -> Metadata -> Decoder (Result Error a)
 decodeBytesBody decoder meta =
     Decode.string
         |> Decode.map
             (\res ->
                 case Base64.toBytes res of
                     Just bytes ->
-                        case Bytes.Decode.decode decoder bytes of
+                        case Bytes.Decode.decode (decoder bytes) bytes of
                             Just a ->
                                 Ok a
 
