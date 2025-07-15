@@ -6,8 +6,8 @@ import Json.Decode as Decode
 
 
 subscriptions :
-    (( ConcurrentTask.Pool msg x a, Cmd msg ) -> msg)
-    -> { model | tasks : ConcurrentTask.Pool msg x a }
+    (( ConcurrentTask.Pool msg, Cmd msg ) -> msg)
+    -> { model | tasks : ConcurrentTask.Pool msg }
     -> Sub msg
 subscriptions onProgress { tasks } =
     ConcurrentTask.onProgress
@@ -30,10 +30,10 @@ progress model ( tasks, cmd ) =
 
 attempt :
     { task : ConcurrentTask x a
-    , pool : ConcurrentTask.Pool msg x a
+    , pool : ConcurrentTask.Pool msg
     , onComplete : ConcurrentTask.Response x a -> msg
     }
-    -> ( ConcurrentTask.Pool msg x a, Cmd msg )
+    -> ( ConcurrentTask.Pool msg, Cmd msg )
 attempt { task, pool, onComplete } =
     ConcurrentTask.attempt
         { send = send

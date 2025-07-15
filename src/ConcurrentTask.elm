@@ -132,11 +132,11 @@ Here's a minimal complete example:
     import Json.Decode as Decode
 
     type alias Model =
-        { tasks : ConcurrentTask.Pool Msg Http.Error Titles
+        { tasks : ConcurrentTask.Pool Msg
         }
 
     type Msg
-        = OnProgress ( ConcurrentTask.Pool Msg Http.Error Titles, Cmd Msg )
+        = OnProgress ( ConcurrentTask.Pool Msg, Cmd Msg )
         | OnComplete (ConcurrentTask.Response Http.Error Titles)
 
     init : ( Model, Cmd Msg )
@@ -882,18 +882,42 @@ Make sure to update your `Model` and pass in the `Cmd` returned from `attempt`. 
 
 -}
 attempt :
-    { pool : Pool msg x a
+    { pool : Pool msg
     , send : Decode.Value -> Cmd msg
     , onComplete : Response x a -> msg
     }
     -> ConcurrentTask x a
-    -> ( Pool msg x a, Cmd msg )
-attempt options =
+    -> ( Pool msg, Cmd msg )
+attempt config task =
+    let
+        mappedTask : ConcurrentTask msg msg
+        mappedTask =
+            task
+                |> map (\res -> config.onComplete (Success res))
+                |> onError
+                    (\err ->
+                        config.onComplete (Error err)
+                            |> succeed
+                    )
+
+        onComplete : Internal.Response msg msg -> msg
+        onComplete res =
+            case res of
+                Internal.Success s ->
+                    s
+
+                Internal.Error e ->
+                    e
+
+                Internal.UnexpectedError e ->
+                    config.onComplete (UnexpectedError (toUnexpectedError e))
+    in
     Internal.attempt
-        { pool = options.pool
-        , send = options.send
-        , onComplete = toResponse >> options.onComplete
+        { pool = config.pool
+        , send = config.send
+        , onComplete = onComplete
         }
+        mappedTask
 
 
 {-| The value returned from a task when it completes (returned in the `OnComplete` msg).
@@ -937,19 +961,6 @@ type UnexpectedError
     | ErrorsDecoderFailure { function : String, error : Decode.Error }
     | MissingFunction String
     | InternalError String
-
-
-toResponse : Internal.Response x a -> Response x a
-toResponse res =
-    case res of
-        Internal.Success a ->
-            Success a
-
-        Internal.Error x ->
-            Error x
-
-        Internal.UnexpectedError e ->
-            UnexpectedError (toUnexpectedError e)
 
 
 toUnexpectedError : Internal.UnexpectedError -> UnexpectedError
@@ -1000,9 +1011,9 @@ Make sure to update your `Model` and pass in the `Cmd` in your `OnProgress` bran
 onProgress :
     { send : Decode.Value -> Cmd msg
     , receive : (Decode.Value -> msg) -> Sub msg
-    , onProgress : ( Pool msg x a, Cmd msg ) -> msg
+    , onProgress : ( Pool msg, Cmd msg ) -> msg
     }
-    -> Pool msg x a
+    -> Pool msg
     -> Sub msg
 onProgress =
     Internal.onProgress
@@ -1011,8 +1022,8 @@ onProgress =
 {-| A Pool keeps track of each task's progress,
 and allows multiple Task attempts to be in-flight at the same time.
 -}
-type alias Pool msg x a =
-    Internal.Pool msg x a
+type alias Pool msg =
+    Internal.Pool msg
 
 
 {-| Create an empty ConcurrentTask Pool.
@@ -1024,6 +1035,6 @@ Right now it doesn't expose any functionality, but it could be used in the futur
   - Expose metrics on previous or running tasks.
 
 -}
-pool : Pool msg x a
+pool : Pool msg
 pool =
     Internal.pool

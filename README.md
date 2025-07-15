@@ -206,7 +206,7 @@ Your Elm program needs:
 
   ```elm
   type alias Model =
-      { tasks : ConcurrentTask.Pool Msg Error Success
+      { tasks : ConcurrentTask.Pool Msg
       }
   ```
 
@@ -214,7 +214,7 @@ Your Elm program needs:
 
   ```elm
   type Msg
-      = OnProgress ( ConcurrentTask.Pool Msg Error Success, Cmd Msg ) -- updates task progress
+      = OnProgress ( ConcurrentTask.Pool Msg, Cmd Msg ) -- updates task progress
       | OnComplete (ConcurrentTask.Response Error Success) -- called when a task completes
   ```
 
@@ -236,12 +236,12 @@ import Json.Decode as Decode
 
 
 type alias Model =
-    { tasks : ConcurrentTask.Pool Msg Error Titles
+    { tasks : ConcurrentTask.Pool Msg
     }
 
 
 type Msg
-    = OnProgress ( ConcurrentTask.Pool Msg Error Titles, Cmd Msg )
+    = OnProgress ( ConcurrentTask.Pool Msg, Cmd Msg )
     | OnComplete (ConcurrentTask.Response Error Titles)
 
 

@@ -57,7 +57,7 @@ type alias Flags =
 
 
 type alias Pool =
-    ConcurrentTask.Pool Msg Error Output
+    ConcurrentTask.Pool Msg
 
 
 type alias Error =
