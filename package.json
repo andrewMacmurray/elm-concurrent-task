@@ -22,8 +22,9 @@
     "review": "elm-review --fix",
     "review:ci": "elm-review",
     "review:watch": "elm-review --watch",
-    "runner:compile": "rm -rf lib/* && tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json && ./scripts/package-fixup.sh",
-    "check-versions": "node ./scripts/versions.js"
+    "runner:sub-package-json": "node --experimental-strip-types ./scripts/package-fixup.mts",
+    "runner:compile": "rm -rf lib/* && tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json && npm run runner:sub-package-json",
+    "check-versions": "node --experimental-strip-types ./scripts/versions.mts"
   },
   "author": "Andrew MacMurray",
   "license": "MIT",
