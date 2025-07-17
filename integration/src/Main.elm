@@ -41,6 +41,9 @@ specs =
     [ largeBatchSpec
     , batchAndSequenceSpec
     , complexResponseSpec
+    , raceSpec
+    , raceFailSpec
+    , raceQuickFailSpec
     , missingFunctionSpec
     , httpJsonBodySpec
     , httpHeadersSpec
@@ -178,6 +181,56 @@ complexResponseSpec =
                     ]
                 )
             )
+        )
+
+
+raceSpec : Spec
+raceSpec =
+    Spec.describe
+        "racing tasks"
+        "should return the fastest task to complete"
+        (Task.race (longRequest 300)
+            [ longRequest 1300
+            , longRequest 600
+            , longRequest 42
+            , longRequest 900
+            ]
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "done:42")
+        )
+
+
+raceFailSpec : Spec
+raceFailSpec =
+    Spec.describe
+        "racing tasks with some failures"
+        "should return the fastest task to complete even if later tasks will fail"
+        (Task.race (longRequestWithFail 300)
+            [ longRequest 42
+            , longRequestWithFail 1300
+            , longRequestWithFail 600
+            , longRequestWithFail 900
+            ]
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "done:42")
+        )
+
+
+raceQuickFailSpec : Spec
+raceQuickFailSpec =
+    Spec.describe
+        "racing tasks with a fast failure"
+        "should return the fastest task to fail"
+        (Task.race (longRequestWithFail 100)
+            [ longRequest 600
+            , longRequest 300
+            , longRequest 500
+            ]
+        )
+        (Spec.assertError
+            (Spec.shouldEqual (Http.BadUrl "100"))
         )
 
 
@@ -508,6 +561,11 @@ longRequest ms =
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
+
+
+longRequestWithFail : Int -> ConcurrentTask Http.Error a
+longRequestWithFail ms =
+    longRequest ms |> Task.andThen (\_ -> Task.fail (Http.BadUrl (String.fromInt ms)))
 
 
 waitThenRespond : Int -> String

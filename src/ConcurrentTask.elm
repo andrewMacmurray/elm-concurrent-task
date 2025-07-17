@@ -6,6 +6,7 @@ module ConcurrentTask exposing
     , mapError, onError
     , succeed, fail, andThen
     , fromResult, toResult, andThenDo, return, debug
+    , race
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , attempt, attemptEach, Response(..), UnexpectedError(..), onProgress, Pool, pool
@@ -69,6 +70,13 @@ Lift `UnexpectedError`s into regular task flow.
 These are some general helpers that can make chaining, combining and debugging tasks more convenient.
 
 @docs fromResult, toResult, andThenDo, return, debug
+
+
+# Racing Helpers
+
+Get the result of the fastest task.
+
+@docs race
 
 
 # Batch Helpers
@@ -757,6 +765,60 @@ debugLog tag message =
         , errors = expectNoErrors
         , args = Encode.string ("Debug - " ++ tag ++ ": " ++ message)
         }
+
+
+
+-- Race
+
+
+type Race x a
+    = Winner a
+    | RaceError x
+
+
+{-| Race a list of `ConcurrentTask`s. The fastest task to succeed wins!
+
+    import ConcurrentTask exposing (ConcurrentTask)
+    import ConcurrentTask.Process
+
+    sleep : Int -> ConcurrentTask x Int
+    sleep ms =
+        ConcurrentTask.Process.sleep ms |> ConcurrentTask.map (\_ -> ms)
+
+    -- succeeds with 42
+    fastest : ConcurrentTask x Int
+    fastest =
+        ConcurrentTask.race (sleep 500)
+            [ sleep 1000
+            , sleep 42
+            , sleep 200
+            ]
+
+If a task fails before any have succeeded the failure will be surfaced.
+
+-}
+race : ConcurrentTask x a -> List (ConcurrentTask x a) -> ConcurrentTask x a
+race task tasks =
+    -- `race` uses the fact that when a task fails it short circuits any other running tasks.
+    -- Effectively, the first task to complete then immediately fails and is surfaced via `onError` as the winner.
+    let
+        toRacer : ConcurrentTask x a -> ConcurrentTask (Race x a) b
+        toRacer =
+            mapError RaceError >> andThen (Winner >> fail)
+    in
+    List.map toRacer (task :: tasks)
+        |> batch
+        -- This makes the types match up but will never be run, as one of the sub task will always `fail` with a `Winner`.
+        |> andThen (List.head >> Maybe.map succeed >> Maybe.withDefault (toRacer task))
+        |> onError
+            (\e ->
+                case e of
+                    Winner fastest ->
+                        succeed fastest
+
+                    RaceError err ->
+                        fail err
+            )
 
 
 
