@@ -27,7 +27,7 @@ export function http(request: HttpRequest): Promise<HttpResponse> {
             headers: headers,
             statusCode: res.status,
             statusText: res.statusText,
-            body: x || null,
+            body: x || "",
           }));
         }
         case "JSON": {
@@ -49,7 +49,7 @@ export function http(request: HttpRequest): Promise<HttpResponse> {
                 headers: headers,
                 statusCode: res.status,
                 statusText: res.statusText,
-                body: x || null,
+                body: x || "",
               };
             });
         }
