@@ -1,6 +1,7 @@
 module TaskTest exposing (suite)
 
-import ConcurrentTask.Internal as Task exposing (ConcurrentTask)
+import ConcurrentTask
+import ConcurrentTask.Internal as Internal exposing (ConcurrentTask)
 import ConcurrentTask.Internal.Ids as Ids exposing (Ids)
 import Dict
 import Expect
@@ -34,7 +35,7 @@ successResponses =
     describe "Tasks with Success Responses"
         [ fuzz3 string string string "successful responses combine" <|
             \a b c ->
-                Task.map3 join3
+                ConcurrentTask.map3 join3
                     createTask
                     createTask
                     createTask
@@ -43,15 +44,15 @@ successResponses =
                         , ( 1, Encode.string b )
                         , ( 2, Encode.string c )
                         ]
-                    |> Expect.equal (Task.Success (join3 a b c))
+                    |> Expect.equal (Internal.Success (join3 a b c))
         , fuzz3 string string string "successful responses chain" <|
             \a b c ->
-                Task.map2 (++)
+                ConcurrentTask.map2 (++)
                     createTask
                     createTask
-                    |> Task.andThen
+                    |> ConcurrentTask.andThen
                         (\ab ->
-                            Task.map2 (join3 ab)
+                            ConcurrentTask.map2 (join3 ab)
                                 createTask
                                 createTask
                         )
@@ -61,15 +62,15 @@ successResponses =
                         , ( 2, Encode.string c )
                         , ( 3, Encode.string c )
                         ]
-                    |> Expect.equal (Task.Success (a ++ b ++ c ++ c))
+                    |> Expect.equal (Internal.Success (a ++ b ++ c ++ c))
         , test "responses can arrive out of order" <|
             \_ ->
-                Task.map2 join2
+                ConcurrentTask.map2 join2
                     createTask
                     createTask
-                    |> Task.andThen
+                    |> ConcurrentTask.andThen
                         (\ab ->
-                            Task.map2 (join3 ab)
+                            ConcurrentTask.map2 (join3 ab)
                                 createTask
                                 createTask
                         )
@@ -79,14 +80,14 @@ successResponses =
                         , ( 2, Encode.string "c" )
                         , ( 3, Encode.string "d" )
                         ]
-                    |> Expect.equal (Task.Success "abcd")
+                    |> Expect.equal (Internal.Success "abcd")
         , test "can handle nested chains" <|
             \_ ->
-                Task.map4 join4
-                    (createTask |> Task.andThen withAnother)
-                    (createTask |> Task.andThen withAnother)
-                    (createTask |> Task.andThen withAnother)
-                    (createTask |> Task.andThen withAnother)
+                ConcurrentTask.map4 join4
+                    (createTask |> ConcurrentTask.andThen withAnother)
+                    (createTask |> ConcurrentTask.andThen withAnother)
+                    (createTask |> ConcurrentTask.andThen withAnother)
+                    (createTask |> ConcurrentTask.andThen withAnother)
                     |> runTask
                         [ ( 0, Encode.string "1" )
                         , ( 1, Encode.string "3" )
@@ -97,18 +98,18 @@ successResponses =
                         , ( 6, Encode.string "6" )
                         , ( 7, Encode.string "8" )
                         ]
-                    |> Expect.equal (Task.Success "12345678")
+                    |> Expect.equal (Internal.Success "12345678")
         , test "can handle deeply nested chains" <|
             \_ ->
-                Task.map2 join2
+                ConcurrentTask.map2 join2
                     (createTask
-                        |> Task.andThen
+                        |> ConcurrentTask.andThen
                             (\x ->
                                 withAnother x
-                                    |> Task.andThen
+                                    |> ConcurrentTask.andThen
                                         (\y ->
                                             withAnother y
-                                                |> Task.andThen
+                                                |> ConcurrentTask.andThen
                                                     (\z ->
                                                         withAnother z
                                                     )
@@ -116,16 +117,16 @@ successResponses =
                             )
                     )
                     (createTask
-                        |> Task.andThen
+                        |> ConcurrentTask.andThen
                             (\x ->
                                 withAnother x
-                                    |> Task.andThen
+                                    |> ConcurrentTask.andThen
                                         (\y ->
                                             withAnother y
                                         )
                             )
                     )
-                    |> Task.andThen withAnother
+                    |> ConcurrentTask.andThen withAnother
                     |> runTask
                         [ ( 0, Encode.string "0" )
                         , ( 1, Encode.string "4" )
@@ -136,10 +137,10 @@ successResponses =
                         , ( 6, Encode.string "3" )
                         , ( 7, Encode.string "7" )
                         ]
-                    |> Expect.equal (Task.Success "01234567")
+                    |> Expect.equal (Internal.Success "01234567")
         , fuzz3 int string int "can handle mixed response types" <|
             \a b c ->
-                Task.map3 (\x y z -> ( x, y, z ))
+                ConcurrentTask.map3 (\x y z -> ( x, y, z ))
                     (create Decode.int)
                     (create Decode.string)
                     (create Decode.int)
@@ -148,11 +149,11 @@ successResponses =
                         , ( 1, Encode.string b )
                         , ( 2, Encode.int c )
                         ]
-                    |> Expect.equal (Task.Success ( a, b, c ))
+                    |> Expect.equal (Internal.Success ( a, b, c ))
         , fuzz (intRange 1 1000) "the id always increments in step with the number of tasks" <|
             \n ->
                 List.repeat n createTask
-                    |> Task.sequence
+                    |> ConcurrentTask.sequence
                     |> evalTask
                         (List.range 0 n
                             |> List.map
@@ -173,8 +174,8 @@ successResponses =
                         100000
                 in
                 List.repeat n (create Decode.int)
-                    |> Task.sequence
-                    |> Task.map List.sum
+                    |> ConcurrentTask.sequence
+                    |> ConcurrentTask.map List.sum
                     |> runTask
                         (List.range 0 n
                             |> List.map
@@ -184,7 +185,7 @@ successResponses =
                                     )
                                 )
                         )
-                    |> Expect.equal (Task.Success n)
+                    |> Expect.equal (Internal.Success n)
         , test "handles large batches" <|
             \_ ->
                 let
@@ -195,8 +196,8 @@ successResponses =
                         1000
                 in
                 List.repeat n (create Decode.int)
-                    |> Task.batch
-                    |> Task.map List.sum
+                    |> ConcurrentTask.batch
+                    |> ConcurrentTask.map List.sum
                     |> runTask
                         (List.range 0 n
                             |> List.map
@@ -206,7 +207,7 @@ successResponses =
                                     )
                                 )
                         )
-                    |> Expect.equal (Task.Success n)
+                    |> Expect.equal (Internal.Success n)
         ]
 
 
@@ -220,28 +221,28 @@ errors =
         (let
             customErrorTask : ConcurrentTask Error String
             customErrorTask =
-                Task.define
+                ConcurrentTask.define
                     { function = "custom"
-                    , expect = Task.expectString
-                    , errors = Task.expectErrors (Decode.field "error" Decode.string)
+                    , expect = ConcurrentTask.expectString
+                    , errors = ConcurrentTask.expectErrors (Decode.field "error" Decode.string)
                     , args = Encode.null
                     }
 
             catchTask : ConcurrentTask Error String
             catchTask =
-                Task.define
+                ConcurrentTask.define
                     { function = "catch"
-                    , expect = Task.expectString
-                    , errors = Task.expectThrows identity
+                    , expect = ConcurrentTask.expectString
+                    , errors = ConcurrentTask.expectThrows identity
                     , args = Encode.null
                     }
 
             noErrorsTask : ConcurrentTask x String
             noErrorsTask =
-                Task.define
+                ConcurrentTask.define
                     { function = "noErrors"
-                    , expect = Task.expectString
-                    , errors = Task.expectNoErrors
+                    , expect = ConcurrentTask.expectString
+                    , errors = ConcurrentTask.expectNoErrors
                     , args = Encode.null
                     }
          in
@@ -252,7 +253,7 @@ errors =
                 ]
                 "Errors with UnhandledJsException if a task throws and does not catch exception"
                 (\( fnName, task ) ->
-                    Task.map2 join2
+                    ConcurrentTask.map2 join2
                         task
                         task
                         |> runTaskWith
@@ -260,8 +261,8 @@ errors =
                             , ( 1, jsException "f threw an exception" (Encode.string "error data") )
                             ]
                         |> Expect.equal
-                            (Task.UnexpectedError
-                                (Task.UnhandledJsException
+                            (Internal.UnexpectedError
+                                (Internal.UnhandledJsException
                                     { function = fnName
                                     , message = "f threw an exception"
                                     , raw = Encode.string "error data"
@@ -271,7 +272,7 @@ errors =
                 )
             , test "Errors with caught exception if task throws and has expectThrows handler" <|
                 \_ ->
-                    Task.map3 join3
+                    ConcurrentTask.map3 join3
                         catchTask
                         customErrorTask
                         catchTask
@@ -280,7 +281,7 @@ errors =
                             , ( 1, success (Encode.string "b") )
                             , ( 2, jsException "f threw an exception" (Encode.string "error data") )
                             ]
-                        |> Expect.equal (Task.Error "f threw an exception")
+                        |> Expect.equal (Internal.Error "f threw an exception")
             , Test.forEach
                 [ customErrorTask
                 , noErrorsTask
@@ -288,9 +289,9 @@ errors =
                 "JSExceptions can be caught and returned in regular task flow"
                 (\task ->
                     task
-                        |> Task.onJsException (.message >> Task.succeed)
+                        |> ConcurrentTask.onJsException (.message >> ConcurrentTask.succeed)
                         |> runTaskWith [ ( 0, jsException "f threw an exception" (Encode.string "error data") ) ]
-                        |> Expect.equal (Task.Success "f threw an exception")
+                        |> Expect.equal (Internal.Success "f threw an exception")
                 )
             ]
          , describe "Tasks with Missing functions"
@@ -301,13 +302,13 @@ errors =
                 ]
                 "Always errors with a RunnerError regardless of error handling strategy"
                 (\task ->
-                    Task.map3 join3 task task task
+                    ConcurrentTask.map3 join3 task task task
                         |> runTaskWith
                             [ ( 0, success (Encode.string "a") )
                             , ( 1, success (Encode.string "b") )
                             , ( 2, missingFunctionError "f is missing" )
                             ]
-                        |> Expect.equal (Task.UnexpectedError (Task.MissingFunction "f is missing"))
+                        |> Expect.equal (Internal.UnexpectedError (Internal.MissingFunction "f is missing"))
                 )
             ]
          , describe "Tasks with unexpected responses"
@@ -330,13 +331,13 @@ errors =
                 "ResponseDecoderFailures can be caught and returned in regular task flow"
                 (\task ->
                     task
-                        |> Task.onResponseDecoderFailure
+                        |> ConcurrentTask.onResponseDecoderFailure
                             (Decode.errorToString
                                 >> String.right 18
-                                >> Task.succeed
+                                >> ConcurrentTask.succeed
                             )
                         |> runTaskWith [ ( 0, success (Encode.int 1) ) ]
-                        |> Expect.equal (Task.Success "Expecting a STRING")
+                        |> Expect.equal (Internal.Success "Expecting a STRING")
                 )
             ]
          , describe "Tasks with custom errors"
@@ -359,26 +360,26 @@ errors =
 
                 task : ConcurrentTask CustomError String
                 task =
-                    Task.define
+                    ConcurrentTask.define
                         { function = "custom"
-                        , expect = Task.expectString
-                        , errors = Task.expectErrors decodeError
+                        , expect = ConcurrentTask.expectString
+                        , errors = ConcurrentTask.expectErrors decodeError
                         , args = Encode.null
                         }
              in
              [ test "Tasks can specify a custom error decoder" <|
                 \_ ->
-                    Task.map2 join2
+                    ConcurrentTask.map2 join2
                         task
                         task
                         |> runTaskWith
                             [ ( 0, success (Encode.string "1") )
                             , ( 1, success (Encode.object [ ( "error", Encode.string "ERR_1" ) ]) )
                             ]
-                        |> Expect.equal (Task.Error Error1)
+                        |> Expect.equal (Internal.Error Error1)
              , test "Errors with ErrorDecoderFailure if the task returns an error key with an unexpected value on it" <|
                 \_ ->
-                    Task.map2 join2
+                    ConcurrentTask.map2 join2
                         task
                         task
                         |> runTaskWith
@@ -390,14 +391,14 @@ errors =
             )
          , test "task with an unknown error reason" <|
             \_ ->
-                Task.map2 join2
+                ConcurrentTask.map2 join2
                     createTask
                     createTask
                     |> runTaskWith
                         [ ( 0, success (Encode.string "a") )
                         , ( 1, error "other_error" "..." Encode.null )
                         ]
-                    |> Expect.equal (Task.UnexpectedError (Task.InternalError "Unknown runner error reason: other_error"))
+                    |> Expect.equal (Internal.UnexpectedError (Internal.InternalError "Unknown runner error reason: other_error"))
          ]
         )
 
@@ -416,34 +417,34 @@ hardcoded =
     describe "Hardcoded Tasks"
         [ fuzz3 string string string "tasks can combine" <|
             \a b c ->
-                Task.map3 join3
-                    (Task.succeed a)
-                    (Task.succeed b)
-                    (Task.succeed c)
+                ConcurrentTask.map3 join3
+                    (ConcurrentTask.succeed a)
+                    (ConcurrentTask.succeed b)
+                    (ConcurrentTask.succeed c)
                     |> runTask []
-                    |> Expect.equal (Task.Success (join3 a b c))
+                    |> Expect.equal (Internal.Success (join3 a b c))
         , fuzz3 string string string "tasks can chain" <|
             \a b c ->
-                Task.map2 (++)
-                    (Task.succeed a)
-                    (Task.succeed b)
-                    |> Task.andThen (\ab -> Task.map (join2 ab) (Task.succeed c))
+                ConcurrentTask.map2 (++)
+                    (ConcurrentTask.succeed a)
+                    (ConcurrentTask.succeed b)
+                    |> ConcurrentTask.andThen (\ab -> ConcurrentTask.map (join2 ab) (ConcurrentTask.succeed c))
                     |> runTask []
-                    |> Expect.equal (Task.Success (a ++ b ++ c))
+                    |> Expect.equal (Internal.Success (a ++ b ++ c))
         , test "tasks can short circuit" <|
             \_ ->
-                Task.succeed 1
-                    |> Task.andThenDo (Task.succeed 2)
-                    |> Task.andThen (\_ -> Task.fail "hardcoded error")
+                ConcurrentTask.succeed 1
+                    |> ConcurrentTask.andThenDo (ConcurrentTask.succeed 2)
+                    |> ConcurrentTask.andThen (\_ -> ConcurrentTask.fail "hardcoded error")
                     |> runTask []
-                    |> Expect.equal (Task.Error "hardcoded error")
+                    |> Expect.equal (Internal.Error "hardcoded error")
         , fuzz2 int int "tasks can recover from an error" <|
             \a b ->
-                Task.succeed a
-                    |> Task.andThen (\_ -> Task.fail "error")
-                    |> Task.onError (\_ -> Task.succeed b)
+                ConcurrentTask.succeed a
+                    |> ConcurrentTask.andThen (\_ -> ConcurrentTask.fail "error")
+                    |> ConcurrentTask.onError (\_ -> ConcurrentTask.succeed b)
                     |> runTask []
-                    |> Expect.equal (Task.Success b)
+                    |> Expect.equal (Internal.Success b)
         ]
 
 
@@ -451,17 +452,17 @@ hardcoded =
 -- Task Runner
 
 
-runTask : List ( Int, Encode.Value ) -> ConcurrentTask x a -> Task.Response x a
+runTask : List ( Int, Encode.Value ) -> ConcurrentTask x a -> Internal.Response x a
 runTask results =
     runTaskWith (List.map (Tuple.mapSecond success) results)
 
 
-runTaskWith : List ( Int, Encode.Value ) -> ConcurrentTask x a -> Task.Response x a
+runTaskWith : List ( Int, Encode.Value ) -> ConcurrentTask x a -> Internal.Response x a
 runTaskWith results task =
     Tuple.second (evalTask results task)
 
 
-evalTask : List ( Int, Encode.Value ) -> ConcurrentTask x a -> ( Ids, Task.Response x a )
+evalTask : List ( Int, Encode.Value ) -> ConcurrentTask x a -> ( Ids, Internal.Response x a )
 evalTask results task =
     evalWith
         { maxDepth = 100000000
@@ -479,10 +480,10 @@ type alias Eval x a =
     }
 
 
-evalWith : Eval x a -> ( Ids, Task.Response x a )
+evalWith : Eval x a -> ( Ids, Internal.Response x a )
 evalWith options =
     let
-        results : Task.Results
+        results : Internal.Results
         results =
             options.results
                 |> List.head
@@ -492,10 +493,10 @@ evalWith options =
                 |> Dict.fromList
     in
     case stepTask results ( options.ids, options.task ) of
-        ( ids, Task.Done a ) ->
+        ( ids, Internal.Done a ) ->
             ( ids, a )
 
-        ( ids, Task.Pending _ next ) ->
+        ( ids, Internal.Pending _ next ) ->
             if options.maxDepth > 0 then
                 evalWith
                     { options
@@ -506,11 +507,11 @@ evalWith options =
                     }
 
             else
-                ( ids, Task.UnexpectedError (Task.InternalError "timeout") )
+                ( ids, Internal.UnexpectedError (Internal.InternalError "timeout") )
 
 
-stepTask : Task.Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Task.Task_ x a )
-stepTask res ( ids, Task.Task run ) =
+stepTask : Internal.Results -> ( Ids, ConcurrentTask x a ) -> ( Ids, Internal.Task_ x a )
+stepTask res ( ids, Internal.Task run ) =
     run res ids
 
 
@@ -556,7 +557,7 @@ error reason message raw =
 
 withAnother : String -> ConcurrentTask Error String
 withAnother x =
-    Task.map (join2 x) createTask
+    ConcurrentTask.map (join2 x) createTask
 
 
 createTask : ConcurrentTask Error String
@@ -566,10 +567,10 @@ createTask =
 
 create : Decoder a -> ConcurrentTask Error a
 create decoder =
-    Task.define
+    ConcurrentTask.define
         { function = "aTask"
-        , expect = Task.expectJson decoder
-        , errors = Task.expectThrows identity
+        , expect = ConcurrentTask.expectJson decoder
+        , errors = ConcurrentTask.expectThrows identity
         , args = Encode.null
         }
 
