@@ -3,7 +3,7 @@ module Utils.Expect exposing
     , responseDecoderFailureFor
     )
 
-import ConcurrentTask.Internal.ConcurrentTask as ConcurrentTask
+import ConcurrentTask.Internal as ConcurrentTask
 import Expect exposing (Expectation)
 import Json.Decode as Decode
 

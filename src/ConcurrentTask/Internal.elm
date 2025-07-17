@@ -1,4 +1,4 @@
-module ConcurrentTask.Internal.ConcurrentTask exposing
+module ConcurrentTask.Internal exposing
     ( Attempt
     , ConcurrentTask(..)
     , Errors

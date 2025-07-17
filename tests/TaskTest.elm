@@ -1,6 +1,6 @@
 module TaskTest exposing (suite)
 
-import ConcurrentTask.Internal.ConcurrentTask as Task exposing (ConcurrentTask)
+import ConcurrentTask.Internal as Task exposing (ConcurrentTask)
 import ConcurrentTask.Internal.Ids as Ids exposing (Ids)
 import Dict
 import Expect
