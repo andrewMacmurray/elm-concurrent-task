@@ -74,7 +74,7 @@ largeBatchSpec =
     Spec.describe
         "large batches"
         "large batches should complete in reasonable time"
-        (Spec.timeExecution
+        (ConcurrentTask.Time.withDuration
             (ConcurrentTask.Process.sleep 100
                 |> List.repeat batchSize
                 |> Task.batch
@@ -84,7 +84,7 @@ largeBatchSpec =
             (\res ->
                 Spec.assertAll
                     [ Spec.shouldHaveDurationLessThan 5000 res
-                    , res.result |> Spec.shouldEqual (List.repeat batchSize ())
+                    , res.value |> Spec.shouldEqual (List.repeat batchSize ())
                     ]
             )
         )
@@ -96,7 +96,7 @@ batchAndSequenceSpec =
         "batch and sequence speed"
         "the batched branch should be faster than the sequential branch"
         (Task.map2 Tuple.pair
-            (Spec.timeExecution
+            (ConcurrentTask.Time.withDuration
                 (Task.batch
                     [ longRequest 100
                     , longRequest 100
@@ -105,7 +105,7 @@ batchAndSequenceSpec =
                     ]
                 )
             )
-            (Spec.timeExecution
+            (ConcurrentTask.Time.withDuration
                 (Task.sequence
                     [ longRequest 100
                     , longRequest 100
@@ -119,7 +119,7 @@ batchAndSequenceSpec =
             (\( batched, sequential ) ->
                 Spec.assertAll
                     [ batched |> Spec.shouldBeFasterThan sequential
-                    , batched.result |> Spec.shouldEqual sequential.result
+                    , batched.value |> Spec.shouldEqual sequential.value
                     ]
             )
         )
@@ -382,7 +382,7 @@ httpTimeoutSpec =
     Spec.describe
         "http timeout"
         "http requests should abort if request takes longer than given timeout"
-        (Spec.timeExecution
+        (ConcurrentTask.Time.withDuration
             (Http.get
                 { url = waitThenRespond 10000
                 , headers = []
@@ -394,7 +394,7 @@ httpTimeoutSpec =
         (Spec.assertError
             (\err ->
                 Spec.assertAll
-                    [ Spec.shouldEqual Http.Timeout err.result
+                    [ Spec.shouldEqual Http.Timeout err.value
                     , err |> Spec.shouldHaveDurationLessThan 3000 -- account for test flake
                     ]
             )

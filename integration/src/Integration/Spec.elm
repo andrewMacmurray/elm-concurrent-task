@@ -7,7 +7,6 @@ module Integration.Spec exposing
     , assertSuccess
     , describe
     , describeUnexpected
-    , duration
     , fail
     , failWith
     , pass
@@ -15,13 +14,11 @@ module Integration.Spec exposing
     , shouldBeFasterThan
     , shouldEqual
     , shouldHaveDurationLessThan
-    , timeExecution
     )
 
 import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError)
 import ConcurrentTask.Time
 import Console
-import Time
 
 
 {-| Task Spec
@@ -99,66 +96,27 @@ assertAll xs =
 
 
 
--- Time a Task
+-- Timed expectations
 
 
-type alias Timed a =
-    { start : Time.Posix
-    , finish : Time.Posix
-    , result : a
-    }
-
-
-timeExecution : ConcurrentTask x a -> ConcurrentTask (Timed x) (Timed a)
-timeExecution task =
-    ConcurrentTask.Time.now
-        |> Task.andThen
-            (\start ->
-                task
-                    |> Task.onError
-                        (\x ->
-                            ConcurrentTask.Time.now
-                                |> Task.andThen
-                                    (\finish ->
-                                        Task.fail
-                                            { start = start
-                                            , finish = finish
-                                            , result = x
-                                            }
-                                    )
-                        )
-                    |> Task.andThen
-                        (\a ->
-                            ConcurrentTask.Time.now
-                                |> Task.map
-                                    (\finish ->
-                                        { start = start
-                                        , finish = finish
-                                        , result = a
-                                        }
-                                    )
-                        )
-            )
-
-
-shouldHaveDurationLessThan : Int -> Timed a -> Expect
+shouldHaveDurationLessThan : Int -> ConcurrentTask.Time.Duration a -> Expect
 shouldHaveDurationLessThan ms a =
-    if duration a < ms then
+    if ConcurrentTask.Time.duration a < ms then
         Pass
 
     else
         Fail
             ("Duration was: "
-                ++ String.fromInt (duration a)
+                ++ String.fromInt (ConcurrentTask.Time.duration a)
                 ++ ", Expected less than: "
                 ++ String.fromInt ms
                 ++ "ms"
             )
 
 
-shouldBeFasterThan : Timed b -> Timed a -> Expect
+shouldBeFasterThan : ConcurrentTask.Time.Duration b -> ConcurrentTask.Time.Duration a -> Expect
 shouldBeFasterThan b a =
-    if duration a < duration b then
+    if ConcurrentTask.Time.duration a < ConcurrentTask.Time.duration b then
         Pass
 
     else
@@ -172,11 +130,6 @@ shouldEqual a b =
 
     else
         Fail ("\n Expected: " ++ Debug.toString a ++ ",\n Got:      " ++ Debug.toString b)
-
-
-duration : Timed a -> Int
-duration timed =
-    Time.posixToMillis timed.finish - Time.posixToMillis timed.start
 
 
 describe :
