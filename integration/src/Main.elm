@@ -50,6 +50,7 @@ specs =
     , httpTimeoutSpec
     , httpBadBodySpec
     , httpBadStatusSpec
+    , httpBadUrlSpec
     , randomSpec
     , timeZoneSpec
     , timeHereSpec
@@ -377,6 +378,22 @@ httpBadStatusSpec =
             }
         )
         (Spec.assertError (shouldHaveBadStatus 400))
+
+
+httpBadUrlSpec : Spec
+httpBadUrlSpec =
+    Spec.describe "http bad url"
+        "should surface a BadUrl error if url is invalid"
+        (Http.get
+            { url = "WAT WAT"
+            , headers = []
+            , expect = Http.expectWhatever
+            , timeout = Nothing
+            }
+        )
+        (Spec.assertError
+            (Spec.shouldEqual (Http.BadUrl "WAT WAT"))
+        )
 
 
 randomSpec : Spec
