@@ -1,16 +1,10 @@
 module Utils.Test exposing (forEach)
 
 import Expect exposing (Expectation)
-import Test exposing (Test, describe, test)
+import Fuzz
+import Test exposing (Test, fuzz)
 
 
 forEach : List item -> String -> (item -> Expectation) -> Test
-forEach items description testCase =
-    describe description
-        (List.indexedMap
-            (\index item ->
-                test (description ++ ": " ++ String.fromInt index) <|
-                    \_ -> testCase item
-            )
-            items
-        )
+forEach items =
+    fuzz (Fuzz.oneOf (List.map Fuzz.constant items))
