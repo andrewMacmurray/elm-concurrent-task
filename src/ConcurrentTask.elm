@@ -8,7 +8,7 @@ module ConcurrentTask exposing
     , fromResult, andThenDo, return, debug
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , attempt, Response(..), UnexpectedError(..), onProgress, Pool, pool
+    , attempt, attemptEach, Response(..), UnexpectedError(..), onProgress, Pool, pool
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -186,7 +186,7 @@ Here's a minimal complete example:
             , subscriptions = subscriptions
             }
 
-@docs attempt, Response, UnexpectedError, onProgress, Pool, pool
+@docs attempt, attemptEach, Response, UnexpectedError, onProgress, Pool, pool
 
 -}
 
@@ -918,6 +918,27 @@ attempt config task =
         , onComplete = onComplete
         }
         mappedTask
+
+
+{-| Start a list of `ConcurrentTask`s. This is identical to [attempt](ConcurrentTask#attempt) except with a `List` of tasks.
+Use this when you don't need to wait explicitly for all the tasks to finish.
+-}
+attemptEach :
+    { pool : Pool msg
+    , send : Decode.Value -> Cmd msg
+    , onComplete : Response x a -> msg
+    }
+    -> List (ConcurrentTask x a)
+    -> ( Pool msg, Cmd msg )
+attemptEach config taskList =
+    let
+        attemptAccum : ConcurrentTask x a -> ( Pool msg, List (Cmd msg) ) -> ( Pool msg, List (Cmd msg) )
+        attemptAccum task ( pool_, cmds_ ) =
+            attempt { config | pool = pool_ } task
+                |> Tuple.mapSecond (\cmd -> cmd :: cmds_)
+    in
+    List.foldl attemptAccum ( config.pool, [] ) taskList
+        |> Tuple.mapSecond Cmd.batch
 
 
 {-| The value returned from a task when it completes (returned in the `OnComplete` msg).
