@@ -44,6 +44,8 @@ specs =
     , raceSpec
     , raceFailSpec
     , raceQuickFailSpec
+    , withTimeoutQuickSpec
+    , withTimeoutSlowSpec
     , missingFunctionSpec
     , httpJsonBodySpec
     , httpHeadersSpec
@@ -231,6 +233,32 @@ raceQuickFailSpec =
         )
         (Spec.assertError
             (Spec.shouldEqual (Http.BadUrl "100"))
+        )
+
+
+withTimeoutQuickSpec : Spec
+withTimeoutQuickSpec =
+    Spec.describe
+        "withTimeout quick"
+        "should return the task value if the task completes before the timeout"
+        (longRequest 300
+            |> ConcurrentTask.Process.withTimeout 1000 "timeout"
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "done:300")
+        )
+
+
+withTimeoutSlowSpec : Spec
+withTimeoutSlowSpec =
+    Spec.describe
+        "withTimeout slow"
+        "should return the timeout value if the task doesn't complete before the timeout"
+        (longRequest 1000
+            |> ConcurrentTask.Process.withTimeout 300 "timeout"
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "timeout")
         )
 
 
