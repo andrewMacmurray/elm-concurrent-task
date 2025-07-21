@@ -1,4 +1,7 @@
-module ConcurrentTask.Time exposing (now, here, getZoneName)
+module ConcurrentTask.Time exposing
+    ( now, here, getZoneName
+    , Duration, withDuration, duration
+    )
 
 {-| Drop in replacements for [elm/time's](https://package.elm-lang.org/packages/elm/time/latest/Time#now)'s `Task`s.
 
@@ -35,6 +38,13 @@ The JavaScript runner has these tasks builtin by default. If needed they can be 
     }
 
 @docs now, here, getZoneName
+
+
+# Duration Helpers
+
+Get the start and finish time of a task.
+
+@docs Duration, withDuration, duration
 
 -}
 
@@ -96,3 +106,57 @@ decodeZoneName =
         [ Decode.map Time.Offset Decode.int
         , Decode.map Time.Name Decode.string
         ]
+
+
+
+-- Duration Helpers
+
+
+{-| A result value of a task (success or error) with start and finish times.
+-}
+type alias Duration a =
+    { start : Time.Posix
+    , finish : Time.Posix
+    , value : a
+    }
+
+
+{-| Add duration information onto a task success or failure.
+-}
+withDuration : ConcurrentTask x a -> ConcurrentTask (Duration x) (Duration a)
+withDuration task =
+    now
+        |> ConcurrentTask.andThen
+            (\start ->
+                task
+                    |> ConcurrentTask.onError
+                        (\x ->
+                            now
+                                |> ConcurrentTask.andThen
+                                    (\finish ->
+                                        ConcurrentTask.fail
+                                            { start = start
+                                            , finish = finish
+                                            , value = x
+                                            }
+                                    )
+                        )
+                    |> ConcurrentTask.andThen
+                        (\a ->
+                            now
+                                |> ConcurrentTask.map
+                                    (\finish ->
+                                        { start = start
+                                        , finish = finish
+                                        , value = a
+                                        }
+                                    )
+                        )
+            )
+
+
+{-| Get the duration in millis of a task result (`finish` - `start`)
+-}
+duration : Duration a -> Int
+duration d =
+    Time.posixToMillis d.finish - Time.posixToMillis d.start

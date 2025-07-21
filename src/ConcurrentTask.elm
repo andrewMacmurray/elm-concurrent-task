@@ -6,6 +6,7 @@ module ConcurrentTask exposing
     , mapError, onError
     , succeed, fail, andThen
     , fromResult, toResult, andThenDo, return, debug
+    , race
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
     , attempt, attemptEach, Response(..), UnexpectedError(..), onProgress, Pool, pool
@@ -69,6 +70,13 @@ Lift `UnexpectedError`s into regular task flow.
 These are some general helpers that can make chaining, combining and debugging tasks more convenient.
 
 @docs fromResult, toResult, andThenDo, return, debug
+
+
+# Racing Helpers
+
+Get the result of the fastest task.
+
+@docs race
 
 
 # Batch Helpers
@@ -190,7 +198,8 @@ Here's a minimal complete example:
 
 -}
 
-import ConcurrentTask.Internal.ConcurrentTask as Internal
+import ConcurrentTask.Internal as Internal
+import ConcurrentTask.Internal.List
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 
@@ -290,21 +299,21 @@ type alias Expect a =
 -}
 expectJson : Decoder a -> Expect a
 expectJson =
-    Internal.expectJson
+    Internal.ExpectJson
 
 
 {-| Expect the response of a Task to be a String
 -}
 expectString : Expect String
 expectString =
-    Internal.expectString
+    Internal.ExpectJson Decode.string
 
 
 {-| Ignore the response of a Task
 -}
 expectWhatever : Expect ()
 expectWhatever =
-    Internal.expectWhatever
+    Internal.ExpectJson (Decode.succeed ())
 
 
 
@@ -369,7 +378,7 @@ but it's often much more expressive and useful if you catch and explicitly retur
 -}
 expectThrows : (String -> x) -> Errors x
 expectThrows =
-    Internal.expectThrows
+    Internal.ExpectThrows
 
 
 {-| Decode explicit errors returned by a `ConcurrentTask`. Use this when you want more meaningful errors in your task.
@@ -464,7 +473,7 @@ And on the JS side:
 -}
 expectErrors : Decoder x -> Errors x
 expectErrors =
-    Internal.expectErrors
+    Internal.ExpectErrors
 
 
 {-| Only use this handler for functions that you don't expect to fail.
@@ -500,7 +509,7 @@ On the JS side:
 -}
 expectNoErrors : Errors x
 expectNoErrors =
-    Internal.expectNoErrors
+    Internal.ExpectNoErrors
 
 
 {-| Use this alongside other error handlers to lift a `ResponseDecoderFailure`'s `Json.Decode` error into regular task flow.
@@ -683,8 +692,8 @@ Maybe you want to save a file then log a message to the console:
 
 -}
 andThenDo : ConcurrentTask x b -> ConcurrentTask x a -> ConcurrentTask x b
-andThenDo =
-    Internal.andThenDo
+andThenDo t2 t1 =
+    t1 |> andThen (\_ -> t2)
 
 
 {-| Succeed with a hardcoded value after the previous Task.
@@ -700,9 +709,9 @@ Maybe you want to do some Tasks on a User but allow it to be chained onwards:
             |> ConcurrentTask.return user
 
 -}
-return : b -> ConcurrentTask x a -> ConcurrentTask x b
-return =
-    Internal.return
+return : a -> ConcurrentTask x b -> ConcurrentTask x a
+return a =
+    map (\_ -> a)
 
 
 {-| Debug the current state of a Task to the console.
@@ -759,6 +768,60 @@ debugLog tag message =
 
 
 
+-- Race
+
+
+type Race x a
+    = Winner a
+    | RaceError x
+
+
+{-| Race a list of `ConcurrentTask`s. The fastest task to succeed wins!
+
+    import ConcurrentTask exposing (ConcurrentTask)
+    import ConcurrentTask.Process
+
+    sleep : Int -> ConcurrentTask x Int
+    sleep ms =
+        ConcurrentTask.Process.sleep ms |> ConcurrentTask.map (\_ -> ms)
+
+    -- succeeds with 42
+    fastest : ConcurrentTask x Int
+    fastest =
+        ConcurrentTask.race (sleep 500)
+            [ sleep 1000
+            , sleep 42
+            , sleep 200
+            ]
+
+If a task fails before any have succeeded the failure will be surfaced.
+
+-}
+race : ConcurrentTask x a -> List (ConcurrentTask x a) -> ConcurrentTask x a
+race task tasks =
+    -- `race` uses the fact that when a task fails it short circuits any other running tasks.
+    -- Effectively, the first task to complete then immediately fails and is surfaced via `onError` as the winner.
+    let
+        toRacer : ConcurrentTask x a -> ConcurrentTask (Race x a) b
+        toRacer =
+            mapError RaceError >> andThen (Winner >> fail)
+    in
+    List.map toRacer (task :: tasks)
+        |> batch
+        -- This makes the types match up but will never be run, as one of the sub task will always `fail` with a `Winner`.
+        |> andThen (List.head >> Maybe.map succeed >> Maybe.withDefault (toRacer task))
+        |> onError
+            (\e ->
+                case e of
+                    Winner fastest ->
+                        succeed fastest
+
+                    RaceError err ->
+                        fail err
+            )
+
+
+
 -- Batch Helpers
 
 
@@ -768,8 +831,42 @@ If any of the subtasks fail the whole ConcurrentTask will fail.
 
 -}
 batch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
-batch =
-    Internal.batch
+batch tasks =
+    {- Dividing each batch into mini-batches for some reason makes this stack safe up to 10M+ Tasks.
+
+       Without dividing into mini-batches, `batch` quickly falls over at much smaller numbers.
+       Because each individual task needs a unique Id the `Task` type is difficult to defunctionalize (<https://martin.janiczek.cz/2019/07/27/defunctionalization-in-elm.html>),
+       which would help significantly with stack safety.
+
+       A clear explanation of why this works (or an alternative method!) would be much appreciated! (An approach something like this would be ideal <https://martin.janiczek.cz/2023/06/27/fp-pattern-list-of-todos.html>).
+
+    -}
+    tasks
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> miniBatchesOf 10
+        |> doBatch
+        |> map
+            (List.concat
+                >> List.concat
+                >> List.concat
+                >> List.concat
+                >> List.concat
+                >> List.concat
+            )
+
+
+miniBatchesOf : Int -> List (ConcurrentTask x a) -> List (ConcurrentTask x (List a))
+miniBatchesOf n =
+    ConcurrentTask.Internal.List.chunk n >> List.map doBatch
+
+
+doBatch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
+doBatch =
+    List.foldr (map2 (::)) (succeed [])
 
 
 {-| Perform a List of tasks one after the other and return the results in a List.
@@ -778,8 +875,18 @@ If any of the subtasks fail the whole ConcurrentTask will fail.
 
 -}
 sequence : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
-sequence =
-    Internal.sequence
+sequence tasks =
+    sequenceHelp tasks (succeed []) |> map List.reverse
+
+
+sequenceHelp : List (ConcurrentTask x a) -> ConcurrentTask x (List a) -> ConcurrentTask x (List a)
+sequenceHelp tasks combined =
+    case tasks of
+        task :: rest ->
+            combined |> andThen (\xs -> sequenceHelp rest (map (\x -> x :: xs) task))
+
+        [] ->
+            combined
 
 
 
@@ -845,8 +952,10 @@ andMap =
 
 -}
 map2 : (a -> b -> c) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c
-map2 =
-    Internal.map2
+map2 f t1 t2 =
+    succeed f
+        |> andMap t1
+        |> andMap t2
 
 
 {-| Run three tasks concurrently and combine their results.
@@ -857,8 +966,11 @@ map3 :
     -> ConcurrentTask x b
     -> ConcurrentTask x c
     -> ConcurrentTask x d
-map3 =
-    Internal.map3
+map3 f a b c =
+    succeed f
+        |> andMap a
+        |> andMap b
+        |> andMap c
 
 
 {-| Run four tasks concurrently and combine their results.
@@ -870,8 +982,12 @@ map4 :
     -> ConcurrentTask x c
     -> ConcurrentTask x d
     -> ConcurrentTask x e
-map4 =
-    Internal.map4
+map4 f a b c d =
+    succeed f
+        |> andMap a
+        |> andMap b
+        |> andMap c
+        |> andMap d
 
 
 {-| Run five tasks concurrently and combine their results.
@@ -884,8 +1000,13 @@ map5 :
     -> ConcurrentTask x d
     -> ConcurrentTask x e
     -> ConcurrentTask x f
-map5 =
-    Internal.map5
+map5 f a b c d e =
+    succeed f
+        |> andMap a
+        |> andMap b
+        |> andMap c
+        |> andMap d
+        |> andMap e
 
 
 

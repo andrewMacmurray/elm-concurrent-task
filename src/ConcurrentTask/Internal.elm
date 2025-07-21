@@ -1,8 +1,8 @@
-module ConcurrentTask.Internal.ConcurrentTask exposing
+module ConcurrentTask.Internal exposing
     ( Attempt
     , ConcurrentTask(..)
-    , Errors
-    , Expect
+    , Errors(..)
+    , Expect(..)
     , OnProgress
     , Pool
     , Response(..)
@@ -11,37 +11,22 @@ module ConcurrentTask.Internal.ConcurrentTask exposing
     , UnexpectedError(..)
     , andMap
     , andThen
-    , andThenDo
     , attempt
-    , batch
     , define
-    , expectErrors
-    , expectJson
-    , expectNoErrors
-    , expectString
-    , expectThrows
-    , expectWhatever
     , fail
     , fromResult
     , map
-    , map2
-    , map3
-    , map4
-    , map5
     , mapError
     , onError
     , onJsException
     , onProgress
     , onResponseDecoderFailure
     , pool
-    , return
-    , sequence
     , succeed
     )
 
 import Array exposing (Array)
 import ConcurrentTask.Internal.Ids as Ids exposing (Ids)
-import ConcurrentTask.Internal.List
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -99,44 +84,6 @@ type Errors x
     = ExpectNoErrors
     | ExpectThrows (String -> x)
     | ExpectErrors (Decoder x)
-
-
-
--- Expect
-
-
-expectJson : Decoder a -> Expect a
-expectJson =
-    ExpectJson
-
-
-expectString : Expect String
-expectString =
-    ExpectJson Decode.string
-
-
-expectWhatever : Expect ()
-expectWhatever =
-    ExpectJson (Decode.succeed ())
-
-
-
--- Errors
-
-
-expectNoErrors : Errors x
-expectNoErrors =
-    ExpectNoErrors
-
-
-expectThrows : (String -> x) -> Errors x
-expectThrows =
-    ExpectThrows
-
-
-expectErrors : Decoder x -> Errors x
-expectErrors =
-    ExpectErrors
 
 
 
@@ -254,102 +201,6 @@ haltOnError res task =
             Done (UnexpectedError e)
 
 
-map2 : (a -> b -> c) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c
-map2 f t1 t2 =
-    succeed f
-        |> andMap t1
-        |> andMap t2
-
-
-map3 : (a -> b -> c -> d) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c -> ConcurrentTask x d
-map3 f t1 t2 t3 =
-    succeed f
-        |> andMap t1
-        |> andMap t2
-        |> andMap t3
-
-
-map4 : (a -> b -> c -> d -> e) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c -> ConcurrentTask x d -> ConcurrentTask x e
-map4 f t1 t2 t3 t4 =
-    succeed f
-        |> andMap t1
-        |> andMap t2
-        |> andMap t3
-        |> andMap t4
-
-
-map5 : (a -> b -> c -> d -> e -> f) -> ConcurrentTask x a -> ConcurrentTask x b -> ConcurrentTask x c -> ConcurrentTask x d -> ConcurrentTask x e -> ConcurrentTask x f
-map5 f t1 t2 t3 t4 t5 =
-    succeed f
-        |> andMap t1
-        |> andMap t2
-        |> andMap t3
-        |> andMap t4
-        |> andMap t5
-
-
-
--- Sequence
-
-
-sequence : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
-sequence tasks =
-    sequenceHelp tasks (succeed []) |> map List.reverse
-
-
-sequenceHelp : List (ConcurrentTask x a) -> ConcurrentTask x (List a) -> ConcurrentTask x (List a)
-sequenceHelp tasks combined =
-    case tasks of
-        task :: rest ->
-            combined |> andThen (\xs -> sequenceHelp rest (map (\x -> x :: xs) task))
-
-        [] ->
-            combined
-
-
-
--- Batch
-
-
-{-| Dividing each batch into mini-batches for some reason makes this stack safe up to 10M+ Tasks.
-
-Without dividing into mini-batches, `batch` quickly falls over at much smaller numbers.
-Because each individual task needs a unique Id the `Task` type is difficult to defunctionalize (<https://martin.janiczek.cz/2019/07/27/defunctionalization-in-elm.html>),
-which would help significantly with stack safety.
-
-A clear explanation of why this works (or an alternative method!) would be much appreciated! (An approach something like this would be ideal <https://martin.janiczek.cz/2023/06/27/fp-pattern-list-of-todos.html>).
-
--}
-batch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
-batch tasks =
-    tasks
-        |> miniBatchesOf 10
-        |> miniBatchesOf 10
-        |> miniBatchesOf 10
-        |> miniBatchesOf 10
-        |> miniBatchesOf 10
-        |> miniBatchesOf 10
-        |> doBatch
-        |> map
-            (List.concat
-                >> List.concat
-                >> List.concat
-                >> List.concat
-                >> List.concat
-                >> List.concat
-            )
-
-
-miniBatchesOf : Int -> List (ConcurrentTask x a) -> List (ConcurrentTask x (List a))
-miniBatchesOf n =
-    ConcurrentTask.Internal.List.chunk n >> List.map doBatch
-
-
-doBatch : List (ConcurrentTask x a) -> ConcurrentTask x (List a)
-doBatch =
-    List.foldr (map2 (::)) (succeed [])
-
-
 
 -- Chain Tasks
 
@@ -404,16 +255,6 @@ andThen f (Task run) =
                 Pending defs next ->
                     ( ids_, Pending defs (andThen f next) )
         )
-
-
-andThenDo : ConcurrentTask x b -> ConcurrentTask x a -> ConcurrentTask x b
-andThenDo t2 t1 =
-    t1 |> andThen (\_ -> t2)
-
-
-return : a -> ConcurrentTask x b -> ConcurrentTask x a
-return a =
-    map (\_ -> a)
 
 
 

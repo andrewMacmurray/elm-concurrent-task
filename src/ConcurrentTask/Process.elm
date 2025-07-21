@@ -1,4 +1,4 @@
-module ConcurrentTask.Process exposing (sleep)
+module ConcurrentTask.Process exposing (sleep, withTimeout)
 
 {-| A drop in replacement for [elm/core's](https://package.elm-lang.org/packages/elm/core/latest/Process#sleep) `Process.sleep`.
 
@@ -20,7 +20,7 @@ The JavaScript runner has this task builtin by default. If needed it can be over
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-@docs sleep
+@docs sleep, withTimeout
 
 -}
 
@@ -41,3 +41,26 @@ sleep ms =
         , errors = ConcurrentTask.expectNoErrors
         , args = Encode.int ms
         }
+
+
+{-| Cancel a task, succeeding with the given value if the task takes longer than the given milliseconds.
+
+    import ConcurrentTask exposing (ConcurrentTask)
+    import ConcurrentTask.Http as Http
+    import ConcurrentTask.Process
+
+    type Fruits
+        = Cached (List String)
+        | Loaded (List String)
+
+    loadFruits : ConcurrentTask Http.Error Fruits
+    loadFruits =
+        getFruits
+            |> ConcurrentTask.withTimeout 2000 (Cached [ "Apple", "Orange", "Banana" ])
+
+If `getFruits` takes longer than 2000ms the task will succeed with the `Cached` value.
+
+-}
+withTimeout : Int -> a -> ConcurrentTask x a -> ConcurrentTask x a
+withTimeout ms a task =
+    ConcurrentTask.race (sleep ms |> ConcurrentTask.return a) [ task ]

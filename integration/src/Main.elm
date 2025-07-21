@@ -41,6 +41,11 @@ specs =
     [ largeBatchSpec
     , batchAndSequenceSpec
     , complexResponseSpec
+    , raceSpec
+    , raceFailSpec
+    , raceQuickFailSpec
+    , withTimeoutQuickSpec
+    , withTimeoutSlowSpec
     , missingFunctionSpec
     , httpJsonBodySpec
     , httpHeadersSpec
@@ -71,7 +76,7 @@ largeBatchSpec =
     Spec.describe
         "large batches"
         "large batches should complete in reasonable time"
-        (Spec.timeExecution
+        (ConcurrentTask.Time.withDuration
             (ConcurrentTask.Process.sleep 100
                 |> List.repeat batchSize
                 |> Task.batch
@@ -81,7 +86,7 @@ largeBatchSpec =
             (\res ->
                 Spec.assertAll
                     [ Spec.shouldHaveDurationLessThan 5000 res
-                    , res.result |> Spec.shouldEqual (List.repeat batchSize ())
+                    , res.value |> Spec.shouldEqual (List.repeat batchSize ())
                     ]
             )
         )
@@ -93,7 +98,7 @@ batchAndSequenceSpec =
         "batch and sequence speed"
         "the batched branch should be faster than the sequential branch"
         (Task.map2 Tuple.pair
-            (Spec.timeExecution
+            (ConcurrentTask.Time.withDuration
                 (Task.batch
                     [ longRequest 100
                     , longRequest 100
@@ -102,7 +107,7 @@ batchAndSequenceSpec =
                     ]
                 )
             )
-            (Spec.timeExecution
+            (ConcurrentTask.Time.withDuration
                 (Task.sequence
                     [ longRequest 100
                     , longRequest 100
@@ -116,7 +121,7 @@ batchAndSequenceSpec =
             (\( batched, sequential ) ->
                 Spec.assertAll
                     [ batched |> Spec.shouldBeFasterThan sequential
-                    , batched.result |> Spec.shouldEqual sequential.result
+                    , batched.value |> Spec.shouldEqual sequential.value
                     ]
             )
         )
@@ -178,6 +183,82 @@ complexResponseSpec =
                     ]
                 )
             )
+        )
+
+
+raceSpec : Spec
+raceSpec =
+    Spec.describe
+        "racing tasks"
+        "should return the fastest task to complete"
+        (Task.race (longRequest 300)
+            [ longRequest 1300
+            , longRequest 600
+            , longRequest 42
+            , longRequest 900
+            ]
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "done:42")
+        )
+
+
+raceFailSpec : Spec
+raceFailSpec =
+    Spec.describe
+        "racing tasks with some failures"
+        "should return the fastest task to complete even if later tasks will fail"
+        (Task.race (longRequestWithFail 300)
+            [ longRequest 42
+            , longRequestWithFail 1300
+            , longRequestWithFail 600
+            , longRequestWithFail 900
+            ]
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "done:42")
+        )
+
+
+raceQuickFailSpec : Spec
+raceQuickFailSpec =
+    Spec.describe
+        "racing tasks with a fast failure"
+        "should return the fastest task to fail"
+        (Task.race (longRequestWithFail 100)
+            [ longRequest 600
+            , longRequest 300
+            , longRequest 500
+            ]
+        )
+        (Spec.assertError
+            (Spec.shouldEqual (Http.BadUrl "100"))
+        )
+
+
+withTimeoutQuickSpec : Spec
+withTimeoutQuickSpec =
+    Spec.describe
+        "withTimeout quick"
+        "should return the task value if the task completes before the timeout"
+        (longRequest 300
+            |> ConcurrentTask.Process.withTimeout 1000 "timeout"
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "done:300")
+        )
+
+
+withTimeoutSlowSpec : Spec
+withTimeoutSlowSpec =
+    Spec.describe
+        "withTimeout slow"
+        "should return the timeout value if the task doesn't complete before the timeout"
+        (longRequest 1000
+            |> ConcurrentTask.Process.withTimeout 300 "timeout"
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual "timeout")
         )
 
 
@@ -329,7 +410,7 @@ httpTimeoutSpec =
     Spec.describe
         "http timeout"
         "http requests should abort if request takes longer than given timeout"
-        (Spec.timeExecution
+        (ConcurrentTask.Time.withDuration
             (Http.get
                 { url = waitThenRespond 10000
                 , headers = []
@@ -341,7 +422,7 @@ httpTimeoutSpec =
         (Spec.assertError
             (\err ->
                 Spec.assertAll
-                    [ Spec.shouldEqual Http.Timeout err.result
+                    [ Spec.shouldEqual Http.Timeout err.value
                     , err |> Spec.shouldHaveDurationLessThan 3000 -- account for test flake
                     ]
             )
@@ -508,6 +589,11 @@ longRequest ms =
         , expect = Http.expectJson (Decode.field "message" Decode.string)
         , timeout = Nothing
         }
+
+
+longRequestWithFail : Int -> ConcurrentTask Http.Error a
+longRequestWithFail ms =
+    longRequest ms |> Task.andThen (\_ -> Task.fail (Http.BadUrl (String.fromInt ms)))
 
 
 waitThenRespond : Int -> String
