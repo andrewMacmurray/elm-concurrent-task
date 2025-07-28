@@ -23,6 +23,7 @@ module ConcurrentTask.Internal exposing
     , onResponseDecoderFailure
     , pool
     , succeed
+    , withPoolId
     )
 
 import Array exposing (Array)
@@ -408,32 +409,10 @@ type Pool msg
 
 
 type alias Pool_ msg =
-    { poolId : PoolId
-    , queued : List ( Array Todo, Progress msg )
+    { poolId : Maybe Int
     , attempts : Dict AttemptId (Progress msg)
     , attemptIds : Ids
     }
-
-
-{-| Because Pools can be instantiated multiple times (think switching pages in a Single Page App),
-without a unique identifier a Task Pool may end up receiving responses for a Task pool that was previously discarded.
-
-One example is a user switching back and forth between two pages:
-
-    - Page one has a long running task on `init`
-    - The user switches to page 2, then switches back to page 1
-    - A new long running task is started
-    - But the Task Pool can receive the response from the first long running task (which is unexpected behaviour)
-
-Adding a `PoolId` is a bit fiddly (internally there needs to be a random / external value present before any tasks start), but it solves this problem.
-
-The JS runner externally keeps track of the number of Pools that have been instantiated and sends that number back, so each new pool is unique.
-
--}
-type PoolId
-    = Unidentified
-    | Identifying
-    | Identified String
 
 
 type alias Progress msg =
@@ -489,99 +468,31 @@ attempt attempt_ task =
                     , onComplete = attempt_.onComplete
                     }
             in
-            case poolId attempt_.pool of
-                Unidentified ->
-                    ( withPoolId Identifying attempt_.pool |> queueTask ( defs, progress )
-                    , attempt_.send identifyPoolCmd
-                    )
-
-                Identifying ->
-                    ( attempt_.pool |> queueTask ( defs, progress )
-                    , Cmd.none
-                    )
-
-                Identified _ ->
-                    startTask
-                        { progress = progress
-                        , pool = attempt_.pool
-                        , send = attempt_.send
-                        , defs = defs
-                        }
-
-
-startTask :
-    { progress : Progress msg
-    , pool : Pool msg
-    , send : Encode.Value -> Cmd msg
-    , defs : Array Todo
-    }
-    -> ( Pool msg, Cmd msg )
-startTask options =
-    ( startAttempt options.progress options.pool
-    , options.send (encodeDefinitions (currentAttemptId options.pool) options.defs)
-    )
-
-
-identifyPoolCmd : Encode.Value
-identifyPoolCmd =
-    Encode.object [ ( "command", Encode.string "identify-pool" ) ]
-
-
-decodeIdentifyResponse : Decode.Value -> Result Decode.Error PoolId
-decodeIdentifyResponse =
-    Decode.decodeValue
-        (Decode.map (String.fromInt >> Identified)
-            (Decode.field "poolId" Decode.int)
-        )
+            ( startAttempt progress attempt_.pool
+            , attempt_.send (encodeDefinitions (currentAttemptId attempt_.pool) defs)
+            )
 
 
 onProgress : OnProgress msg -> Pool msg -> Sub msg
 onProgress options pool_ =
     options.receive
         (\rawResults ->
-            case decodeIdentifyResponse rawResults of
-                Ok id ->
-                    options.onProgress
-                        (startQueuedTasks
-                            { pool = withPoolId id pool_
-                            , send = options.send
-                            }
-                        )
+            toBatchResults rawResults
+                |> Dict.toList
+                |> List.foldl
+                    (\( attempt_, results ) ( p, cmd ) ->
+                        case findAttempt attempt_ p of
+                            Nothing ->
+                                ( p, cmd )
 
-                Err _ ->
-                    toBatchResults rawResults
-                        |> Dict.toList
-                        |> List.foldl
-                            (\( attempt_, results ) ( p, cmd ) ->
-                                case findAttempt attempt_ p of
-                                    Nothing ->
-                                        ( p, cmd )
-
-                                    Just progress ->
-                                        progress
-                                            |> updateAttempt options p ( attempt_, results )
-                                            |> withCmd cmd
-                            )
-                            ( pool_, Cmd.none )
-                        |> options.onProgress
+                            Just progress ->
+                                progress
+                                    |> updateAttempt options p ( attempt_, results )
+                                    |> withCmd cmd
+                    )
+                    ( pool_, Cmd.none )
+                |> options.onProgress
         )
-
-
-startQueuedTasks : { send : Encode.Value -> Cmd msg, pool : Pool msg } -> ( Pool msg, Cmd msg )
-startQueuedTasks options =
-    queuedTasks options.pool
-        |> List.foldl
-            (\( defs, progress ) ( pool_, cmd ) ->
-                startTask
-                    { progress = progress
-                    , defs = defs
-                    , pool = pool_
-                    , send = options.send
-                    }
-                    |> withCmd cmd
-            )
-            ( options.pool, Cmd.none )
-        |> Tuple.mapFirst clearQueue
 
 
 updateAttempt : OnProgress msg -> Pool msg -> ( AttemptId, Results ) -> Progress msg -> ( Pool msg, Cmd msg )
@@ -831,11 +742,15 @@ encodeDefinitions attemptId =
 pool : Pool msg
 pool =
     Pool
-        { poolId = Unidentified
-        , queued = []
+        { poolId = Nothing
         , attempts = Dict.empty
         , attemptIds = Ids.init
         }
+
+
+withPoolId : Int -> Pool msg -> Pool msg
+withPoolId id =
+    mapPool (\pool_ -> { pool_ | poolId = Just id })
 
 
 startAttempt : Progress msg -> Pool msg -> Pool msg
@@ -853,29 +768,11 @@ startAttempt progress p =
 currentAttemptId : Pool msg -> AttemptId
 currentAttemptId (Pool pool_) =
     case pool_.poolId of
-        Identified id ->
-            id ++ ":" ++ Ids.get pool_.attemptIds
+        Just id ->
+            String.fromInt id ++ ":" ++ Ids.get pool_.attemptIds
 
-        Unidentified ->
+        Nothing ->
             Ids.get pool_.attemptIds
-
-        Identifying ->
-            Ids.get pool_.attemptIds
-
-
-poolId : Pool msg -> PoolId
-poolId (Pool pool_) =
-    pool_.poolId
-
-
-withPoolId : PoolId -> Pool msg -> Pool msg
-withPoolId id =
-    mapPool (\pool_ -> { pool_ | poolId = id })
-
-
-queueTask : ( Array Todo, Progress msg ) -> Pool msg -> Pool msg
-queueTask progress =
-    mapPool (\pool_ -> { pool_ | queued = progress :: pool_.queued })
 
 
 updateProgressFor : AttemptId -> Progress msg -> Pool msg -> Pool msg
@@ -886,16 +783,6 @@ updateProgressFor attemptId progress_ =
 removeFromPool : AttemptId -> Pool msg -> Pool msg
 removeFromPool attemptId =
     mapPool (\pool_ -> { pool_ | attempts = Dict.remove attemptId pool_.attempts })
-
-
-queuedTasks : Pool msg -> List ( Array Todo, Progress msg )
-queuedTasks (Pool p) =
-    p.queued
-
-
-clearQueue : Pool msg -> Pool msg
-clearQueue =
-    mapPool (\pool_ -> { pool_ | queued = [] })
 
 
 findAttempt : AttemptId -> Pool msg -> Maybe (Progress msg)
