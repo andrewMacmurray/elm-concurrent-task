@@ -592,6 +592,10 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                 nextProgress : ( Ids, ConcurrentTask msg msg )
                 nextProgress =
                     ( ids_, next_ )
+
+                notStarted : Todo -> Bool
+                notStarted def =
+                    not (Set.member def.taskId progress.inFlight)
             in
             case stepTask results nextProgress of
                 ( _, Done res ) ->
@@ -610,7 +614,7 @@ updateAttempt options pool_ ( attemptId, results ) progress =
                         }
                         pool_
                     , defs
-                        |> Array.filter (notStarted progress)
+                        |> Array.filter notStarted
                         |> encodeDefinitions attemptId
                         |> options.send
                     )
@@ -621,7 +625,14 @@ updateAttempt options pool_ ( attemptId, results ) progress =
 
 recordSent : Array Todo -> Set TaskId -> Set TaskId
 recordSent defs inFlight =
-    Set.union inFlight (toSentIds defs)
+    let
+        sentIds : Set TaskId
+        sentIds =
+            Array.map .taskId defs
+                |> Array.toList
+                |> Set.fromList
+    in
+    Set.union inFlight sentIds
 
 
 removeCompleted : Results -> Set TaskId -> Set TaskId
@@ -629,46 +640,34 @@ removeCompleted res inFlight =
     Set.diff inFlight (Set.fromList (Dict.keys res))
 
 
-toSentIds : Array Todo -> Set TaskId
-toSentIds defs =
-    Array.map .taskId defs
-        |> Array.toList
-        |> Set.fromList
-
-
 sendResult : (Response x a -> msg) -> Response x a -> Cmd msg
 sendResult onComplete res =
     CoreTask.succeed res |> CoreTask.perform onComplete
 
 
-notStarted : Progress msg -> Todo -> Bool
-notStarted model def =
-    not (Set.member def.taskId model.inFlight)
-
-
 toBatchResults : Decode.Value -> BatchResults
 toBatchResults =
+    let
+        toBatchResults_ : List RawResult -> BatchResults
+        toBatchResults_ =
+            List.foldl
+                (\result batch_ ->
+                    Dict.update result.attemptId
+                        (\attempt_ ->
+                            case attempt_ of
+                                Nothing ->
+                                    Just (Dict.singleton result.taskId result.result)
+
+                                Just attempt__ ->
+                                    Just (Dict.insert result.taskId result.result attempt__)
+                        )
+                        batch_
+                )
+                Dict.empty
+    in
     Decode.decodeValue (Decode.list decodeRawResult)
         >> Result.map toBatchResults_
         >> Result.withDefault Dict.empty
-
-
-toBatchResults_ : List RawResult -> BatchResults
-toBatchResults_ =
-    List.foldl
-        (\result batch_ ->
-            Dict.update result.attemptId
-                (\attempt_ ->
-                    case attempt_ of
-                        Nothing ->
-                            Just (Dict.singleton result.taskId result.result)
-
-                        Just attempt__ ->
-                            Just (Dict.insert result.taskId result.result attempt__)
-                )
-                batch_
-        )
-        Dict.empty
 
 
 
@@ -685,150 +684,144 @@ decodeRawResult =
 
 decodeResponse : Definition x a -> Decode.Value -> Response x a
 decodeResponse def val =
-    case def.errors of
-        ExpectThrows catch ->
-            decodeExpectThrows catch def val
+    let
+        decodeRunnerSuccess : Decoder a
+        decodeRunnerSuccess =
+            case def.expect of
+                ExpectJson expect ->
+                    Decode.field "value" expect
 
-        ExpectErrors expect ->
-            decodeExpectErrors expect def val
+        decodeRunnerError : Decoder UnexpectedError
+        decodeRunnerError =
+            Decode.field "error"
+                (Decode.field "reason" Decode.string
+                    |> Decode.andThen
+                        (\reason ->
+                            case reason of
+                                "js_exception" ->
+                                    Decode.map2
+                                        (\msg raw ->
+                                            UnhandledJsException
+                                                { function = def.function
+                                                , message = msg
+                                                , raw = raw
+                                                }
+                                        )
+                                        (Decode.field "message" Decode.string)
+                                        (Decode.field "raw" Decode.value)
 
-        ExpectNoErrors ->
-            decodeExpectNoErrors def val
+                                "missing_function" ->
+                                    Decode.field "message" (Decode.map MissingFunction Decode.string)
 
-
-decodeExpectNoErrors : Definition x a -> Decode.Value -> Response b a
-decodeExpectNoErrors def val =
-    case Decode.decodeValue (decodeRunnerError def) val of
-        Ok err ->
-            UnexpectedError err
-
-        Err _ ->
-            case Decode.decodeValue (decodeRunnerSuccess def) val of
-                Ok a ->
-                    Success a
-
-                Err e ->
-                    UnexpectedError
-                        (ResponseDecoderFailure
-                            { function = def.function
-                            , error = e
-                            }
+                                _ ->
+                                    Decode.succeed (InternalError ("Unknown runner error reason: " ++ reason))
                         )
+                )
 
-
-decodeExpectThrows : (String -> x) -> Definition a b -> Decode.Value -> Response x b
-decodeExpectThrows catch def val =
-    case Decode.decodeValue (decodeRunnerError def) val of
-        Ok err ->
-            case err of
-                UnhandledJsException e ->
-                    Error (catch e.message)
-
-                _ ->
+        decodeExpectErrors : Decoder x -> Response x a
+        decodeExpectErrors expect =
+            let
+                decodeExpectErrorField : Decoder val -> Decoder val
+                decodeExpectErrorField decoder =
+                    Decode.field "value" (Decode.field "error" decoder)
+            in
+            case Decode.decodeValue decodeRunnerError val of
+                Ok err ->
                     UnexpectedError err
 
-        Err _ ->
-            case Decode.decodeValue (decodeRunnerSuccess def) val of
-                Ok a ->
-                    Success a
+                Err _ ->
+                    case Decode.decodeValue (decodeExpectErrorField Decode.value) val of
+                        Ok _ ->
+                            case Decode.decodeValue (decodeExpectErrorField expect) val of
+                                Ok err_ ->
+                                    Error err_
 
-                Err e ->
-                    UnexpectedError
-                        (ResponseDecoderFailure
-                            { function = def.function
-                            , error = e
-                            }
-                        )
+                                Err e_ ->
+                                    UnexpectedError
+                                        (ErrorsDecoderFailure
+                                            { function = def.function
+                                            , error = e_
+                                            }
+                                        )
 
+                        Err _ ->
+                            case Decode.decodeValue decodeRunnerSuccess val of
+                                Ok a ->
+                                    Success a
 
-decodeExpectErrors : Decoder x -> Definition a b -> Decode.Value -> Response x b
-decodeExpectErrors expect def val =
-    case Decode.decodeValue (decodeRunnerError def) val of
-        Ok err ->
-            UnexpectedError err
+                                Err e_ ->
+                                    UnexpectedError
+                                        (ResponseDecoderFailure
+                                            { function = def.function
+                                            , error = e_
+                                            }
+                                        )
 
-        Err _ ->
-            case Decode.decodeValue (decodeExpectErrorField Decode.value) val of
-                Ok _ ->
-                    case Decode.decodeValue (decodeExpectErrorField expect) val of
-                        Ok err_ ->
-                            Error err_
+        decodeExpectThrows : (String -> x) -> Response x a
+        decodeExpectThrows catch =
+            case Decode.decodeValue decodeRunnerError val of
+                Ok err ->
+                    case err of
+                        UnhandledJsException e ->
+                            Error (catch e.message)
 
-                        Err e_ ->
-                            UnexpectedError
-                                (ErrorsDecoderFailure
-                                    { function = def.function
-                                    , error = e_
-                                    }
-                                )
+                        _ ->
+                            UnexpectedError err
 
                 Err _ ->
-                    case Decode.decodeValue (decodeRunnerSuccess def) val of
+                    case Decode.decodeValue decodeRunnerSuccess val of
                         Ok a ->
                             Success a
 
-                        Err e_ ->
+                        Err e ->
                             UnexpectedError
                                 (ResponseDecoderFailure
                                     { function = def.function
-                                    , error = e_
+                                    , error = e
                                     }
                                 )
 
+        decodeExpectNoErrors : () -> Response x a
+        decodeExpectNoErrors _ =
+            case Decode.decodeValue decodeRunnerError val of
+                Ok err ->
+                    UnexpectedError err
 
-decodeExpectErrorField : Decoder a -> Decoder a
-decodeExpectErrorField decoder =
-    Decode.field "value" (Decode.field "error" decoder)
+                Err _ ->
+                    case Decode.decodeValue decodeRunnerSuccess val of
+                        Ok a ->
+                            Success a
 
-
-decodeRunnerSuccess : Definition x a -> Decoder a
-decodeRunnerSuccess def =
-    case def.expect of
-        ExpectJson expect ->
-            Decode.field "value" expect
-
-
-decodeRunnerError : Definition x a -> Decoder UnexpectedError
-decodeRunnerError def =
-    Decode.field "error"
-        (Decode.field "reason" Decode.string
-            |> Decode.andThen
-                (\reason ->
-                    case reason of
-                        "js_exception" ->
-                            Decode.map2
-                                (\msg raw ->
-                                    UnhandledJsException
-                                        { function = def.function
-                                        , message = msg
-                                        , raw = raw
-                                        }
+                        Err e ->
+                            UnexpectedError
+                                (ResponseDecoderFailure
+                                    { function = def.function
+                                    , error = e
+                                    }
                                 )
-                                (Decode.field "message" Decode.string)
-                                (Decode.field "raw" Decode.value)
+    in
+    case def.errors of
+        ExpectThrows catch ->
+            decodeExpectThrows catch
 
-                        "missing_function" ->
-                            Decode.field "message" (Decode.map MissingFunction Decode.string)
+        ExpectErrors expect ->
+            decodeExpectErrors expect
 
-                        _ ->
-                            Decode.succeed (InternalError ("Unknown runner error reason: " ++ reason))
-                )
-        )
+        ExpectNoErrors ->
+            decodeExpectNoErrors ()
 
 
 encodeDefinitions : AttemptId -> Array Todo -> Encode.Value
 encodeDefinitions attemptId =
-    Encode.array (encodeDefinition attemptId)
-
-
-encodeDefinition : AttemptId -> Todo -> Encode.Value
-encodeDefinition attemptId def =
-    Encode.object
-        [ ( "attemptId", Encode.string attemptId )
-        , ( "taskId", Encode.string def.taskId )
-        , ( "function", Encode.string def.function )
-        , ( "args", def.args )
-        ]
+    Encode.array
+        (\def ->
+            Encode.object
+                [ ( "attemptId", Encode.string attemptId )
+                , ( "taskId", Encode.string def.taskId )
+                , ( "function", Encode.string def.function )
+                , ( "args", def.args )
+                ]
+        )
 
 
 
