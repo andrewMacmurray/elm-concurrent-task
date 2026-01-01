@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Bytes
+import Bytes exposing (Bytes)
 import Bytes.Decode
 import Bytes.Encode
 import ConcurrentTask as Task exposing (ConcurrentTask, UnexpectedError(..))
@@ -50,6 +50,7 @@ specs =
     , httpJsonBodySpec
     , httpHeadersSpec
     , httpBytesSpec
+    , httpRawBytesSpec
     , httpMalformedSpec
     , httpStringSpec
     , httpTimeoutSpec
@@ -310,6 +311,30 @@ httpJsonBodySpec =
         )
         (Spec.assertSuccess
             (Spec.shouldEqual "hello,world")
+        )
+
+
+httpRawBytesSpec : Spec
+httpRawBytesSpec =
+    let
+        body : Bytes
+        body =
+            Bytes.Encode.unsignedInt32 Bytes.BE 42
+                |> Bytes.Encode.encode
+    in
+    Spec.describe
+        "http raw bytes"
+        "sends http bytes body in a request and receives them in response"
+        (Http.post
+            { url = echoBody
+            , headers = []
+            , timeout = Nothing
+            , expect = Http.expectRawBytes
+            , body = Http.bytesBody "application/octet-stream" body
+            }
+        )
+        (Spec.assertSuccess
+            (Spec.shouldEqual body)
         )
 
 
