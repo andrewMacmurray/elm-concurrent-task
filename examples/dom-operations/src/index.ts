@@ -1,3 +1,5 @@
+import "../../util/style.css";
+
 import { Elm } from "./Main.elm";
 import * as ConcurrentTask from "../../../runner";
 
