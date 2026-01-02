@@ -1266,17 +1266,17 @@ pool =
     Internal.pool
 
 
-{-| Add an id to a `Pool`.
+{-| Add an id to a `Pool`. Use this if you're creating multiple new `Pool`s for a single pair of ports.
 
 Why? Because Pools can be instantiated multiple times (think switching pages in a Single Page App),
 without a unique identifier a ConcurrentTask Pool may end up receiving responses for a ConcurrentTask pool that was previously discarded.
 
 One example is a user switching back and forth between two pages:
 
-    - Page one has a long running task on `init`
-    - The user switches to page 2, then switches back to page 1
-    - A new long running task is started
-    - But the Pool can receive the response from the first long running task (which is unexpected behaviour)
+  - Page one has a long running task on `init`
+  - The user switches to page 2, then switches back to page 1
+  - A new long running task is started
+  - But the Pool can receive the response from the first long running task (which is unexpected behaviour)
 
 Adding a different id to the `Pool` allows these previous responses to be ignored.
 
