@@ -368,10 +368,9 @@ const tasks = {
 
 ## Re-using ports
 
-Each `send` and `receive` port pair only support **one** `ConcurrentTask.Pool` subscribed at a time.
-**Weird** things can happen if you have **two or more** `ConcurrentTask.Pool`s using the same ports at the same time.
+For most cases a single `ConcurrentTask.Pool` is paired a `send` and `receive` port pair.
 
-Generally this should not be needed, but if you have a use-case, please leave an [issue](https://github.com/andrewMacmurray/elm-concurrent-task/issues).
+If you need multiple `Pool`s subscribed to a port pair at the same time or need to continually instantiate new `Pool`s (e.g. switching between pages), make sure each pool has a unique id with `ConcurrentTask.withPoolId`. Otherwise `Pool`s may receive results for other pools which can lead to some confusing states!
 
 ## Develop Locally
 

@@ -13,17 +13,9 @@ export * from "./http/index.js";
 export * from "./browser/index.js";
 
 export interface ElmPorts {
-  send: {
-    subscribe: (
-      callback: (defs: TaskDefinition[] | Command) => Promise<void>
-    ) => void;
-  };
-  receive: { send: (result: TaskResult[] | PoolId) => void };
+  send: { subscribe: (callback: (defs: TaskDefinition[]) => Promise<void>) => void; };
+  receive: { send: (result: TaskResult[]) => void };
 }
-
-export type Command = { command: "identify-pool" };
-
-export type PoolId = { poolId: number };
 
 export type Tasks = { [fn: string]: (arg: any) => any };
 
@@ -128,69 +120,49 @@ export function register(options: Options): void {
   const tasks = createTasks(options);
   const subscribe = options.ports.send.subscribe;
   const send = options.ports.receive.send;
-  let poolId = 0;
-
-  function nextPoolId() {
-    poolId = cycleInt({ max: 1000 }, poolId);
-  }
 
   subscribe(async (payload) => {
-    if ("command" in payload) {
-      switch (payload.command) {
-        case "identify-pool": {
-          // The Promise.resolve wrapper here prevents a race condition in Elm where sometimes the Model is not updated in time before the poolId is received
-          return Promise.resolve().then(() => {
-            send({ poolId });
-            nextPoolId();
-          });
-        }
-        default: {
-          throw new Error(`Unrecognised internal command: ${payload}`);
-        }
-      }
-    } else {
-      const debouncedSend = debounce(send, debounceThreshold(payload));
+    const debouncedSend = debounce(send, debounceThreshold(payload));
 
-      for (const def of payload) {
-        if (!tasks[def.function]) {
-          return debouncedSend({
-            attemptId: def.attemptId,
-            taskId: def.taskId,
-            result: {
-              error: {
-                reason: "missing_function",
-                message: `${def.function} is not registered`,
-              },
+    for (const def of payload) {
+      if (!tasks[def.function]) {
+        return debouncedSend({
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: {
+            error: {
+              reason: "missing_function",
+              message: `${def.function} is not registered`,
             },
-          });
-        }
+          },
+        });
       }
-
-      payload.map(async (def) => {
-        try {
-          logTaskStart(def, options);
-          const result = await tasks[def.function]?.(def.args);
-          logTaskFinish(def, options);
-          debouncedSend({
-            attemptId: def.attemptId,
-            taskId: def.taskId,
-            result: { value: result },
-          });
-        } catch (e) {
-          debouncedSend({
-            attemptId: def.attemptId,
-            taskId: def.taskId,
-            result: {
-              error: {
-                reason: "js_exception",
-                message: `${e.name}: ${e.message}`,
-                raw: e,
-              },
-            },
-          });
-        }
-      });
     }
+
+    payload.map(async (def) => {
+      try {
+        logTaskStart(def, options);
+        const result = await tasks[def.function]?.(def.args);
+        logTaskFinish(def, options);
+        debouncedSend({
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: { value: result },
+        });
+      } catch (e) {
+        debouncedSend({
+          attemptId: def.attemptId,
+          taskId: def.taskId,
+          result: {
+            error: {
+              reason: "js_exception",
+              message: `${e.name}: ${e.message}`,
+              raw: e,
+            },
+          },
+        });
+      }
+    });
   });
 }
 
@@ -270,8 +242,4 @@ function prefixWith(prefix: string, tasks: Tasks): Tasks {
   return Object.fromEntries(
     Object.entries(tasks).map(([key, fn]) => [`${prefix}${key}`, fn])
   );
-}
-
-function cycleInt(options: { max: number }, i: number): number {
-  return i >= options.max ? 0 : i + 1;
 }

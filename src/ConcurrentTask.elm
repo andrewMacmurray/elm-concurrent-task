@@ -9,7 +9,7 @@ module ConcurrentTask exposing
     , race
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , attempt, attemptEach, Response(..), UnexpectedError(..), onProgress, Pool, pool
+    , attempt, attemptEach, Response(..), UnexpectedError(..), onProgress, Pool, pool, withPoolId
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -194,7 +194,7 @@ Here's a minimal complete example:
             , subscriptions = subscriptions
             }
 
-@docs attempt, attemptEach, Response, UnexpectedError, onProgress, Pool, pool
+@docs attempt, attemptEach, Response, UnexpectedError, onProgress, Pool, pool, withPoolId
 
 -}
 
@@ -1264,3 +1264,23 @@ Right now it doesn't expose any functionality, but it could be used in the futur
 pool : Pool msg
 pool =
     Internal.pool
+
+
+{-| Add an id to a `Pool`.
+
+Why? Because Pools can be instantiated multiple times (think switching pages in a Single Page App),
+without a unique identifier a ConcurrentTask Pool may end up receiving responses for a ConcurrentTask pool that was previously discarded.
+
+One example is a user switching back and forth between two pages:
+
+    - Page one has a long running task on `init`
+    - The user switches to page 2, then switches back to page 1
+    - A new long running task is started
+    - But the Pool can receive the response from the first long running task (which is unexpected behaviour)
+
+Adding a different id to the `Pool` allows these previous responses to be ignored.
+
+-}
+withPoolId : Int -> Pool msg -> Pool msg
+withPoolId =
+    Internal.withPoolId
