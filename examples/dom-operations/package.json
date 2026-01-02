@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "vite"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "vite": "6.0.9",
+    "vite": "^7.3.0",
     "vite-plugin-elm": "^3.0.1"
   }
 }

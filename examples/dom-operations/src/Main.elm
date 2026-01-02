@@ -4,8 +4,8 @@ import Browser
 import Browser.Dom as Dom
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Browser.Dom
-import Html exposing (Html, button, div, input, p, text)
-import Html.Attributes exposing (class, id)
+import Html as H exposing (Html)
+import Html.Attributes as A
 import Html.Events exposing (onClick)
 import Json.Decode as Decode
 
@@ -222,33 +222,49 @@ port receive : (Decode.Value -> msg) -> Sub msg
 
 view : Model -> Html Msg
 view model =
-    div [ class "row" ]
-        [ input [ id "input" ] []
-        , div [ class "box", id "box" ] [ text "What size am i?" ]
-        , div [ class "scrolly-box", id "scrolly-box" ]
-            [ text "Scroll mee!!"
-            , p [] [ text "..." ]
-            , p [] [ text "..." ]
-            , p [] [ text "..." ]
-            , p [] [ text "..." ]
-            , p [] [ text "..." ]
-            , p [] [ text "..." ]
+    H.div
+        [ A.class "col gap-xs pa-s"
+        , A.style "max-width" "800px"
+        ]
+        [ H.input [ A.id "input" ] []
+        , H.div
+            [ A.class "pa-s"
+            , A.style "background-color" "dodgerblue"
+            , A.style "color" "white"
+            , A.id "box"
+            ]
+            [ H.text "What size am i?" ]
+        , H.div
+            [ A.class "pa-s"
+            , A.style "width" "100px"
+            , A.style "height" "100px"
+            , A.style "background-color" "cornflowerblue"
+            , A.style "overflow-y" "scroll"
+            , A.id "scrolly-box"
+            ]
+            [ H.text "Scroll mee!!"
+            , H.p [] [ H.text "..." ]
+            , H.p [] [ H.text "..." ]
+            , H.p [] [ H.text "..." ]
+            , H.p [] [ H.text "..." ]
+            , H.p [] [ H.text "..." ]
+            , H.p [] [ H.text "..." ]
             ]
         , showViewport model
         , showWindowViewport model
         , showElement model
-        , div [ class "buttons" ]
-            [ button [ onClick FocusClicked ] [ text "Focus the Input" ]
-            , button [ onClick BlurClicked ] [ text "Blur the Input" ]
+        , H.div [ A.class "row gap-xs" ]
+            [ H.button [ onClick FocusClicked ] [ H.text "Focus the Input" ]
+            , H.button [ onClick BlurClicked ] [ H.text "Blur the Input" ]
             ]
-        , div [ class "buttons" ]
-            [ button [ onClick SetViewportOfElementClicked ] [ text "Scroll top of the scroll box" ]
-            , button [ onClick ScrollTopClicked ] [ text "Scroll Window to Top" ]
+        , H.div [ A.class "row gap-xs" ]
+            [ H.button [ onClick SetViewportOfElementClicked ] [ H.text "Scroll top of the scroll box" ]
+            , H.button [ onClick ScrollTopClicked ] [ H.text "Scroll Window to Top" ]
             ]
-        , div [ class "buttons" ]
-            [ button [ onClick GetBoxViewportClicked ] [ text "Get Viewport of the blue box" ]
-            , button [ onClick GetWindowViewportClicked ] [ text "Get Window Viewport" ]
-            , button [ onClick GetElementClicked ] [ text "Get Element size of the blue box" ]
+        , H.div [ A.class "row gap-xs" ]
+            [ H.button [ onClick GetBoxViewportClicked ] [ H.text "Get Viewport of the blue box" ]
+            , H.button [ onClick GetWindowViewportClicked ] [ H.text "Get Window Viewport" ]
+            , H.button [ onClick GetElementClicked ] [ H.text "Get Element size of the blue box" ]
             ]
         ]
 
@@ -257,12 +273,12 @@ showViewport : Model -> Html msg
 showViewport model =
     case model.foundViewport of
         Nothing ->
-            text ""
+            H.text ""
 
         Just vp ->
-            div []
-                [ div [] [ text "Found blue box viewport!" ]
-                , div [] [ text (Debug.toString vp) ]
+            H.div []
+                [ H.div [] [ H.text "Found blue box viewport!" ]
+                , H.div [] [ H.text (Debug.toString vp) ]
                 ]
 
 
@@ -270,12 +286,12 @@ showWindowViewport : Model -> Html msg
 showWindowViewport model =
     case model.foundWindowViewport of
         Nothing ->
-            text ""
+            H.text ""
 
         Just vp ->
-            div []
-                [ div [] [ text "Found window viewport!" ]
-                , div [] [ text (Debug.toString vp) ]
+            H.div []
+                [ H.div [] [ H.text "Found window viewport!" ]
+                , H.div [] [ H.text (Debug.toString vp) ]
                 ]
 
 
@@ -283,10 +299,10 @@ showElement : Model -> Html msg
 showElement model =
     case model.foundElement of
         Nothing ->
-            text ""
+            H.text ""
 
         Just vp ->
-            div []
-                [ div [] [ text "Found blue box element size!" ]
-                , div [] [ text (Debug.toString vp) ]
+            H.div []
+                [ H.div [] [ H.text "Found blue box element size!" ]
+                , H.div [] [ H.text (Debug.toString vp) ]
                 ]

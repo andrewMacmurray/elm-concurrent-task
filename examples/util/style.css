@@ -1,0 +1,164 @@
+:root {
+  --f1: 36px;
+  --f2: 28px;
+  --f3: 18px;
+
+  --space-xxs: 5px;
+  --space-xs: 10px;
+  --space-s: 20px;
+  --space-m: 40px;
+  --space-l: 80px;
+
+  --color-error: rgb(147, 8, 8);
+  --color-success: rgb(70, 163, 115);
+}
+
+/* Reset */
+
+body {
+  margin: 0;
+  font-family: system-ui, "Open Sans", Arial, sans-serif;
+}
+
+*:not(dialog) {
+  margin: 0;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Layout */
+
+.center {
+  margin: 0 auto;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+}
+
+/* Gaps */
+
+.gap-xxs {
+  gap: var(--space-xxs);
+}
+
+.gap-xs {
+  gap: var(--space-xs);
+}
+
+.gap-s {
+  gap: var(--space-s);
+}
+
+.gap-m {
+  gap: var(--space-m);
+}
+
+.gap-l {
+  gap: var(--space-l);
+}
+
+/* Padding All  */
+
+.pa-xxs {
+  padding: var(--space-xxs);
+}
+
+.pa-xs {
+  padding: var(--space-xs);
+}
+
+.pa-s {
+  padding: var(--space-s);
+}
+
+.pa-m {
+  padding: var(--space-m);
+}
+
+.pa-l {
+  padding: var(--space-l);
+}
+
+/* Padding Vertical */
+
+.pv-xxs {
+  padding-top: var(--space-xxs);
+  padding-bottom: var(--space-xxs);
+}
+
+.pv-xs {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+}
+
+.pv-s {
+  padding-top: var(--space-s);
+  padding-bottom: var(--space-s);
+}
+
+.pv-m {
+  padding-top: var(--space-m);
+  padding-bottom: var(--space-m);
+}
+
+.pv-l {
+  padding-top: var(--space-l);
+  padding-bottom: var(--space-l);
+}
+
+/* Padding Horizontal */
+
+.ph-xxs {
+  padding-left: var(--space-xxs);
+  padding-right: var(--space-xxs);
+}
+
+.ph-xs {
+  padding-left: var(--space-xs);
+  padding-right: var(--space-xs);
+}
+
+.ph-s {
+  padding-left: var(--space-s);
+  padding-right: var(--space-s);
+}
+
+.ph-m {
+  padding-left: var(--space-m);
+  padding-right: var(--space-m);
+}
+
+.ph-l {
+  padding-left: var(--space-l);
+  padding-right: var(--space-l);
+}
+
+/* Fonts */
+
+.f1 {
+  font-size: var(--f1);
+}
+
+.f2 {
+  font-size: var(--f2);
+}
+
+.f3 {
+  font-size: var(--f3);
+}
+
+.error {
+  color: var(--color-error);
+}
+
+.success {
+  color: var(--color-success);
+}

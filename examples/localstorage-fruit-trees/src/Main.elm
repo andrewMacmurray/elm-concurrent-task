@@ -2,17 +2,12 @@ port module Main exposing (main)
 
 import Browser
 import ConcurrentTask exposing (ConcurrentTask)
-import Element exposing (..)
-import Element.Border as Border
-import Element.Font as Font
-import Element.Input as Input
-import Html exposing (Html)
+import Html as H exposing (Html)
+import Html.Attributes as A
+import Html.Events as E
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Localstorage
-import Ui.Palette as Palette
-import Ui.Spacing as Spacing exposing (edges)
-import Ui.Text as Text
 
 
 
@@ -370,145 +365,125 @@ port receive : (Decode.Value -> msg) -> Sub msg
 
 view : Model -> Html Msg
 view model =
-    Element.layout [ Text.fonts ]
-        (column
-            [ width (fill |> maximum 800)
-            , paddingXY Spacing.s Spacing.s
-            , spacing Spacing.l
-            , centerX
-            ]
-            [ column [ width fill, spacing Spacing.s ]
-                [ Text.text [ Text.f1 ] "Fruit Basket"
-                , Text.text [] "Add fruits to your basket!"
-                , row [ spacing Spacing.m ]
-                    [ basketFruit
-                        { icon = "🍎"
-                        , text = "Apples"
-                        , color = Palette.red
-                        , addClicked = AddApplesClicked
-                        , value = model.basket.apples
-                        }
-                    , basketFruit
-                        { icon = "🍊"
-                        , text = "Oranges"
-                        , color = Palette.orange
-                        , addClicked = AddOrangesClicked
-                        , value = model.basket.oranges
-                        }
-                    , basketFruit
-                        { icon = "🍑"
-                        , text = "Peaches"
-                        , color = Palette.peach
-                        , addClicked = AddPeachesClicked
-                        , value = model.basket.peaches
-                        }
-                    , basketFruit
-                        { icon = "🍐"
-                        , text = "Pears"
-                        , color = Palette.green
-                        , addClicked = AddPearsClicked
-                        , value = model.basket.pears
-                        }
-                    ]
+    H.div
+        [ A.class "col gap-l pa-s center"
+        , A.style "max-width" "800px"
+        ]
+        [ H.div [ A.class "col gap-s" ]
+            [ H.p [ A.class "f1" ] [ H.text "Fruit Basket" ]
+            , H.p [ A.class "f3" ] [ H.text "Add fruits to your basket" ]
+            , H.div [ A.class "row gap-m" ]
+                [ basketFruit
+                    { icon = "🍎"
+                    , text = "Apples"
+                    , color = "var(--red)"
+                    , addClicked = AddApplesClicked
+                    , value = model.basket.apples
+                    }
+                , basketFruit
+                    { icon = "🍊"
+                    , text = "Oranges"
+                    , color = "var(--orange)"
+                    , addClicked = AddOrangesClicked
+                    , value = model.basket.oranges
+                    }
+                , basketFruit
+                    { icon = "🍑"
+                    , text = "Peaches"
+                    , color = "var(--peach)"
+                    , addClicked = AddPeachesClicked
+                    , value = model.basket.peaches
+                    }
+                , basketFruit
+                    { icon = "🍐"
+                    , text = "Pears"
+                    , color = "var(--green)"
+                    , addClicked = AddPearsClicked
+                    , value = model.basket.pears
+                    }
                 ]
-            , column [ width fill, spacing Spacing.m ]
-                [ Text.text [ Text.f1 ] "Fruit Trees"
-                , row [ spacing Spacing.m ]
+            , H.div [ A.class "col gap-m" ]
+                [ H.p [ A.class "f1" ] [ H.text "Fruit Trees" ]
+                , H.div [ A.class "row gap-m" ]
                     [ fruitTree
                         { icon = "🌳🍎"
-                        , color = Palette.red
+                        , color = "var(--red)"
                         , value = model.trees.apples
                         }
                     , fruitTree
                         { icon = "🌳🍊"
-                        , color = Palette.orange
+                        , color = "var(--orange)"
                         , value = model.trees.oranges
                         }
                     , fruitTree
                         { icon = "🌳🍑"
-                        , color = Palette.peach
+                        , color = "var(--peach)"
                         , value = model.trees.peaches
                         }
                     , fruitTree
                         { icon = "🌳🍐"
-                        , color = Palette.green
+                        , color = "var(--green)"
                         , value = model.trees.pears
                         }
                     ]
-                , viewMaybe viewError model.error
                 ]
+            , viewMaybe viewError model.error
             ]
-        )
+        ]
 
 
-viewError : TransactionError -> Element msg
+viewError : TransactionError -> Html msg
 viewError error =
     case error of
         TreeRunOutOfFruits ->
-            Text.error [] "Tree ran out of fruits, try refreshing the page"
+            H.p [ A.class "error" ] [ H.text "Tree ran out of fruits, try refreshing the page" ]
 
         ReadError readError ->
-            Text.error [] ("Localstorage Read Error: " ++ Debug.toString readError)
+            H.p [ A.class "error" ] [ H.text ("Localstorage Read Error: " ++ Debug.toString readError) ]
 
         WriteError writeError ->
-            Text.error [] ("Localstorage Write Error: " ++ Debug.toString writeError)
+            H.p [ A.class "error" ] [ H.text ("Localstorage Write Error: " ++ Debug.toString writeError) ]
 
         UnexpectedError unexpectedError ->
-            Text.error [] ("Something went wrong: " ++ Debug.toString unexpectedError)
+            H.p [ A.class "error" ] [ H.text ("Something went wrong: " ++ Debug.toString unexpectedError) ]
 
 
-viewMaybe : (a -> Element msg) -> Maybe a -> Element msg
+viewMaybe : (a -> Html msg) -> Maybe a -> Html msg
 viewMaybe f =
-    Maybe.map f >> Maybe.withDefault Element.none
+    Maybe.map f >> Maybe.withDefault (H.text "")
 
 
 basketFruit :
     { icon : String
     , text : String
-    , color : Element.Color
+    , color : String
     , addClicked : Int -> Msg
     , value : Int
     }
-    -> Element Msg
+    -> Html Msg
 basketFruit options =
-    column [ spacing Spacing.xs, width (px 75) ]
-        [ Text.text [ Text.f1 ] options.icon
-        , Text.text [ Text.f6, Font.color options.color ] options.text
-        , Text.text [ Text.f1, Font.color options.color ] (String.fromInt options.value)
-        , Input.button
-            [ Border.color options.color
-            , Border.width 2
-            , Border.rounded 5
-            , paddingEach
-                { top = 3
-                , bottom = 5
-                , left = Spacing.xs
-                , right = Spacing.xs
-                }
+    H.div [ A.class "col gap-xs", A.style "width" "75px" ]
+        [ H.p [ A.class "f1" ] [ H.text options.icon ]
+        , H.p [ A.class "f3", A.style "color" options.color ] [ H.text options.text ]
+        , H.p [ A.class "f1", A.style "color" options.color ] [ H.text (String.fromInt options.value) ]
+        , H.button
+            [ A.style "border" "solid 2px"
+            , A.style "border-color" options.color
+            , A.style "border-radius" "5px"
+            , A.style "background-color" "white"
+            , A.class "ph-xs pv-xxs"
+            , E.onClick (options.addClicked 1)
             ]
-            { onPress = Just (options.addClicked 1)
-            , label =
-                Text.text
-                    [ Text.f3
-                    , centerX
-                    , centerY
-                    , Text.color options.color
-                    ]
-                    "+"
-            }
+            [ H.p [ A.class "f3", A.style "color" options.color ] [ H.text "+" ]
+            ]
         ]
 
 
-fruitTree : { icon : String, color : Color, value : Int } -> Element msg
+fruitTree : { icon : String, color : String, value : Int } -> Html msg
 fruitTree options =
-    column [ spacing Spacing.xs, width (px 75) ]
-        [ Text.text [ Text.f1 ] options.icon
-        , Text.text
-            [ paddingEach { edges | left = 7 }
-            , Text.f1
-            , Font.color options.color
-            ]
-            (String.fromInt options.value)
+    H.div [ A.class "col gap-xs", A.style "width" "75px" ]
+        [ H.p [ A.class "f1" ] [ H.text options.icon ]
+        , H.p [ A.class "f1 ph-xxs", A.style "color" options.color ] [ H.text (String.fromInt options.value) ]
         ]
 
 

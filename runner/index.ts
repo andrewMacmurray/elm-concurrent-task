@@ -224,6 +224,8 @@ function debounceThreshold(defs: TaskDefinition[]): number {
   return defs.length > 10 ? 20 : 0;
 }
 
+// If lots of responses come back close together, it's more efficient to send them all at once to Elm (less task pool bookeeping required).
+// The debounce colects results that arrive close together and then calls send after the wait threshold elapses.
 function debounce(send: (res: TaskResult[]) => void, wait: number) {
   let timeout: ReturnType<typeof setTimeout>;
   let results: TaskResult[] = [];

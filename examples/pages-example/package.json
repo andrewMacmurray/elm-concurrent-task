@@ -1,7 +1,6 @@
 {
-  "name": "localstorage-fruit-trees",
+  "name": "pages-example",
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
     "start": "vite"
   },
