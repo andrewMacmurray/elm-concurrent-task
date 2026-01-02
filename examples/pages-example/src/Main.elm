@@ -164,7 +164,7 @@ update msg model =
                     ( model, Nav.load u )
 
         OnUrlChange url ->
-            { model | tasks = ConcurrentTask.pool, globalError = Nothing }
+            { model | tasks = ConcurrentTask.cancelAll model.tasks, globalError = Nothing }
                 |> initPage (Route.fromUrl url)
 
 

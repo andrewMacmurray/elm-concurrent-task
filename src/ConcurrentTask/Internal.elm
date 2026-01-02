@@ -12,6 +12,8 @@ module ConcurrentTask.Internal exposing
     , andMap
     , andThen
     , attempt
+    , cancel
+    , cancelAll
     , define
     , fail
     , fromResult
@@ -451,11 +453,17 @@ type alias OnProgress msg =
     }
 
 
-attempt : Attempt msg -> ConcurrentTask msg msg -> ( Pool msg, Cmd msg )
+attempt : Attempt msg -> ConcurrentTask msg msg -> ( AttemptId, Pool msg, Cmd msg )
 attempt attempt_ task =
+    let
+        id : AttemptId
+        id =
+            currentAttemptId attempt_.pool
+    in
     case stepTask Dict.empty ( Ids.init, task ) of
         ( _, Done res ) ->
-            ( attempt_.pool
+            ( id
+            , attempt_.pool
             , sendResult attempt_.onComplete res
             )
 
@@ -468,8 +476,9 @@ attempt attempt_ task =
                     , onComplete = attempt_.onComplete
                     }
             in
-            ( startAttempt progress attempt_.pool
-            , attempt_.send (encodeDefinitions (currentAttemptId attempt_.pool) defs)
+            ( id
+            , startAttempt id progress attempt_.pool
+            , attempt_.send (encodeDefinitions id defs)
             )
 
 
@@ -753,16 +762,19 @@ withPoolId id =
     mapPool (\pool_ -> { pool_ | poolId = Just id })
 
 
-startAttempt : Progress msg -> Pool msg -> Pool msg
-startAttempt progress p =
-    mapPool
-        (\pool_ ->
-            { pool_
-                | attempts = Dict.insert (currentAttemptId p) progress pool_.attempts
-                , attemptIds = Ids.next pool_.attemptIds
-            }
-        )
-        p
+startAttempt : AttemptId -> Progress msg -> Pool msg -> Pool msg
+startAttempt id progress =
+    mapPool (\pool_ -> { pool_ | attempts = Dict.insert id progress pool_.attempts }) >> nextAttemptId
+
+
+cancelAll : Pool msg -> Pool msg
+cancelAll =
+    mapPool (\pool_ -> { pool_ | attempts = Dict.empty }) >> nextAttemptId
+
+
+cancel : AttemptId -> Pool msg -> Pool msg
+cancel id =
+    mapPool (\pool_ -> { pool_ | attempts = Dict.remove id pool_.attempts }) >> nextAttemptId
 
 
 currentAttemptId : Pool msg -> AttemptId
@@ -773,6 +785,11 @@ currentAttemptId (Pool pool_) =
 
         Nothing ->
             Ids.get pool_.attemptIds
+
+
+nextAttemptId : Pool msg -> Pool msg
+nextAttemptId =
+    mapPool (\pool_ -> { pool_ | attemptIds = Ids.next pool_.attemptIds })
 
 
 updateProgressFor : AttemptId -> Progress msg -> Pool msg -> Pool msg

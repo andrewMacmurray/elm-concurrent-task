@@ -9,7 +9,8 @@ module ConcurrentTask exposing
     , race
     , batch, sequence
     , map, andMap, map2, map3, map4, map5
-    , attempt, attemptEach, Response(..), UnexpectedError(..), onProgress, Pool, pool, withPoolId
+    , attempt, attemptWithId, attemptEach, Response(..), UnexpectedError(..), onProgress, Pool, pool, withPoolId
+    , cancel, cancelAll
     )
 
 {-| A Task similar to `elm/core`'s `Task` but:
@@ -194,7 +195,14 @@ Here's a minimal complete example:
             , subscriptions = subscriptions
             }
 
-@docs attempt, attemptEach, Response, UnexpectedError, onProgress, Pool, pool, withPoolId
+@docs attempt, attemptWithId, attemptEach, Response, UnexpectedError, onProgress, Pool, pool, withPoolId
+
+
+# Cancel Tasks
+
+These can be used to stop running tasks from outside the task chain.
+
+@docs cancel, cancelAll
 
 -}
 
@@ -1093,7 +1101,38 @@ attempt :
     }
     -> ConcurrentTask x a
     -> ( Pool msg, Cmd msg )
-attempt config task =
+attempt options task =
+    let
+        ( _, p, cmd ) =
+            attemptWithId options task
+    in
+    ( p, cmd )
+
+
+{-| Start a `ConcurrentTask` identical to [attempt](ConcurrentTask#attempt) except it returns an additional `String` id that can be used to cancel the task.
+
+Pass this `String` id to [cancel](ConcurrentTask#cancel) to stop the running task. Below is a contrived example but it would stop the task immediately:
+
+    let
+        ( id, tasks, cmd ) =
+            ConcurrentTask.attemptWithId
+                { send = send
+                , pool = model.pool
+                , onComplete = OnComplete
+                }
+                myTask
+    in
+    ( { model | tasks = ConcurrentTask.cancel id tasks }, cmd )
+
+-}
+attemptWithId :
+    { pool : Pool msg
+    , send : Decode.Value -> Cmd msg
+    , onComplete : Response x a -> msg
+    }
+    -> ConcurrentTask x a
+    -> ( String, Pool msg, Cmd msg )
+attemptWithId config task =
     let
         mappedTask : ConcurrentTask msg msg
         mappedTask =
@@ -1139,8 +1178,11 @@ attemptEach config taskList =
     let
         attemptAccum : ConcurrentTask x a -> ( Pool msg, List (Cmd msg) ) -> ( Pool msg, List (Cmd msg) )
         attemptAccum task ( pool_, cmds_ ) =
-            attempt { config | pool = pool_ } task
-                |> Tuple.mapSecond (\cmd -> cmd :: cmds_)
+            let
+                ( p, cmd ) =
+                    attempt { config | pool = pool_ } task
+            in
+            ( p, cmd :: cmds_ )
     in
     List.foldl attemptAccum ( config.pool, [] ) taskList
         |> Tuple.mapSecond Cmd.batch
@@ -1266,17 +1308,17 @@ pool =
     Internal.pool
 
 
-{-| Add an id to a `Pool`.
+{-| Add an id to a `Pool`. Use this if you're creating multiple new `Pool`s for a single pair of ports.
 
 Why? Because Pools can be instantiated multiple times (think switching pages in a Single Page App),
 without a unique identifier a ConcurrentTask Pool may end up receiving responses for a ConcurrentTask pool that was previously discarded.
 
 One example is a user switching back and forth between two pages:
 
-    - Page one has a long running task on `init`
-    - The user switches to page 2, then switches back to page 1
-    - A new long running task is started
-    - But the Pool can receive the response from the first long running task (which is unexpected behaviour)
+  - Page one has a long running task on `init`
+  - The user switches to page 2, then switches back to page 1
+  - A new long running task is started
+  - But the Pool can receive the response from the first long running task (which is unexpected behaviour)
 
 Adding a different id to the `Pool` allows these previous responses to be ignored.
 
@@ -1284,3 +1326,30 @@ Adding a different id to the `Pool` allows these previous responses to be ignore
 withPoolId : Int -> Pool msg -> Pool msg
 withPoolId =
     Internal.withPoolId
+
+
+{-| Cancel a running task. Pass the `String` id returned from [attemptWithId](ConcurrentTask#attemptWithId) to cancel that specific task.
+
+If the task has already completed this does nothing.
+
+-}
+cancel : String -> Pool msg -> Pool msg
+cancel =
+    Internal.cancel
+
+
+{-| Cancel all running tasks for the given `Pool`.
+
+**Why use `cancelAll` instead of creating a new `ConcurrentTask.pool`?**
+
+Internally, a `Pool` tracks an attempt id and associates a running task with it.
+Calling `cancelAll` increments this attempt id, ensuring any results from previously
+started (and potentially long-running) tasks are ignored.
+
+Creating a new pool resets the attempt identifier, which can allow messages from an
+old task to be delivered to the new pool, leading to a subtle race condition.
+
+-}
+cancelAll : Pool msg -> Pool msg
+cancelAll =
+    Internal.cancelAll
