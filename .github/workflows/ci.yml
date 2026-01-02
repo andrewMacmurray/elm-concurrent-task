@@ -72,6 +72,9 @@ jobs:
           node-version: 22
       - run: npm install
 
+      - name: Verify versions match
+        run: npm run check-versions
+
       - name: Verify Docs Compile
         run: npm run docs:verify
 

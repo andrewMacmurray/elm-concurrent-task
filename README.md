@@ -399,5 +399,7 @@ npm run docs
 1. Run `elm bump` to bump the elm version.
 2. Update the `version` in [package.json](https://github.com/andrewMacmurray/elm-concurrent-task/tree/main/package.json) to match the new elm version.
 3. Ensure all links in the README / docs are pointing to the correct new version.
-4. Commit and push the updates.
-5. Wait for the [Publish Github Action](https://github.com/andrewMacmurray/elm-concurrent-task/actions/workflows/publish.yml) to complete.
+4. Commit and push the updates and ensure CI passes.
+5. Tag the current commit with the new version number and push e.g. `git tag -a 2.0.0 && git push origin 2.0.0`
+6. Publish the runner to npm with `npm run runner:compile && npm publish`
+7. Publish the package to elm packages with `elm publish`
