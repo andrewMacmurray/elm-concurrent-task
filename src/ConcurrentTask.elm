@@ -848,10 +848,13 @@ race task tasks =
         toRacer =
             mapError RaceError >> andThen (Winner >> fail)
     in
-    List.map toRacer (task :: tasks)
-        |> batch
-        -- This makes the types match up but will never be run, as one of the sub task will always `fail` with a `Winner`.
-        |> andThen (List.head >> Maybe.map succeed >> Maybe.withDefault (toRacer task))
+    map2
+        (\h _ ->
+            -- This makes the types match up but will never be run, as one of the sub task will always `fail` with a `Winner`.
+            never h
+        )
+        (toRacer task)
+        (batch (List.map toRacer tasks))
         |> onError
             (\e ->
                 case e of
